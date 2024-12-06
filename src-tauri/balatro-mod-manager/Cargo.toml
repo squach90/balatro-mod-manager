@@ -1,0 +1,10 @@
+[package]
+name = "balatro-mod-manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+colour = "2.1.0"
+home = "0.5.9"
+libflate = "2.1.0"
+zip = "2.2.1"
