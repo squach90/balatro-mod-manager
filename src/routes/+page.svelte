@@ -1,156 +1,153 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+	import BalatroPicker from "../components/BalatroPicker.svelte";
+	import { Menu, MenuItem } from "@tauri-apps/api/menu";
+	import { onMount } from "svelte";
 
-  let name = $state("");
-  let greetMsg = $state("");
+	// Add context menu listener
+	window.addEventListener("contextmenu", async (e) => {
+		e.preventDefault();
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
-  }
+		const menuItems = [
+			await MenuItem.new({
+				text: "Copy",
+				action: () => {
+					// Copy action
+				},
+			}),
+			await MenuItem.new({
+				text: "Paste",
+				action: () => {
+					// Paste action
+				},
+			}),
+		];
+
+		const menu = await Menu.new({ items: menuItems });
+		menu.popup();
+	});
+
+	onMount(() => {
+		const prefersDark = window.matchMedia(
+			"(prefers-color-scheme: dark)",
+		).matches;
+		document.documentElement.setAttribute(
+			"data-theme",
+			prefersDark ? "dark" : "light",
+		);
+
+		// Listen for system theme changes
+		window
+			.matchMedia("(prefers-color-scheme: dark)")
+			.addEventListener("change", (e) => {
+				document.documentElement.setAttribute(
+					"data-theme",
+					e.matches ? "dark" : "light",
+				);
+			});
+	});
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
-
-  <div class="row">
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://kit.svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
-
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
+<main>
+	<h1 id="welcome-message">Welcome to Balatro Mod Manager</h1>
+	<BalatroPicker />
 </main>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
+	@font-face {
+		font-family: "Quicksand";
+		src:
+			url("/fonts/quicksand/Quicksand-Regular.otf") format("opentype"),
+			url("/fonts/quicksand/Quicksand-Italic.otf") format("opentype"),
+			url("/fonts/quicksand/Quicksand-Bold.otf") format("opentype"),
+			url("/fonts/quicksand/Quicksand-BoldItalic.otf") format("opentype");
+		font-display: swap;
+	}
+	@font-face {
+		font-family: "Blokletters";
+		src:
+			url("/fonts/blokletters/Blokletters-Balpen.ttf") format("truetype"),
+			url("/fonts/blokletters/Blokletters-Potlood.ttf") format("truetype"),
+			url("/fonts/blokletters/Blokletters-Viltstift.ttf")
+				format("truetype");
+		font-display: swap;
+	}
 
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
+	:root {
+		font-family: "Blokletters", sans-serif;
+		font-size: 16px;
+		line-height: 24px;
+		font-weight: 400;
+		color: var(--text-primary);
+		background-color: var(--background-primary);
+		font-synthesis: none;
+		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		-webkit-text-size-adjust: 100%;
+		-webkit-user-select: none;
+		user-select: none;
+		cursor: default;
+	}
 
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+	:root {
+		/* Base Colors */
+		--color-dark: #393646;
+		--color-medium: #4f4557;
+		--color-light: #6d5d6e;
+		--color-cream: #f4eee0;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+		/* Functional Colors */
+		--text-primary: var(--color-cream);
+		--text-secondary: var(--color-medium);
+		--background-primary: var(--color-dark);
+		--background-secondary: var(--color-medium);
+		--accent: var(--color-light);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
+		/* System Colors */
+		--error: rgb(244, 67, 54);
+		--success: rgb(76, 175, 80);
+		--warning: rgb(255, 152, 0);
+	}
 
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
+	:root[data-theme="light"] {
+		--text-primary: var(--color-dark);
+		--text-secondary: var(--color-medium);
+		--background-primary: var(--color-cream);
+		--background-secondary: var(--color-light);
+	}
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
+	/* Dark Theme */
+	:root[data-theme="dark"] {
+		--text-primary: var(--color-cream);
+		--text-secondary: var(--color-light);
+		--background-primary: var(--color-dark);
+		--background-secondary: var(--color-medium);
+	}
 
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
+	#welcome-message {
+		text-align: center;
+	}
+	h1 {
+		font-size: 2rem;
+		font-weight: 700;
+		margin: 0;
+		color: var(--text-primary);
+	}
 
-.row {
-  display: flex;
-  justify-content: center;
-}
+	main {
+		font-family: "Blokletters", sans-serif;
+		margin: 1rem;
+		margin-top: 3rem;
+		margin-bottom: 2rem;
+		-webkit-user-select: none; /* Safari */
+		user-select: none; /* Standard syntax */
+		cursor: default;
+	}
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
+	@media (prefers-color-scheme: dark) {
+		:root {
+			color: var(--text-primary);
+			background-color: var(--background-primary);
+		}
+	}
 </style>
