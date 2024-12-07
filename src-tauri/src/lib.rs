@@ -32,7 +32,10 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![find_steam_balatro, check_custom_balatro])
+        .invoke_handler(tauri::generate_handler![
+            find_steam_balatro,
+            check_custom_balatro
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -214,7 +214,7 @@
         background-color: transparent;
         color: #f4eee0;
         font-family: inherit;
-        font-size: 1.2rem; /* Slightly larger font */
+        font-size: 1.4rem; /* Slightly larger font */
         cursor: pointer;
         width: 150px; /* Increased from 120px */
         height: 60px; /* Increased from 45px */
@@ -284,14 +284,14 @@
 
     h2 {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 2rem;
         font-weight: 600;
         text-align: center;
     }
 
     p {
         margin: 0.5rem 0 1.5rem;
-        font-size: 1rem;
+        font-size: 1.2rem;
         opacity: 0.9;
         text-align: center;
     }
@@ -347,7 +347,7 @@
     .radio-text {
         color: #f4eee0;
         /* distance between 2 elements */
-        font-size: 1.2rem;
+        font-size: 1.4rem;
     }
 
     .input-container {
