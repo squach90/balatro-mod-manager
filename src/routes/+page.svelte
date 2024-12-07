@@ -48,8 +48,8 @@
 </script>
 
 <div class="app">
-  <h1>Welcome to Balatro Mod Manager</h1>
-  <BalatroPicker />
+	<h1>Welcome to Balatro Mod Manager</h1>
+	<BalatroPicker />
 </div>
 
 <style>
@@ -71,36 +71,34 @@
 				format("truetype");
 		font-display: swap;
 	}
-.app {
-  width: 100vw;
-  height: 100vh;
-  background-color: #393646;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem;
-  box-sizing: border-box;
-  overflow: hidden;
-}
+	.app {
+		width: 100vw;
+		height: 100vh;
+		background-color: #393646;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+		box-sizing: border-box;
+		overflow: hidden;
+	}
 
-   h1 {
-    color: #F4EEE0;
-    font-size: 2.5rem;
-    margin-bottom: 3rem;
-    font-family: "Blokletters", sans-serif;
-  }
+	h1 {
+		color: #f4eee0;
+		font-size: 2.5rem;
+		margin-bottom: 3rem;
+		font-family: "Blokletters", sans-serif;
+	}
 
+	:global(body) {
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+	:global(html) {
+		overflow: hidden;
+	}
 
-  :global(body) {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-:global(html) {
-  overflow: hidden;
-}
-
-  
 	:root {
 		font-family: "Blokletters", sans-serif;
 		font-size: 16px;
@@ -159,6 +157,4 @@
 			background-color: var(--background-primary);
 		}
 	}
-
-
 </style>
