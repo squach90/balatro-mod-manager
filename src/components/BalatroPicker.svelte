@@ -32,11 +32,11 @@
 
 	let isLoading = false;
 
-  const handleClick = async () => {
-    isLoading = true;
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    isLoading = false;
-  };
+	const handleClick = async () => {
+		isLoading = true;
+		await new Promise((resolve) => setTimeout(resolve, 3000));
+		isLoading = false;
+	};
 </script>
 
 <div class="page-wrapper">
@@ -50,8 +50,7 @@
 					type="radio"
 					name="location"
 					value="steam"
-
-    disabled={isLoading}
+					disabled={isLoading}
 					bind:group={selectedOption}
 					on:change={() => handleOptionChange("steam")}
 				/>
@@ -63,8 +62,7 @@
 					type="radio"
 					name="location"
 					value="custom"
-
-    disabled={isLoading}
+					disabled={isLoading}
 					bind:group={selectedOption}
 					on:change={() => handleOptionChange("custom")}
 				/>
@@ -81,6 +79,7 @@
 				<input
 					type="text"
 					placeholder="Choose Balatro Path"
+					disabled={isLoading}
 					on:click={handlePathSelect}
 					value={selectedPath ? truncatePath(selectedPath) : ""}
 					readonly
@@ -88,24 +87,22 @@
 			</div>
 		{/if}
 
-<div class="button-wrapper">
-  {#if isLoading}
-    <div class="overlay"></div>
-  {/if}
-  <button 
-    class="action-button" 
-    on:click={handleClick} 
-    disabled={isLoading}
-  >
-    {#if isLoading}
-      <div class="throbber"></div>
-    {:else}
-      Continue
-    {/if}
-  </button>
-</div>
-
-
+		<div class="button-wrapper">
+			{#if isLoading}
+				<div class="overlay"></div>
+			{/if}
+			<button
+				class="action-button"
+				on:click={handleClick}
+				disabled={isLoading}
+			>
+				{#if isLoading}
+					<div class="throbber"></div>
+				{:else}
+					Continue
+				{/if}
+			</button>
+		</div>
 	</div>
 </div>
 
@@ -125,24 +122,24 @@
 
 	.page-wrapper {
 		display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%
+		justify-content: center;
+		align-items: center;
+		width: 100%;
 	}
 
-  .button-wrapper {
-    position: relative;
-  }
+	.button-wrapper {
+		position: relative;
+	}
 
-  .overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: transparent;
-    z-index: 100;
-  }
+	.overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: transparent;
+		z-index: 100;
+	}
 
 	.container {
 		display: flex;
@@ -160,72 +157,74 @@
 		position: relative;
 	}
 
-.action-button {
-  margin-top: 2rem;
-  padding: 0.75rem 2rem;
-  border: 2px solid #F4EEE0;
-  border-radius: 12px;
-  background-color: transparent;
-  color: #F4EEE0;
-  font-family: inherit;
-    font-size: 1.2rem;  /* Slightly larger font */
-  cursor: pointer;
-    width: 150px;  /* Increased from 120px */
-    height: 60px;  /* Increased from 45px */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;  /* Prevents content from spilling during transition */
-}
-  .action-button:hover {
-    background-color: #F4EEE0;
-    color: #393646;
-  }
+	.action-button {
+		margin-top: 2rem;
+		padding: 0.75rem 2rem;
+		border: 2px solid #f4eee0;
+		border-radius: 12px;
+		background-color: transparent;
+		color: #f4eee0;
+		font-family: inherit;
+		font-size: 1.2rem; /* Slightly larger font */
+		cursor: pointer;
+		width: 150px; /* Increased from 120px */
+		height: 60px; /* Increased from 45px */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		overflow: hidden; /* Prevents content from spilling during transition */
+	}
+	.action-button:hover {
+		background-color: #f4eee0;
+		color: #393646;
+	}
 
-  .action-button:active {
-    transform: scale(0.98);
-  }
+	.action-button:active {
+		transform: scale(0.98);
+	}
 
-  .action-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.8;
-    background-color: #F4EEE0;
-    transform: none;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+	.action-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.8;
+		background-color: #f4eee0;
+		transform: none;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
 
-.action-button:has(.throbber) {
-  width: 70px;  /* Smaller width when showing throbber */
-  padding: 0.75rem;
-  background-color: #F4EEE0;
-}
+	.action-button:has(.throbber) {
+		width: 70px; /* Smaller width when showing throbber */
+		padding: 0.75rem;
+		background-color: #f4eee0;
+	}
 
-  .throbber {
-    width: 24px;
-    height: 24px;
-    border: 3px solid #393646;
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: spin 1s linear infinite, fade-in 0.3s ease;
-  }
+	.throbber {
+		width: 24px;
+		height: 24px;
+		border: 3px solid #393646;
+		border-radius: 50%;
+		border-top-color: transparent;
+		animation:
+			spin 1s linear infinite,
+			fade-in 0.3s ease;
+	}
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 
-		.container.expanded {
+	.container.expanded {
 		min-height: 250px;
 	}
 
@@ -320,6 +319,8 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 
 	input[type="text"]:hover {
@@ -328,5 +329,7 @@
 
 	input[type="text"]::placeholder {
 		color: var(--text-secondary);
+		-webkit-user-select: none;
+		user-select: none;
 	}
 </style>
