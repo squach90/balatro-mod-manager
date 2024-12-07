@@ -1,0 +1,252 @@
+<script lang="ts">
+	import { fly } from "svelte/transition";
+
+	let selectedOption = "steam";
+	let showCustomInput = false;
+	let selectedPath = "";
+
+	const handleOptionChange = (option: string) => {
+		selectedOption = option;
+		showCustomInput = option === "custom";
+	};
+
+	const truncatePath = (path: string) => {
+		const maxLength = 50;
+		return path.length > maxLength
+			? path.substring(0, maxLength - 3) + "..."
+			: path;
+	};
+
+	const handlePathSelect = async () => {
+		const { open } = await import("@tauri-apps/plugin-dialog");
+
+		const selected = await open({
+			directory: true,
+			multiple: false,
+			title: "Select Balatro Path",
+		});
+		if (selected) {
+			selectedPath = selected as string;
+		}
+	};
+</script>
+
+<div class="page-wrapper">
+	<div class="container" class:expanded={showCustomInput}>
+		<h2>Where is Balatro?</h2>
+		<p>Select Balatro Path</p>
+
+		<div class="radio-group">
+			<label class="radio-label">
+				<input
+					type="radio"
+					name="location"
+					value="steam"
+					bind:group={selectedOption}
+					on:change={() => handleOptionChange("steam")}
+				/>
+				<span class="radio-text">Steam</span>
+			</label>
+
+			<label class="radio-label">
+				<input
+					type="radio"
+					name="location"
+					value="custom"
+					bind:group={selectedOption}
+					on:change={() => handleOptionChange("custom")}
+				/>
+				<span class="radio-text">Custom</span>
+			</label>
+		</div>
+
+		{#if showCustomInput}
+			<div
+				class="input-container"
+				in:fly={{ duration: 200, y: 10 }}
+				out:fly={{ duration: 200, y: -10 }}
+			>
+				<input
+					type="text"
+					placeholder="Choose Balatro Path"
+					on:click={handlePathSelect}
+					value={selectedPath ? truncatePath(selectedPath) : ""}
+					readonly
+				/>
+			</div>
+		{/if}
+
+		<button class="action-button"> Continue </button>
+	</div>
+</div>
+
+<style>
+	:root {
+		--color-dark: #393646; /* rgb(57, 54, 70) */
+		--color-medium: #4f4557; /* rgb(79, 69, 87) */
+		--color-light: #6d5d6e; /* rgb(109, 93, 110) */
+		--color-cream: #f4eee0; /* rgb(244, 238, 224) */
+
+		--text-primary: var(--color-cream);
+		--text-secondary: var(--color-light);
+		--background-primary: var(--color-dark);
+		--background-secondary: var(--color-medium);
+		--accent: var(--color-light);
+	}
+
+	.page-wrapper {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		background-color: #393646;
+	}
+
+	.container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 400px;
+		padding: 2.5rem;
+		border-radius: 25px;
+		background-color: #4f4557;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+		color: #f4eee0;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		height: auto;
+		min-height: 150px;
+		position: relative;
+	}
+
+	.action-button {
+		margin-top: 2rem;
+		padding: 0.75rem 2rem;
+		border: 2px solid #f4eee0;
+		border-radius: 12px;
+		background-color: transparent;
+		color: #f4eee0;
+		font-family: inherit;
+		font-size: 1.1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.action-button:hover {
+		background-color: #f4eee0;
+		outline-color: #393646;
+		color: #393646;
+	}
+
+	.action-button:active {
+		transform: scale(0.98);
+	}
+
+	.container.expanded {
+		min-height: 250px;
+	}
+
+	.input-container {
+		width: 80%;
+		margin-top: 1rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 600;
+		text-align: center;
+	}
+
+	p {
+		margin: 0.5rem 0 1.5rem;
+		font-size: 1rem;
+		opacity: 0.9;
+		text-align: center;
+	}
+
+	.radio-group {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem; /* Increased from 1rem to 1.5rem to match the spacing in the image */
+		width: 100%;
+	}
+	.radio-label {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		cursor: pointer;
+	}
+
+	.radio-label input[type="radio"] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 24px;
+		height: 24px;
+		border: 2px solid #f4eee0;
+		border-radius: 50%;
+		margin: 0;
+		cursor: pointer;
+		position: relative;
+		transition: all 0.2s ease;
+	}
+
+	.radio-label input[type="radio"]:checked {
+		border-color: #f4eee0;
+		background-color: transparent;
+	}
+
+	.radio-label input[type="radio"]:checked::after {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background-color: #f4eee0;
+	}
+
+	.radio-label input[type="radio"]:hover {
+		border-color: #f4eee0;
+		opacity: 0.8;
+	}
+
+	.radio-text {
+		color: #f4eee0;
+		/* distance between 2 elements */
+		font-size: 1.2rem;
+	}
+
+	.input-container {
+		width: 100%;
+		margin: 1rem;
+	}
+
+	input[type="text"] {
+		width: 100%;
+		padding: 0.75rem;
+		border: 2px solid var(--accent);
+		border-radius: 8px;
+		background-color: var(--background-primary);
+		color: var(--text-primary);
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	input[type="text"]:hover {
+		border-color: var(--text-primary);
+	}
+
+	input[type="text"]::placeholder {
+		color: var(--text-secondary);
+	}
+</style>
