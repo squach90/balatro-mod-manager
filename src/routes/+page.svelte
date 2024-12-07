@@ -47,10 +47,10 @@
 	});
 </script>
 
-<main>
-	<h1 id="welcome-message">Welcome to Balatro Mod Manager</h1>
-	<BalatroPicker />
-</main>
+<div class="app">
+  <h1>Welcome to Balatro Mod Manager</h1>
+  <BalatroPicker />
+</div>
 
 <style>
 	@font-face {
@@ -71,7 +71,30 @@
 				format("truetype");
 		font-display: swap;
 	}
+  .app {
+    width: 100%;
+    min-height: 100vh;
+    background-color: #393646;
+    display: flex;
+    flex-direction: column;
+    padding-top: 3rem;
+    align-items: center;
+    font-family: "Blokletters", sans-serif;
+  }
 
+  h1 {
+    color: #F4EEE0;
+    font-size: 2.5rem;
+    margin-bottom: 3rem;
+    font-weight: normal;
+  }
+
+  :global(body) {
+    margin: 0;
+    padding: 0;
+  }
+
+  
 	:root {
 		font-family: "Blokletters", sans-serif;
 		font-size: 16px;
@@ -124,30 +147,12 @@
 		--background-secondary: var(--color-medium);
 	}
 
-	#welcome-message {
-		text-align: center;
-	}
-	h1 {
-		font-size: 2rem;
-		font-weight: 700;
-		margin: 0;
-		color: var(--text-primary);
-	}
-
-	main {
-		font-family: "Blokletters", sans-serif;
-		margin: 1rem;
-		margin-top: 3rem;
-		margin-bottom: 2rem;
-		-webkit-user-select: none; /* Safari */
-		user-select: none; /* Standard syntax */
-		cursor: default;
-	}
-
 	@media (prefers-color-scheme: dark) {
 		:root {
 			color: var(--text-primary);
 			background-color: var(--background-primary);
 		}
 	}
+
+
 </style>
