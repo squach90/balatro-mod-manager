@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "balatro-mod-manager",
+        "title": "Balatro Mod Manager",
         "width": 800,
-        "height": 600
+        "height": 700,
+		"minWidth": 900,
+        "minHeight": 700,
+        "resizable": true
       }
     ],
     "security": {

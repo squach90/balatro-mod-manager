@@ -71,28 +71,34 @@
 				format("truetype");
 		font-display: swap;
 	}
-  .app {
-    width: 100%;
-    min-height: 100vh;
-    background-color: #393646;
-    display: flex;
-    flex-direction: column;
-    padding-top: 3rem;
-    align-items: center;
-    font-family: "Blokletters", sans-serif;
-  }
+.app {
+  width: 100vw;
+  height: 100vh;
+  background-color: #393646;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
 
-  h1 {
+   h1 {
     color: #F4EEE0;
     font-size: 2.5rem;
     margin-bottom: 3rem;
-    font-weight: normal;
+    font-family: "Blokletters", sans-serif;
   }
 
+
   :global(body) {
-    margin: 0;
-    padding: 0;
-  }
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+:global(html) {
+  overflow: hidden;
+}
 
   
 	:root {
