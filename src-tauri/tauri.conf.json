@@ -15,7 +15,7 @@
         "title": "Balatro Mod Manager",
         "width": 800,
         "height": 700,
-		"minWidth": 900,
+        "minWidth": 900,
         "minHeight": 700,
         "resizable": true
       }
