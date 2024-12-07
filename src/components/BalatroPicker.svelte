@@ -37,7 +37,7 @@
         isLoading = true;
 
         try {
-            const paths = await invoke("find_steam_balatro");
+            const paths: string[] = await invoke("find_steam_balatro");
             if (selectedOption === "steam") {
                 if (paths.length === 0) {
                     // Handle case where Balatro is not found
