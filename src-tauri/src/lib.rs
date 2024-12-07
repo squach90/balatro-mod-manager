@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bmm_lib::balamod::find_balatros;
 use tauri::Manager;
 
@@ -8,6 +10,12 @@ async fn find_steam_balatro() -> Result<Vec<String>, String> {
         .iter()
         .map(|b| b.path.to_string_lossy().into_owned())
         .collect())
+}
+
+#[tauri::command]
+async fn check_custom_balatro(path: String) -> Result<bool, String> {
+    let path = PathBuf::from(path);
+    Ok(bmm_lib::balamod::Balatro::from_custom_path(path).is_some())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,7 +32,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![find_steam_balatro])
+        .invoke_handler(tauri::generate_handler![find_steam_balatro, check_custom_balatro])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

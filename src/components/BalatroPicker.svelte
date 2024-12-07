@@ -1,6 +1,18 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { invoke } from "@tauri-apps/api/core";
+    import MessageBox from "./MessageBox.svelte";
+
+    let showMessage = false;
+    let messageType: 'success' | 'error' | 'warning' | 'info' = 'success';
+    let messageText = '';
+
+    const showNotification = (text: string, type: 'success' | 'error' | 'warning') => {
+        messageText = text;
+        messageType = type;
+        showMessage = true;
+        setTimeout(() => showMessage = false, 3000);
+    };
 
     let selectedOption = "steam";
     let showCustomInput = false;
@@ -37,20 +49,29 @@
         isLoading = true;
 
         try {
-            const paths: string[] = await invoke("find_steam_balatro");
             if (selectedOption === "steam") {
+              const paths: string[] = await invoke("find_steam_balatro");
                 if (paths.length === 0) {
-                    // Handle case where Balatro is not found
-                    console.error("Balatro not found in Steam");
+                    showNotification("Balatro not found in Steam installation", "error");
                 } else {
                     selectedPath = paths[0];
-                    console.log("Balatro found in Steam:", selectedPath);
-                    // Handle successful path finding
+                    showNotification("Successfully found Balatro installation", 'success');
+                }
+            } else if (selectedOption === "custom") {
+              if (!selectedPath) {
+                    showNotification("Please select a custom path", "warning");
+                    isLoading = false;
+                    return;
+                }
+              const isValid = await invoke("check_custom_balatro", { path: selectedPath});
+              if (isValid) {
+                    showNotification("Successfully found Balatro installation", 'success');
+                } else {
+                    showNotification("Invalid Balatro path", "error");
                 }
             }
-            // Handle custom path case here
         } catch (error) {
-            console.error("Error finding Balatro:", error);
+            showNotification("Error finding Balatro" + error, "error");
         } finally {
             isLoading = false;
         }
@@ -123,6 +144,11 @@
         </div>
     </div>
 </div>
+<MessageBox
+    message={messageText}
+    type={messageType}
+    visible={showMessage}
+/>
 
 <style>
     :root {
