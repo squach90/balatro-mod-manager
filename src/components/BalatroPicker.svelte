@@ -50,6 +50,8 @@
 					type="radio"
 					name="location"
 					value="steam"
+
+    disabled={isLoading}
 					bind:group={selectedOption}
 					on:change={() => handleOptionChange("steam")}
 				/>
@@ -61,6 +63,8 @@
 					type="radio"
 					name="location"
 					value="custom"
+
+    disabled={isLoading}
 					bind:group={selectedOption}
 					on:change={() => handleOptionChange("custom")}
 				/>
