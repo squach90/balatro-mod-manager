@@ -1,18 +1,9 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { invoke } from "@tauri-apps/api/core";
-    import MessageBox from "./MessageBox.svelte";
+    import MessageStack from "./MessageStack.svelte";
 
-    let showMessage = false;
-    let messageType: 'success' | 'error' | 'warning' | 'info' = 'success';
-    let messageText = '';
-
-    const showNotification = (text: string, type: 'success' | 'error' | 'warning') => {
-        messageText = text;
-        messageType = type;
-        showMessage = true;
-        setTimeout(() => showMessage = false, 3000);
-    };
+    let messageStack: MessageStack;
 
     let selectedOption = "steam";
     let showCustomInput = false;
@@ -21,6 +12,10 @@
     const handleOptionChange = (option: string) => {
         selectedOption = option;
         showCustomInput = option === "custom";
+
+        if (option == "custom") {
+            selectedPath = "";
+        }
     };
 
     const truncatePath = (path: string) => {
@@ -50,28 +45,42 @@
 
         try {
             if (selectedOption === "steam") {
-              const paths: string[] = await invoke("find_steam_balatro");
+                const paths: string[] = await invoke("find_steam_balatro");
                 if (paths.length === 0) {
-                    showNotification("Balatro not found in Steam installation", "error");
+                    messageStack.addMessage(
+                        "Balatro not found in Steam installation",
+                        "error",
+                    );
                 } else {
                     selectedPath = paths[0];
-                    showNotification("Successfully found Balatro installation", 'success');
+                    messageStack.addMessage(
+                        "Successfully found Balatro installation",
+                        "success",
+                    );
                 }
             } else if (selectedOption === "custom") {
-              if (!selectedPath) {
-                    showNotification("Please select a custom path", "warning");
+                if (!selectedPath) {
+                    messageStack.addMessage(
+                        "Please select a custom path",
+                        "warning",
+                    );
                     isLoading = false;
                     return;
                 }
-              const isValid = await invoke("check_custom_balatro", { path: selectedPath});
-              if (isValid) {
-                    showNotification("Successfully found Balatro installation", 'success');
+                const isValid = await invoke("check_custom_balatro", {
+                    path: selectedPath,
+                });
+                if (isValid) {
+                    messageStack.addMessage(
+                        "Successfully found Balatro installation",
+                        "success",
+                    );
                 } else {
-                    showNotification("Invalid Balatro path", "error");
+                    messageStack.addMessage("Invalid Balatro path", "error");
                 }
             }
         } catch (error) {
-            showNotification("Error finding Balatro" + error, "error");
+            messageStack.addMessage("Error finding Balatro" + error, "error");
         } finally {
             isLoading = false;
         }
@@ -144,11 +153,7 @@
         </div>
     </div>
 </div>
-<MessageBox
-    message={messageText}
-    type={messageType}
-    visible={showMessage}
-/>
+<MessageStack bind:this={messageStack} />
 
 <style>
     :root {
