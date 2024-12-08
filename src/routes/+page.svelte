@@ -135,9 +135,9 @@
 
 	:root {
 		/* Base Colors */
-		--color-dark: #393646;
-		--color-medium: #4f4557;
-		--color-light: #6d5d6e;
+		--color-dark: #459373;
+		--color-medium: #56a786;
+		--color-light: #74cca8;
 		--color-cream: #f4eee0;
 
 		/* Functional Colors */
@@ -153,27 +153,6 @@
 		--warning: rgb(255, 152, 0);
 	}
 
-	:root[data-theme="light"] {
-		--text-primary: var(--color-dark);
-		--text-secondary: var(--color-medium);
-		--background-primary: var(--color-cream);
-		--background-secondary: var(--color-light);
-	}
-
-	/* Dark Theme */
-	:root[data-theme="dark"] {
-		--text-primary: var(--color-cream);
-		--text-secondary: var(--color-light);
-		--background-primary: var(--color-dark);
-		--background-secondary: var(--color-medium);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		:root {
-			color: var(--text-primary);
-			background-color: var(--background-primary);
-		}
-	}
 
 	.video-background {
 		position: fixed;

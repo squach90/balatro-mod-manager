@@ -10,8 +10,8 @@
 
     const types = {
         success: {
-            bg: "#4F4557",
-            border: "#6D5D6E",
+            bg: "#459373",
+            border: "white",
             icon: "✓",
         },
         error: {
@@ -86,8 +86,8 @@
     }
 
     .success {
-        background-color: #4f4557;
-        border: 2px solid #6d5d6e;
+        background-color: #459373;
+        border: 2px solid white;
     }
 
     .error {

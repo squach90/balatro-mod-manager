@@ -109,6 +109,7 @@
 		backdrop-filter: blur(10px);
 		padding: 2rem;
 		margin-top: 1rem;
+		margin-bottom: 1rem;
 	}
 
 	.version-text {
