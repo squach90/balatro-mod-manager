@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ShaderBackground from "../../components/ShaderBackground.svelte";
+	import About from "../../components/viewblock/About.svelte";
 
 	let currentSection = "mods";
 </script>
@@ -40,7 +41,7 @@
 		{/if}
 
 		{#if currentSection === "about"}
-			About section
+			<About />
 		{/if}
 	</div>
 
