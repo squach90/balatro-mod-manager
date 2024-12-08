@@ -153,7 +153,6 @@
 		--warning: rgb(255, 152, 0);
 	}
 
-
 	.video-background {
 		position: fixed;
 		top: 0;

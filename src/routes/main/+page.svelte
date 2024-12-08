@@ -30,31 +30,32 @@
 		</nav>
 	</header>
 
-
-
 	<main>
 		{#if currentSection === "mods"}
 			<div class="content-section">
 				<!-- Mods content -->
+				Mods
 			</div>
 		{:else if currentSection === "settings"}
 			<div class="content-section">
 				<!-- Settings content -->
+				Settings
 			</div>
 		{:else if currentSection === "about"}
 			<div class="content-section">
 				<!-- About content -->
+				About
 			</div>
 		{/if}
 	</main>
 
 	<div class="content">
 		<!-- Your section content here -->
+		Content
 	</div>
 
 	<div class="version-text">v0.1.0</div>
 </div>
-
 
 <style>
 	.main-page {
@@ -89,9 +90,10 @@
 		background: transparent;
 		border: 2px solid #f4eee0;
 		color: #f4eee0;
-		padding: 0.5rem 1rem;
+		padding: 0.6rem 1.2rem;
 		border-radius: 8px;
 		font-family: "M6X11", sans-serif;
+		font-size: 0.8rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
 	}
@@ -104,12 +106,11 @@
 
 	.content {
 		flex: 1;
-		background: rgba(57, 54, 70, 0.7);
+		background: rgba(69, 147, 115, 0.8);
 		border-radius: 15px;
 		backdrop-filter: blur(10px);
 		padding: 2rem;
-		margin-top: 1rem;
-		margin-bottom: 1rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.version-text {
@@ -123,5 +124,10 @@
 			1px -1px 0 #000,
 			-1px 1px 0 #000,
 			1px 1px 0 #000;
+	}
+
+	.content-section {
+		font-size: 1.5rem;
+		margin-left: 0.5rem;
 	}
 </style>
