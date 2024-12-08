@@ -61,24 +61,6 @@
 
 <style>
 	@font-face {
-		font-family: "Quicksand";
-		src:
-			url("/fonts/quicksand/Quicksand-Regular.otf") format("opentype"),
-			url("/fonts/quicksand/Quicksand-Italic.otf") format("opentype"),
-			url("/fonts/quicksand/Quicksand-Bold.otf") format("opentype"),
-			url("/fonts/quicksand/Quicksand-BoldItalic.otf") format("opentype");
-		font-display: swap;
-	}
-	@font-face {
-		font-family: "Blokletters";
-		src:
-			url("/fonts/blokletters/Blokletters-Balpen.ttf") format("truetype"),
-			url("/fonts/blokletters/Blokletters-Potlood.ttf") format("truetype"),
-			url("/fonts/blokletters/Blokletters-Viltstift.ttf")
-				format("truetype");
-		font-display: swap;
-	}
-	@font-face {
 		font-family: "M6X11";
 		src: url("/fonts/m6x11.ttf") format("truetype");
 		font-display: swap;
