@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "Balatro Mod Manager",
-        "width": 800,
-        "height": 700,
-        "minWidth": 900,
-        "minHeight": 700,
+        "width": 850,
+        "height": 750,
+        "minWidth": 950,
+        "minHeight": 750,
         "resizable": true
       }
     ],

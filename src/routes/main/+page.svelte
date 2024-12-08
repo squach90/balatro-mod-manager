@@ -1,122 +1,128 @@
 <script lang="ts">
-	import ShaderBackground from "../../components/ShaderBackground.svelte";
-	import About from "../../components/viewblock/About.svelte";
+    import ShaderBackground from "../../components/ShaderBackground.svelte";
+    import About from "../../components/viewblock/About.svelte";
 
-	let currentSection = "mods";
+    let currentSection = "mods";
+    // window.addEventListener("resize", () => {
+    //     console.log(
+    //         `Window size: ${window.innerWidth} x ${window.innerHeight}`,
+    //     );
+    // });
 </script>
 
 <ShaderBackground />
 <div class="main-page">
-	<header>
-		<h1>Balatro Mod Manager</h1>
-		<nav>
-			<button
-				class:active={currentSection === "mods"}
-				on:click={() => (currentSection = "mods")}
-			>
-				Mods
-			</button>
-			<button
-				class:active={currentSection === "settings"}
-				on:click={() => (currentSection = "settings")}
-			>
-				Settings
-			</button>
-			<button
-				class:active={currentSection === "about"}
-				on:click={() => (currentSection = "about")}
-			>
-				About
-			</button>
-		</nav>
-	</header>
+    <header>
+        <h1>Balatro Mod Manager</h1>
+        <nav>
+            <button
+                class:active={currentSection === "mods"}
+                on:click={() => (currentSection = "mods")}
+            >
+                Mods
+            </button>
+            <button
+                class:active={currentSection === "settings"}
+                on:click={() => (currentSection = "settings")}
+            >
+                Settings
+            </button>
+            <button
+                class:active={currentSection === "about"}
+                on:click={() => (currentSection = "about")}
+            >
+                About
+            </button>
+        </nav>
+    </header>
 
-	<div class="content">
-		{#if currentSection === "mods"}
-			Mods section
-		{/if}
+    <div class="content">
+        {#if currentSection === "mods"}
+            Mods section
+        {/if}
 
-		{#if currentSection === "settings"}
-			Settings section
-		{/if}
+        {#if currentSection === "settings"}
+            Settings section
+        {/if}
 
-		{#if currentSection === "about"}
-			<About />
-		{/if}
-	</div>
+        {#if currentSection === "about"}
+            <About />
+        {/if}
+    </div>
 
-	<div class="version-text">v0.1.0</div>
+    <div class="version-text">v0.1.0</div>
 </div>
 
 <style>
-	.main-page {
-		width: 100vw;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		padding: 2rem;
-		box-sizing: border-box;
-		background: transparent;
-	}
-	header {
-		margin-bottom: -1rem;
-	}
+    .main-page {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 2rem;
+        box-sizing: border-box;
+        background: transparent;
+    }
+    header {
+        margin-bottom: -1rem;
+    }
 
-	h1 {
-		color: #f4eee0;
-		font-size: 3rem;
-		margin-bottom: 2rem;
-		font-family: "M6X11", sans-serif;
-		text-shadow:
-			-2px -2px 0 #000,
-			2px -2px 0 #000,
-			-2px 2px 0 #000,
-			2px 2px 0 #000;
-	}
+    h1 {
+        color: #f4eee0;
+        font-size: 3rem;
+        margin-bottom: 2rem;
+        font-family: "M6X11", sans-serif;
+        text-shadow:
+            -2px -2px 0 #000,
+            2px -2px 0 #000,
+            -2px 2px 0 #000,
+            2px 2px 0 #000;
+    }
 
-	nav {
-		display: flex;
-		gap: 1rem;
-		margin-bottom: 2rem;
-	}
+    nav {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
 
-	button {
-		background: transparent;
-		border: 2px solid #f4eee0;
-		color: #f4eee0;
-		padding: 0.6rem 1.2rem;
-		border-radius: 8px;
-		font-family: "M6X11", sans-serif;
-		font-size: 0.8rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
+    button {
+        background: transparent;
+        border: 2px solid #f4eee0;
+        color: #f4eee0;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        font-family: "M6X11", sans-serif;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-	button:hover,
-	button.active {
-		background: #f4eee0;
-		color: #393646;
-	}
+    button:hover,
+    button.active {
+        background: #f4eee0;
+        color: #393646;
+    }
 
-	.content {
-		flex: 1;
-		background: rgba(193, 65, 57, 0.8);
-		border-radius: 15px;
-		backdrop-filter: blur(10px);
-		padding: 2rem;
-		margin-bottom: 1.5rem;
-	}
+    .content {
+        flex: 1;
+        background: rgba(193, 65, 57, 0.8);
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        outline: 2px solid #f4eee0;
+    }
 
-	.version-text {
-		position: fixed;
-		bottom: 1rem;
-		right: 1rem;
-		color: #f4eee0;
-		font-family: "M6X11", sans-serif;
-		text-shadow:
-			-1px -1px 0 #000,
-			1px -1px 0 #000,
-			-1px 1px 0 #000,
-			1px 1px 0 #000;
-	}
+    .version-text {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        color: #f4eee0;
+        font-family: "M6X11", sans-serif;
+        text-shadow:
+            -1px -1px 0 #000,
+            1px -1px 0 #000,
+            -1px 1px 0 #000,
+            1px 1px 0 #000;
+    }
 </style>
