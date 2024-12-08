@@ -2,6 +2,7 @@
 	import { fly } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
 	import MessageStack from "./MessageStack.svelte";
+	import { goto } from "$app/navigation";
 
 	let messageStack: MessageStack;
 
@@ -56,10 +57,10 @@
 						"Successfully found Balatro installation",
 						"success",
 					);
-					// Wait for the success message to show
+
+
 					await new Promise((resolve) => setTimeout(resolve, 1000));
-					// Navigate to the main page
-					window.location.href = "/main";
+					await goto("/main", { replaceState: true });
 				}
 			} else if (selectedOption === "custom") {
 				if (!selectedPath) {
@@ -80,8 +81,7 @@
 					);
 					// Wait for the success message to show
 					await new Promise((resolve) => setTimeout(resolve, 1000));
-					// Navigate to the main page
-					window.location.href = "/main";
+					await goto("/main", { replaceState: true });
 				} else {
 					messageStack.addMessage("Invalid Balatro path", "error");
 				}
