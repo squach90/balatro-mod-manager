@@ -1,0 +1,11 @@
+[package]
+name = "bmm-lib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+home = "0.5.9"
+libflate = "2.1.0"
+log = "0.4.22"
+rusqlite = "0.32.1"
+zip = "2.2.1"
