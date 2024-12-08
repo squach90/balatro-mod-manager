@@ -1,384 +1,391 @@
 <script lang="ts">
-    import { fly } from "svelte/transition";
-    import { invoke } from "@tauri-apps/api/core";
-    import MessageStack from "./MessageStack.svelte";
+	import { fly } from "svelte/transition";
+	import { invoke } from "@tauri-apps/api/core";
+	import MessageStack from "./MessageStack.svelte";
 
-    let messageStack: MessageStack;
+	let messageStack: MessageStack;
 
-    let selectedOption = "steam";
-    let showCustomInput = false;
-    let selectedPath = "";
+	let selectedOption = "steam";
+	let showCustomInput = false;
+	let selectedPath = "";
 
-    const handleOptionChange = (option: string) => {
-        selectedOption = option;
-        showCustomInput = option === "custom";
+	const handleOptionChange = (option: string) => {
+		selectedOption = option;
+		showCustomInput = option === "custom";
 
-        if (option == "custom") {
-            selectedPath = "";
-        }
-    };
+		if (option == "custom") {
+			selectedPath = "";
+		}
+	};
 
-    const truncatePath = (path: string) => {
-        const maxLength = 50;
-        return path.length > maxLength
-            ? path.substring(0, maxLength - 3) + "..."
-            : path;
-    };
+	const truncatePath = (path: string) => {
+		const maxLength = 50;
+		return path.length > maxLength
+			? path.substring(0, maxLength - 3) + "..."
+			: path;
+	};
 
-    const handlePathSelect = async () => {
-        const { open } = await import("@tauri-apps/plugin-dialog");
+	const handlePathSelect = async () => {
+		const { open } = await import("@tauri-apps/plugin-dialog");
 
-        const selected = await open({
-            directory: true,
-            multiple: false,
-            title: "Select Balatro Path",
-        });
-        if (selected) {
-            selectedPath = selected as string;
-        }
-    };
+		const selected = await open({
+			directory: true,
+			multiple: false,
+			title: "Select Balatro Path",
+		});
+		if (selected) {
+			selectedPath = selected as string;
+		}
+	};
 
-    let isLoading = false;
+	let isLoading = false;
 
-    const handleClick = async () => {
-        isLoading = true;
-
-        try {
-            if (selectedOption === "steam") {
-                const paths: string[] = await invoke("find_steam_balatro");
-                if (paths.length === 0) {
-                    messageStack.addMessage(
-                        "Balatro not found in Steam installation",
-                        "error",
-                    );
-                } else {
-                    selectedPath = paths[0];
-                    messageStack.addMessage(
-                        "Successfully found Balatro installation",
-                        "success",
-                    );
-                }
-            } else if (selectedOption === "custom") {
-                if (!selectedPath) {
-                    messageStack.addMessage(
-                        "Please select a custom path",
-                        "warning",
-                    );
-                    isLoading = false;
-                    return;
-                }
-                const isValid = await invoke("check_custom_balatro", {
-                    path: selectedPath,
-                });
-                if (isValid) {
-                    messageStack.addMessage(
-                        "Successfully found Balatro installation",
-                        "success",
-                    );
-                } else {
-                    messageStack.addMessage("Invalid Balatro path", "error");
-                }
-            }
-        } catch (error) {
-            messageStack.addMessage("Error finding Balatro" + error, "error");
-        } finally {
-            isLoading = false;
-        }
-    };
+	const handleClick = async () => {
+		isLoading = true;
+		try {
+			if (selectedOption === "steam") {
+				const paths: string[] = await invoke("find_steam_balatro");
+				if (paths.length === 0) {
+					messageStack.addMessage(
+						"Balatro not found in Steam installation",
+						"error",
+					);
+				} else {
+					selectedPath = paths[0];
+					messageStack.addMessage(
+						"Successfully found Balatro installation",
+						"success",
+					);
+					// Wait for the success message to show
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+					// Navigate to the main page
+					window.location.href = "/main";
+				}
+			} else if (selectedOption === "custom") {
+				if (!selectedPath) {
+					messageStack.addMessage(
+						"Please select a custom path",
+						"warning",
+					);
+					isLoading = false;
+					return;
+				}
+				const isValid = await invoke("check_custom_balatro", {
+					path: selectedPath,
+				});
+				if (isValid) {
+					messageStack.addMessage(
+						"Successfully found Balatro installation",
+						"success",
+					);
+					// Wait for the success message to show
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+					// Navigate to the main page
+					window.location.href = "/main";
+				} else {
+					messageStack.addMessage("Invalid Balatro path", "error");
+				}
+			}
+		} catch (error) {
+			messageStack.addMessage("Error finding Balatro: " + error, "error");
+		} finally {
+			isLoading = false;
+		}
+	};
 </script>
 
 <div class="page-wrapper">
-    <div class="container" class:expanded={showCustomInput}>
-        <h2>Where is Balatro?</h2>
-        <p>Select Balatro Path</p>
+	<div class="container" class:expanded={showCustomInput}>
+		<h2>Where is Balatro?</h2>
+		<p>Select Balatro Path</p>
 
-        <div class="radio-group">
-            <label class="radio-label">
-                <input
-                    type="radio"
-                    name="location"
-                    value="steam"
-                    disabled={isLoading}
-                    bind:group={selectedOption}
-                    on:change={() => handleOptionChange("steam")}
-                />
-                <span class="radio-text">Steam</span>
-            </label>
+		<div class="radio-group">
+			<label class="radio-label">
+				<input
+					type="radio"
+					name="location"
+					value="steam"
+					disabled={isLoading}
+					bind:group={selectedOption}
+					on:change={() => handleOptionChange("steam")}
+				/>
+				<span class="radio-text">Steam</span>
+			</label>
 
-            <label class="radio-label">
-                <input
-                    type="radio"
-                    name="location"
-                    value="custom"
-                    disabled={isLoading}
-                    bind:group={selectedOption}
-                    on:change={() => handleOptionChange("custom")}
-                />
-                <span class="radio-text">Custom</span>
-            </label>
-        </div>
+			<label class="radio-label">
+				<input
+					type="radio"
+					name="location"
+					value="custom"
+					disabled={isLoading}
+					bind:group={selectedOption}
+					on:change={() => handleOptionChange("custom")}
+				/>
+				<span class="radio-text">Custom</span>
+			</label>
+		</div>
 
-        {#if showCustomInput}
-            <div
-                class="input-container"
-                in:fly={{ duration: 200, y: 10 }}
-                out:fly={{ duration: 200, y: -10 }}
-            >
-                <input
-                    type="text"
-                    placeholder="Choose Balatro Path"
-                    disabled={isLoading}
-                    on:click={handlePathSelect}
-                    value={selectedPath ? truncatePath(selectedPath) : ""}
-                    readonly
-                />
-            </div>
-        {/if}
+		{#if showCustomInput}
+			<div
+				class="input-container"
+				in:fly={{ duration: 200, y: 10 }}
+				out:fly={{ duration: 200, y: -10 }}
+			>
+				<input
+					type="text"
+					placeholder="Choose Balatro Path"
+					disabled={isLoading}
+					on:click={handlePathSelect}
+					value={selectedPath ? truncatePath(selectedPath) : ""}
+					readonly
+				/>
+			</div>
+		{/if}
 
-        <div class="button-wrapper">
-            {#if isLoading}
-                <div class="overlay"></div>
-            {/if}
-            <button
-                class="action-button"
-                on:click={handleClick}
-                disabled={isLoading}
-            >
-                {#if isLoading}
-                    <div class="throbber"></div>
-                {:else}
-                    Continue
-                {/if}
-            </button>
-        </div>
-    </div>
+		<div class="button-wrapper">
+			{#if isLoading}
+				<div class="overlay"></div>
+			{/if}
+			<button
+				class="action-button"
+				on:click={handleClick}
+				disabled={isLoading}
+			>
+				{#if isLoading}
+					<div class="throbber"></div>
+				{:else}
+					Continue
+				{/if}
+			</button>
+		</div>
+	</div>
 </div>
 <MessageStack bind:this={messageStack} />
 
 <style>
-    :root {
-        --color-dark: #393646; /* rgb(57, 54, 70) */
-        --color-medium: #4f4557; /* rgb(79, 69, 87) */
-        --color-light: #6d5d6e; /* rgb(109, 93, 110) */
-        --color-cream: #f4eee0; /* rgb(244, 238, 224) */
+	:root {
+		--color-dark: #393646; /* rgb(57, 54, 70) */
+		--color-medium: #4f4557; /* rgb(79, 69, 87) */
+		--color-light: #6d5d6e; /* rgb(109, 93, 110) */
+		--color-cream: #f4eee0; /* rgb(244, 238, 224) */
 
-        --text-primary: var(--color-cream);
-        --text-secondary: var(--color-light);
-        --background-primary: var(--color-dark);
-        --background-secondary: var(--color-medium);
-        --accent: var(--color-light);
-    }
+		--text-primary: var(--color-cream);
+		--text-secondary: var(--color-light);
+		--background-primary: var(--color-dark);
+		--background-secondary: var(--color-medium);
+		--accent: var(--color-light);
+	}
 
-    .page-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-    }
+	.page-wrapper {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+	}
 
-    .button-wrapper {
-        position: relative;
-    }
+	.button-wrapper {
+		position: relative;
+	}
 
-    .overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: transparent;
-        z-index: 100;
-    }
+	.overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: transparent;
+		z-index: 100;
+	}
 
-    .container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 400px;
-        padding: 2.5rem;
-        border-radius: 25px;
-        background-color: #4f4557;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-        color: #f4eee0;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        height: auto;
-        min-height: 150px;
-        position: relative;
-    }
+	.container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 400px;
+		padding: 2.5rem;
+		border-radius: 25px;
+		background-color: #4f4557;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+		color: #f4eee0;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		height: auto;
+		min-height: 150px;
+		position: relative;
+	}
 
-    .action-button {
-        margin-top: 2rem;
-        padding: 0.75rem 2rem;
-        border: 2px solid #f4eee0;
-        border-radius: 12px;
-        background-color: transparent;
-        color: #f4eee0;
-        font-family: inherit;
-        font-size: 1.4rem; /* Slightly larger font */
-        cursor: pointer;
-        width: 150px; /* Increased from 120px */
-        height: 60px; /* Increased from 45px */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow: hidden; /* Prevents content from spilling during transition */
-    }
-    .action-button:hover {
-        background-color: #f4eee0;
-        color: #393646;
-    }
+	.action-button {
+		margin-top: 2rem;
+		padding: 0.75rem 2rem;
+		border: 2px solid #f4eee0;
+		border-radius: 12px;
+		background-color: transparent;
+		color: #f4eee0;
+		font-family: inherit;
+		font-size: 1.4rem; /* Slightly larger font */
+		cursor: pointer;
+		width: 150px; /* Increased from 120px */
+		height: 60px; /* Increased from 45px */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		overflow: hidden; /* Prevents content from spilling during transition */
+	}
+	.action-button:hover {
+		background-color: #f4eee0;
+		color: #393646;
+	}
 
-    .action-button:active {
-        transform: scale(0.98);
-    }
+	.action-button:active {
+		transform: scale(0.98);
+	}
 
-    .action-button:disabled {
-        cursor: not-allowed;
-        opacity: 0.8;
-        background-color: #f4eee0;
-        transform: none;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
+	.action-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.8;
+		background-color: #f4eee0;
+		transform: none;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
 
-    .action-button:has(.throbber) {
-        width: 70px; /* Smaller width when showing throbber */
-        padding: 0.75rem;
-        background-color: #f4eee0;
-    }
+	.action-button:has(.throbber) {
+		width: 70px; /* Smaller width when showing throbber */
+		padding: 0.75rem;
+		background-color: #f4eee0;
+	}
 
-    .throbber {
-        width: 24px;
-        height: 24px;
-        border: 3px solid #393646;
-        border-radius: 50%;
-        border-top-color: transparent;
-        animation:
-            spin 1s linear infinite,
-            fade-in 0.3s ease;
-    }
+	.throbber {
+		width: 24px;
+		height: 24px;
+		border: 3px solid #393646;
+		border-radius: 50%;
+		border-top-color: transparent;
+		animation:
+			spin 1s linear infinite,
+			fade-in 0.3s ease;
+	}
 
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 
-    @keyframes fade-in {
-        from {
-            opacity: 0;
-        }
-        to {
-            opacity: 1;
-        }
-    }
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 
-    .container.expanded {
-        min-height: 250px;
-    }
+	.container.expanded {
+		min-height: 250px;
+	}
 
-    .input-container {
-        width: 80%;
-        margin-top: 1rem;
-    }
+	.input-container {
+		width: 80%;
+		margin-top: 1rem;
+	}
 
-    h2 {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: 600;
-        text-align: center;
-    }
+	h2 {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 600;
+		text-align: center;
+	}
 
-    p {
-        margin: 0.5rem 0 1.5rem;
-        font-size: 1.2rem;
-        opacity: 0.9;
-        text-align: center;
-    }
+	p {
+		margin: 0.5rem 0 1.5rem;
+		font-size: 1.2rem;
+		opacity: 0.9;
+		text-align: center;
+	}
 
-    .radio-group {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem; /* Increased from 1rem to 1.5rem to match the spacing in the image */
-        width: 100%;
-    }
-    .radio-label {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        cursor: pointer;
-    }
+	.radio-group {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem; /* Increased from 1rem to 1.5rem to match the spacing in the image */
+		width: 100%;
+	}
+	.radio-label {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		cursor: pointer;
+	}
 
-    .radio-label input[type="radio"] {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 24px;
-        height: 24px;
-        border: 2px solid #f4eee0;
-        border-radius: 50%;
-        margin: 0;
-        cursor: pointer;
-        position: relative;
-        transition: all 0.2s ease;
-    }
+	.radio-label input[type="radio"] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 24px;
+		height: 24px;
+		border: 2px solid #f4eee0;
+		border-radius: 50%;
+		margin: 0;
+		cursor: pointer;
+		position: relative;
+		transition: all 0.2s ease;
+	}
 
-    .radio-label input[type="radio"]:checked {
-        border-color: #f4eee0;
-        background-color: transparent;
-    }
+	.radio-label input[type="radio"]:checked {
+		border-color: #f4eee0;
+		background-color: transparent;
+	}
 
-    .radio-label input[type="radio"]:checked::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background-color: #f4eee0;
-    }
+	.radio-label input[type="radio"]:checked::after {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background-color: #f4eee0;
+	}
 
-    .radio-label input[type="radio"]:hover {
-        border-color: #f4eee0;
-        opacity: 0.8;
-    }
+	.radio-label input[type="radio"]:hover {
+		border-color: #f4eee0;
+		opacity: 0.8;
+	}
 
-    .radio-text {
-        color: #f4eee0;
-        /* distance between 2 elements */
-        font-size: 1.4rem;
-    }
+	.radio-text {
+		color: #f4eee0;
+		/* distance between 2 elements */
+		font-size: 1.4rem;
+	}
 
-    .input-container {
-        width: 100%;
-        margin: 1rem;
-    }
+	.input-container {
+		width: 100%;
+		margin: 1rem;
+	}
 
-    input[type="text"] {
-        width: 100%;
-        padding: 0.75rem;
-        border: 2px solid var(--accent);
-        border-radius: 8px;
-        background-color: var(--background-primary);
-        color: var(--text-primary);
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        -webkit-user-select: none;
-        user-select: none;
-    }
+	input[type="text"] {
+		width: 100%;
+		padding: 0.75rem;
+		border: 2px solid var(--accent);
+		border-radius: 8px;
+		background-color: var(--background-primary);
+		color: var(--text-primary);
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		-webkit-user-select: none;
+		user-select: none;
+	}
 
-    input[type="text"]:hover {
-        border-color: var(--text-primary);
-    }
+	input[type="text"]:hover {
+		border-color: var(--text-primary);
+	}
 
-    input[type="text"]::placeholder {
-        color: var(--text-secondary);
-        -webkit-user-select: none;
-        user-select: none;
-    }
+	input[type="text"]::placeholder {
+		color: var(--text-secondary);
+		-webkit-user-select: none;
+		user-select: none;
+	}
 </style>
