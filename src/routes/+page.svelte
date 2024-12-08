@@ -183,6 +183,7 @@
 		height: 100%;
 		z-index: -1;
 		overflow: hidden;
+		filter: blur(1px);
 	}
 	.version-text {
 		position: fixed;
