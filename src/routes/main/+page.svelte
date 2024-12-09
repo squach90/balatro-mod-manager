@@ -2,6 +2,7 @@
 	import ShaderBackground from "../../components/ShaderBackground.svelte";
 	import About from "../../components/viewblock/About.svelte";
 	import LaunchButton from "../../components/LaunchButton.svelte";
+	import ModSwitch from "../../components/ModSwitch.svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -56,6 +57,7 @@
 
 	<div class="version-text">v0.1.0</div>
 </div>
+<ModSwitch />
 
 <style>
 	.main-page {
