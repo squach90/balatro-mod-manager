@@ -20,25 +20,16 @@ impl Database {
     fn initialize_database(conn: &Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
+                setting TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )",
             [],
         )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS installation (
-                path TEXT PRIMARY KEY,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )",
-            [],
-        )?;
-
         Ok(())
     }
 
     pub fn get_installation_path(&self) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT path FROM installation LIMIT 1")?;
+        let mut stmt = self.conn.prepare("SELECT value FROM settings WHERE setting = 'installation_path'")?;
         let mut rows = stmt.query([])?;
 
         if let Some(row) = rows.next()? {
@@ -49,22 +40,19 @@ impl Database {
     }
 
     pub fn remove_installation_path(&self) -> Result<()> {
-        self.conn.execute("DELETE FROM installation", [])?;
+        self.delete_setting("installation_path")?;
         Ok(())
     }
 
     pub fn set_installation_path(&self, path: &str) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR REPLACE INTO installation (path) VALUES (?1)",
-            [path],
-        )?;
+        self.set_setting("installation_path", path)?;
         Ok(())
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT value FROM settings WHERE key = ?1")?;
+            .prepare("SELECT value FROM settings WHERE setting = ?1")?;
         let mut rows = stmt.query([key])?;
 
         if let Some(row) = rows.next()? {
@@ -76,9 +64,14 @@ impl Database {
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES (?1, ?2)",
             [key, value],
         )?;
+        Ok(())
+    }
+
+    pub fn delete_setting(&self, key: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM settings WHERE setting = ?1", [key])?;
         Ok(())
     }
 }
