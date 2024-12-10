@@ -1,24 +1,22 @@
 <script lang="ts">
-	// TODO: Please make the Mod Switch more central. Look at the window
-	// TODO: Make the switch more responsive
-	let selectedFramework: "balamod" | "steamodded" = "balamod";
+	let selectedFramework: "balamod" | "steamodded" = "steamodded";
 </script>
 
 <div class="switch-container">
 	<div class="switch-wrapper">
-		<span class:active={selectedFramework === "balamod"}>Balamod</span>
+		<span class:active={selectedFramework === "balamod"} id="balamod">Balamod</span>
 		<label class="switch">
 			<input
 				type="checkbox"
 				checked={selectedFramework === "steamodded"}
-				on:change={(e) =>
+				on:change={(e: Event) =>
 					(selectedFramework = e.target.checked
 						? "steamodded"
 						: "balamod")}
 			/>
 			<span class="slider"></span>
 		</label>
-		<span class:active={selectedFramework === "steamodded"}>Steamodded</span
+		<span class:active={selectedFramework === "steamodded"} id="steamodded">Steamodded</span
 		>
 	</div>
 </div>
@@ -50,8 +48,12 @@
 		transition: color 0.3s ease;
 	}
 
-	span.active {
-		color: #f4eee0;
+	#steamodded.active {
+		color: #7c89f0;
+	}
+
+	#balamod.active {
+		color: #ee8242;
 	}
 
 	.switch {
@@ -95,5 +97,36 @@
 
 	input:checked + .slider:before {
 		transform: translateX(28px);
+	}
+
+	@media (max-width: 1160px) {
+		span {
+			font-size: 1.3rem;
+		}
+		.slider {
+			width: 50px;
+			height: 24px;
+			
+		}
+		.slider:before {
+			height: 20px;
+			width: 18px;
+		}
+		.switch {
+			width: 50px;
+			height: 24px;
+			bottom: 3px;
+		}
+		.switch input {
+			width: 0;
+			height: 0;
+		}
+		.switch-wrapper {
+			gap: 0.7rem;
+		}
+		#steamodded {
+			margin-left: 0.25rem;
+		}
+
 	}
 </style>
