@@ -25,11 +25,18 @@ impl Database {
             )",
             [],
         )?;
+        // Set modlauncher setting to "steamodded" if current_modloader doesn't exist
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (setting, value) VALUES ('current_modloader', 'steamodded')",
+            [],
+        )?;
         Ok(())
     }
 
     pub fn get_installation_path(&self) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT value FROM settings WHERE setting = 'installation_path'")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'installation_path'")?;
         let mut rows = stmt.query([])?;
 
         if let Some(row) = rows.next()? {
@@ -49,11 +56,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+    pub fn get_setting(&self, setting: &str) -> Result<Option<String>> {
         let mut stmt = self
             .conn
             .prepare("SELECT value FROM settings WHERE setting = ?1")?;
-        let mut rows = stmt.query([key])?;
+        let mut rows = stmt.query([setting])?;
 
         if let Some(row) = rows.next()? {
             Ok(Some(row.get(0)?))
@@ -62,16 +69,17 @@ impl Database {
         }
     }
 
-    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+    pub fn set_setting(&self, setting: &str, value: &str) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO settings (setting, value) VALUES (?1, ?2)",
-            [key, value],
+            [setting, value],
         )?;
         Ok(())
     }
 
-    pub fn delete_setting(&self, key: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM settings WHERE setting = ?1", [key])?;
+    pub fn delete_setting(&self, setting: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM settings WHERE setting = ?1", [setting])?;
         Ok(())
     }
 }

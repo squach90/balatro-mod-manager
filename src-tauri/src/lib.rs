@@ -38,6 +38,21 @@ async fn check_existing_installation(
 }
 
 #[tauri::command]
+async fn set_modloader(state: tauri::State<'_, AppState>, modloader: String) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.set_setting("current_modloader", &modloader)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_modloader(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_setting("current_modloader")
+        .map_err(|e| e.to_string())
+        .map(|s| s.unwrap_or_else(|| "steamodded".to_string()))
+}
+
+#[tauri::command]
 async fn find_steam_balatro(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
     let balatros = find_balatros();
     if let Some(path) = balatros.first() {
@@ -94,7 +109,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             find_steam_balatro,
             check_custom_balatro,
-            check_existing_installation
+            check_existing_installation,
+            set_modloader,
+            get_modloader
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
