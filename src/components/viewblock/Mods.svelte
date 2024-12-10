@@ -1,5 +1,6 @@
 <script lang="ts">
 	// TODO: Do a style for the download button, if the mod is already installed, the button should be disabled and show "Installed" instead of "Download"
+	// TODO: Also add a way to get more information about the mod when clicking on the card (somewherd (somewhere)
 	import {
 		Download,
 		Flame,
