@@ -2,7 +2,7 @@
     import { invoke } from "@tauri-apps/api/core";
     import { onMount } from "svelte";
 
-    let selectedModLoader: "balamod" | "steamodded" = "balamod"; // Default value
+    let selectedModLoader: "steamodded" | "balamod" ; // Default value
 
     onMount(async () => {
         try {
@@ -50,16 +50,7 @@
 
 <style>
     .switch-container {
-        position: fixed;
-        top: 94%;
-        left: 50%; /* Position at 50% of window width */
-        right: 50%; /* Position at 50% of window width */
-        transform: translateX(
-            -50%
-        ); /* Center by shifting back half of element width */
         display: flex;
-        justify-content: center;
-        align-items: center;
     }
 
     .switch-wrapper {

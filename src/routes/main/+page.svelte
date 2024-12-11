@@ -4,6 +4,7 @@
 	import LaunchButton from "../../components/LaunchButton.svelte";
 	import ModSwitch from "../../components/ModSwitch.svelte";
     import Mods from "../../components/viewblock/Mods.svelte";
+    import Settings from "../../components/viewblock/Settings.svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -48,7 +49,7 @@
 		{/if}
 
 		{#if currentSection === "settings"}
-			Settings section
+			<Settings />
 		{/if}
 
 		{#if currentSection === "about"}
@@ -58,7 +59,6 @@
 
 	<div class="version-text">v0.1.0</div>
 </div>
-<ModSwitch />
 
 <style>
 	.main-page {
