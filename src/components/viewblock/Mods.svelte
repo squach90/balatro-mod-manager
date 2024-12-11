@@ -1,7 +1,4 @@
 <script lang="ts">
-	// TODO: Do a style for the download button, if the mod is already installed, the button should be disabled and show "Installed" instead of "Download"
-	// TODO: Also add a way to get more information about the mod when clicking on the card (somewherd (somewhere)
-	// TODO: Move Mod switch to Settings
 	import {
 		Download,
 		Flame,
@@ -11,7 +8,9 @@
 		Gamepad2,
 		LayoutDashboard,
 		FolderHeart,
+		Trash2,
 	} from "lucide-svelte";
+	import ModView from "./ModView.svelte";
 
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
@@ -47,6 +46,18 @@
 		lastUpdated: string;
 		category: string;
 		colors: { color1: string; color2: string };
+		downloaded: boolean;
+		publisher: string;
+	}
+
+	let selectedMod: Mod | null = null;
+
+	function handleClose() {
+		selectedMod = null;
+	}
+
+	function handleModClick(mod: Mod) {
+		selectedMod = mod;
 	}
 
 	let selectedCategory = "Popular";
@@ -61,6 +72,8 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: false,
+			publisher: "Joe Mama",
 		},
 		{
 			title: "Extended Deck",
@@ -71,6 +84,8 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: true,
+			publisher: "Joe Mama",
 		},
 		{
 			title: "Extended Deck",
@@ -81,6 +96,8 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: false,
+			publisher: "Joe Mama",
 		},
 		{
 			title: "Extended Deck",
@@ -91,6 +108,8 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: false,
+			publisher: "Joe Mama",
 		},
 		{
 			title: "Extended Deck",
@@ -101,6 +120,8 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: true,
+			publisher: "Joe Mama",
 		},
 		{
 			title: "Extended Deck",
@@ -111,8 +132,9 @@
 			lastUpdated: "2 days",
 			category: "Card Mods",
 			colors: getRandomColorPair(),
+			downloaded: true,
+			publisher: "Joe Mama",
 		},
-		// Your other mods...
 	];
 </script>
 
@@ -135,8 +157,12 @@
 		{#each mods as mod}
 			<div
 				class="mod-card"
-				style="--bg-color: {mod.colors.color1}; --bg-color-2: {mod
+				style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod
 					.colors.color2};"
+				on:click={() => handleModClick(mod)}
+				on:keydown={(e) => e.key === "Enter" && handleModClick(mod)}
+				role="button"
+				tabindex="0"
 			>
 				<div class="mod-image">
 					<img src={mod.image} alt={mod.title} />
@@ -155,14 +181,37 @@
 					<h3>{mod.title}</h3>
 					<p>{mod.description}</p>
 				</div>
-				<button class="download-button">
-					<Download size={16} />
-					Download
-				</button>
+				<div class="button-container">
+					<button
+						class="download-button"
+						class:installed={mod.downloaded}
+						disabled={mod.downloaded}
+						on:click|stopPropagation={() => {
+							/* handle download */
+						}}
+					>
+						<Download size={16} />
+						{mod.downloaded ? "Installed" : "Download"}
+					</button>
+					{#if mod.downloaded}
+						<button
+							class="delete-button"
+							on:click|stopPropagation={() => {
+								/* handle delete */
+							}}
+						>
+							<Trash2 size={16} />
+						</button>
+					{/if}
+				</div>
 			</div>
 		{/each}
 	</div>
 </div>
+
+{#if selectedMod}
+	<ModView mod={selectedMod} onClose={handleClose} />
+{/if}
 
 <style>
 	.mods-container {
@@ -270,18 +319,12 @@
 	}
 
 	.mod-card {
-		--bg-color: #4f6367;
-		--bg-color-2: #334461;
+		--bg-color: var(--orig-color1, #4f6367);
+		--bg-color-2: var(--orig-color2, #334461);
+
 		display: flex;
 		flex-direction: column;
 		position: relative;
-		background: repeating-linear-gradient(
-			45deg,
-			var(--bg-color),
-			var(--bg-color) 10px,
-			var(--bg-color-2) 10px,
-			var(--bg-color-2) 20px
-		);
 		border-radius: 8px;
 		overflow: hidden;
 		border: 2px solid #f4eee0;
@@ -290,6 +333,31 @@
 		margin: 0 auto;
 		padding: 1rem;
 		box-sizing: border-box;
+		cursor: pointer;
+		background-size: 100% 200%;
+		transition: all 0.3s ease;
+		/* Remove the duplicate background property and keep only this one */
+		background-image: repeating-linear-gradient(
+			-45deg,
+			var(--bg-color),
+			var(--bg-color) 10px,
+			var(--bg-color-2) 10px,
+			var(--bg-color-2) 20px
+		);
+	}
+
+	.mod-card:hover {
+		animation: stripe-slide-up 1s linear infinite;
+		scale: 1.05;
+	}
+
+	@keyframes stripe-slide-up {
+		0% {
+			background-position: 0 0;
+		}
+		100% {
+			background-position: 0 -20px;
+		}
 	}
 
 	.mod-image {
@@ -347,7 +415,19 @@
 		position: absolute;
 		bottom: 1rem;
 		left: 1rem;
+
+		&.installed {
+			background: #808080;
+			outline-color: #666666;
+			cursor: not-allowed;
+		}
+
+		&.installed:hover {
+			background: #808080;
+			transform: none;
+		}
 	}
+
 	.download-button:hover {
 		background: #74cca8;
 		transform: translateY(-2px);
@@ -374,5 +454,44 @@
 		color: #f4eee0;
 		font-size: 1rem;
 		line-height: 1.2;
+	}
+
+	.button-container {
+		display: flex;
+		gap: 0.5rem;
+		position: absolute;
+		bottom: 1rem;
+		left: 1rem;
+		width: calc(100% - 2rem);
+	}
+
+	.download-button {
+		flex: 1;
+		position: static;
+		bottom: auto;
+		left: auto;
+	}
+
+	.delete-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.75rem;
+		background: #c14139;
+		color: #f4eee0;
+		border: none;
+		outline: #a13029 solid 2px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.delete-button:hover {
+		background: #d4524a;
+		transform: translateY(-2px);
+	}
+
+	.delete-button:active {
+		transform: translateY(0);
 	}
 </style>
