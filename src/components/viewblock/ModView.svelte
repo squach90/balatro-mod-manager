@@ -15,50 +15,41 @@
 
 {#if $currentModView}
 	<div
-		class="overlay"
-		transition:fade={{ duration: 200 }}
-		on:click={handleClose}
+		class="mod-view"
+		transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
 	>
-		<div
-			class="mod-view"
-			transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
-			on:click|stopPropagation
-		>
-			<button class="back-button" on:click={handleClose}
-				>&larr; Back</button
-			>
+		<button class="back-button" on:click={handleClose}>&larr; Back</button>
 
-			<div class="mod-content">
-				<h2>{mod.title}</h2>
+		<div class="mod-content">
+			<h2>{mod.title}</h2>
 
-				<div class="content-grid">
-					<div class="left-column">
-						<img src={mod.image} alt={mod.title} />
-						<div class="button-container">
-							<button
-								class="download-button"
-								class:installed={mod.downloaded}
-								disabled={mod.downloaded}
-							>
-								<Download size={16} />
-								{mod.downloaded ? "Installed" : "Download"}
+			<div class="content-grid">
+				<div class="left-column">
+					<img src={mod.image} alt={mod.title} />
+					<div class="button-container">
+						<button
+							class="download-button"
+							class:installed={mod.downloaded}
+							disabled={mod.downloaded}
+						>
+							<Download size={16} />
+							{mod.downloaded ? "Installed" : "Download"}
+						</button>
+						{#if mod.downloaded}
+							<button class="delete-button">
+								<Trash2 size={16} />
 							</button>
-							{#if mod.downloaded}
-								<button class="delete-button">
-									<Trash2 size={16} />
-								</button>
-							{/if}
-						</div>
-						<div class="mod-stats">
-							<span><Download size={16} /> {mod.downloads}</span>
-							<span><Clock size={16} /> {mod.lastUpdated}</span>
-							<span><User size={16} /> {mod.publisher}</span>
-						</div>
+						{/if}
 					</div>
+					<div class="mod-stats">
+						<span><Download size={16} /> {mod.downloads}</span>
+						<span><Clock size={16} /> {mod.lastUpdated}</span>
+						<span><User size={16} /> {mod.publisher}</span>
+					</div>
+				</div>
 
-					<div class="right-column">
-						<p class="description">{mod.description}</p>
-					</div>
+				<div class="right-column">
+					<p class="description">{mod.description}</p>
 				</div>
 			</div>
 		</div>
@@ -71,16 +62,6 @@
 		margin: 2rem auto;
 		padding: 2rem;
 		color: #f4eee0;
-	}
-
-	.overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 999;
 	}
 
 	.content-grid {
