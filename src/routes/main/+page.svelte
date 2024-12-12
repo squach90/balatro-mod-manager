@@ -4,8 +4,6 @@
 	import LaunchButton from "../../components/LaunchButton.svelte";
 	import Mods from "../../components/viewblock/Mods.svelte";
 	import Settings from "../../components/viewblock/Settings.svelte";
-	import { currentModView } from "../../stores/modStore";
-	import type { Mod } from "../../stores/modStore";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {

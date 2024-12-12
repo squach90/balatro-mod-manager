@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fly, fade, crossfade } from "svelte/transition";
+	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User } from "lucide-svelte";
 	import { currentModView } from "../../stores/modStore";
