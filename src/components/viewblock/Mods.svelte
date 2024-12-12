@@ -11,7 +11,8 @@
 		Trash2,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
-
+	import { currentModView } from "../../stores/modStore";
+	import type { Mod } from "../../stores/modStore";
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Popular", icon: Flame },
@@ -38,27 +39,14 @@
 		return colorPairs[Math.floor(Math.random() * colorPairs.length)];
 	}
 
-	interface Mod {
-		title: string;
-		description: string;
-		image: string;
-		downloads: string;
-		lastUpdated: string;
-		category: string;
-		colors: { color1: string; color2: string };
-		downloaded: boolean;
-		publisher: string;
-	}
-
 	let selectedMod: Mod | null = null;
 
-	function handleClose() {
-		selectedMod = null;
-	}
 
 	function handleModClick(mod: Mod) {
 		selectedMod = mod;
+		currentModView.set(mod);
 	}
+
 
 	let selectedCategory = "Popular";
 
@@ -209,8 +197,8 @@
 	</div>
 </div>
 
-{#if selectedMod}
-	<ModView mod={selectedMod} onClose={handleClose} />
+{#if $currentModView}
+	<ModView />
 {/if}
 
 <style>

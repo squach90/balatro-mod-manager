@@ -2,62 +2,60 @@
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User } from "lucide-svelte";
+	import { currentModView } from "../../stores/modStore";
+	import type { Mod } from "../../stores/modStore";
+	// No need to export mod as a prop since we'll use the store
+	let mod: Mod;
+	$: mod = $currentModView!; // The ! operator asserts that the value is non-null
 
-	export let mod: {
-		title: string;
-		description: string;
-		image: string;
-		downloads: string;
-		lastUpdated: string;
-		category: string;
-		downloaded: boolean;
-		publisher: string;
-	};
-
-	export let onClose: () => void;
+	function handleClose() {
+		currentModView.set(null);
+	}
 </script>
 
-<div
-	class="mod-view"
-	in:fly={{ x: 300, duration: 400, easing: cubicOut }}
-	out:fly={{ x: 300, duration: 300, easing: cubicOut }}
->
-	<button class="back-button" on:click={onClose}>&larr; Back</button>
+{#if $currentModView}
+	<div
+		class="mod-view"
+		in:fly={{ x: 300, duration: 400, easing: cubicOut }}
+		out:fly={{ x: 300, duration: 300, easing: cubicOut }}
+	>
+		<button class="back-button" on:click={handleClose}>&larr; Back</button>
 
-	<div class="mod-content">
-		<h2>{mod.title}</h2>
+		<div class="mod-content">
+			<h2>{mod.title}</h2>
 
-		<div class="content-grid">
-			<div class="left-column">
-				<img src={mod.image} alt={mod.title} />
-				<div class="button-container">
-					<button
-						class="download-button"
-						class:installed={mod.downloaded}
-						disabled={mod.downloaded}
-					>
-						<Download size={16} />
-						{mod.downloaded ? "Installed" : "Download"}
-					</button>
-					{#if mod.downloaded}
-						<button class="delete-button">
-							<Trash2 size={16} />
+			<div class="content-grid">
+				<div class="left-column">
+					<img src={mod.image} alt={mod.title} />
+					<div class="button-container">
+						<button
+							class="download-button"
+							class:installed={mod.downloaded}
+							disabled={mod.downloaded}
+						>
+							<Download size={16} />
+							{mod.downloaded ? "Installed" : "Download"}
 						</button>
-					{/if}
+						{#if mod.downloaded}
+							<button class="delete-button">
+								<Trash2 size={16} />
+							</button>
+						{/if}
+					</div>
+					<div class="mod-stats">
+						<span><Download size={16} /> {mod.downloads}</span>
+						<span><Clock size={16} /> {mod.lastUpdated}</span>
+						<span><User size={16} /> {mod.publisher}</span>
+					</div>
 				</div>
-				<div class="mod-stats">
-					<span><Download size={16} /> {mod.downloads}</span>
-					<span><Clock size={16} /> {mod.lastUpdated}</span>
-					<span><User size={16} /> {mod.publisher}</span>
-				</div>
-			</div>
 
-			<div class="right-column">
-				<p class="description">{mod.description}</p>
+				<div class="right-column">
+					<p class="description">{mod.description}</p>
+				</div>
 			</div>
 		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 	.mod-content {
