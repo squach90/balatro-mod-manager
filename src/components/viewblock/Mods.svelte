@@ -314,8 +314,8 @@
 			background-color: transparent;
 		}
 
-		scrollbar-width: thin;
-		scrollbar-color: #f4eee0 transparent;
+		/* scrollbar-width: 0; */
+		/* scrollbar-color: transparent transparent; */
 	}
 
 	.mod-card {

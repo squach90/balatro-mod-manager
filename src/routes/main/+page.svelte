@@ -2,9 +2,8 @@
 	import ShaderBackground from "../../components/ShaderBackground.svelte";
 	import About from "../../components/viewblock/About.svelte";
 	import LaunchButton from "../../components/LaunchButton.svelte";
-	import ModSwitch from "../../components/ModSwitch.svelte";
-    import Mods from "../../components/viewblock/Mods.svelte";
-    import Settings from "../../components/viewblock/Settings.svelte";
+	import Mods from "../../components/viewblock/Mods.svelte";
+	import Settings from "../../components/viewblock/Settings.svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -120,8 +119,8 @@
 		outline: 2px solid #f4eee0;
 		overflow-y: auto; /* Enable vertical scrolling */
 		max-height: calc(100vh - 12rem);
+		min-height: 0;
 
-		/* Webkit browsers (Chrome, Safari, newer Edge) */
 		&::-webkit-scrollbar {
 			width: 10px;
 		}
@@ -137,9 +136,13 @@
 			border-radius: 15px;
 		}
 
-		/* Firefox */
-		scrollbar-width: thin;
-		scrollbar-color: #f4eee0 transparent;
+		&::-webkit-scrollbar:horizontal {
+			display: none;
+		}
+
+		&::-webkit-scrollbar-corner {
+			background-color: transparent;
+		}
 	}
 
 	.version-text {

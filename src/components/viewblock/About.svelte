@@ -38,6 +38,31 @@
 		justify-content: space-between;
 		gap: 2rem;
 		align-items: center;
+		&::-webkit-scrollbar {
+			width: 10px;
+		}
+
+		&::-webkit-scrollbar-track {
+			background: transparent;
+			border-radius: 15px;
+		}
+
+		&::-webkit-scrollbar-thumb {
+			background: #f4eee0;
+			border: 2px solid rgba(193, 65, 57, 0.8);
+			border-radius: 15px;
+		}
+
+		&::-webkit-scrollbar:horizontal {
+			display: none;
+		}
+
+		&::-webkit-scrollbar-corner {
+			background-color: transparent;
+		}
+
+		/* scrollbar-width: thin; */
+		/* scrollbar-color: #f4eee0 transparent; */
 	}
 
 	.profile-section {
