@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { fly } from "svelte/transition";
+	import { fly, fade, crossfade } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User } from "lucide-svelte";
 	import { currentModView } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
-	// No need to export mod as a prop since we'll use the store
+
 	let mod: Mod;
-	$: mod = $currentModView!; // The ! operator asserts that the value is non-null
+	$: mod = $currentModView!;
 
 	function handleClose() {
 		currentModView.set(null);
@@ -15,42 +15,50 @@
 
 {#if $currentModView}
 	<div
-		class="mod-view"
-		in:fly={{ x: 300, duration: 400, easing: cubicOut }}
-		out:fly={{ x: 300, duration: 300, easing: cubicOut }}
+		class="overlay"
+		transition:fade={{ duration: 200 }}
+		on:click={handleClose}
 	>
-		<button class="back-button" on:click={handleClose}>&larr; Back</button>
+		<div
+			class="mod-view"
+			transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
+			on:click|stopPropagation
+		>
+			<button class="back-button" on:click={handleClose}
+				>&larr; Back</button
+			>
 
-		<div class="mod-content">
-			<h2>{mod.title}</h2>
+			<div class="mod-content">
+				<h2>{mod.title}</h2>
 
-			<div class="content-grid">
-				<div class="left-column">
-					<img src={mod.image} alt={mod.title} />
-					<div class="button-container">
-						<button
-							class="download-button"
-							class:installed={mod.downloaded}
-							disabled={mod.downloaded}
-						>
-							<Download size={16} />
-							{mod.downloaded ? "Installed" : "Download"}
-						</button>
-						{#if mod.downloaded}
-							<button class="delete-button">
-								<Trash2 size={16} />
+				<div class="content-grid">
+					<div class="left-column">
+						<img src={mod.image} alt={mod.title} />
+						<div class="button-container">
+							<button
+								class="download-button"
+								class:installed={mod.downloaded}
+								disabled={mod.downloaded}
+							>
+								<Download size={16} />
+								{mod.downloaded ? "Installed" : "Download"}
 							</button>
-						{/if}
+							{#if mod.downloaded}
+								<button class="delete-button">
+									<Trash2 size={16} />
+								</button>
+							{/if}
+						</div>
+						<div class="mod-stats">
+							<span><Download size={16} /> {mod.downloads}</span>
+							<span><Clock size={16} /> {mod.lastUpdated}</span>
+							<span><User size={16} /> {mod.publisher}</span>
+						</div>
 					</div>
-					<div class="mod-stats">
-						<span><Download size={16} /> {mod.downloads}</span>
-						<span><Clock size={16} /> {mod.lastUpdated}</span>
-						<span><User size={16} /> {mod.publisher}</span>
-					</div>
-				</div>
 
-				<div class="right-column">
-					<p class="description">{mod.description}</p>
+					<div class="right-column">
+						<p class="description">{mod.description}</p>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -63,6 +71,16 @@
 		margin: 2rem auto;
 		padding: 2rem;
 		color: #f4eee0;
+	}
+
+	.overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 999;
 	}
 
 	.content-grid {
@@ -169,7 +187,7 @@
 	.mod-view {
 		position: fixed;
 		top: 0;
-		left: 0;
+		right: 0;
 		width: 100%;
 		height: 100%;
 		background: #393646;

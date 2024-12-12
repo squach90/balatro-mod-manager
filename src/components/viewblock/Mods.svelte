@@ -39,14 +39,9 @@
 		return colorPairs[Math.floor(Math.random() * colorPairs.length)];
 	}
 
-	let selectedMod: Mod | null = null;
-
-
 	function handleModClick(mod: Mod) {
-		selectedMod = mod;
 		currentModView.set(mod);
 	}
-
 
 	let selectedCategory = "Popular";
 
@@ -197,9 +192,7 @@
 	</div>
 </div>
 
-{#if $currentModView}
-	<ModView />
-{/if}
+<ModView />
 
 <style>
 	.mods-container {
