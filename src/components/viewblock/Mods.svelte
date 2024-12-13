@@ -12,8 +12,9 @@
 		Search,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
-	import { currentModView } from "../../stores/modStore";
+	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
+	import { Category } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
@@ -49,6 +50,14 @@
 		currentModView.set(mod);
 	}
 
+	let showSearch: boolean;
+
+	$: showSearch = $currentCategory === "Search";
+
+	function handleCategoryClick(category: string) {
+		currentCategory.set(category);
+	}
+
 	document.addEventListener("click", (e) => {
 		const target = e.target as HTMLElement;
 		const anchor = target.closest("a");
@@ -59,14 +68,6 @@
 		}
 	});
 
-	let selectedCategory = "Popular";
-	let showSearch = false;
-
-	function handleCategoryClick(category: string) {
-		selectedCategory = category;
-		showSearch = category === "Search";
-	}
-
 	const mods: Mod[] = [
 		{
 			title: "Extended Deck",
@@ -75,7 +76,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: false,
 			publisher: "Joe Mama",
@@ -87,7 +88,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: true,
 			publisher: "Joe Mama",
@@ -99,7 +100,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: false,
 			publisher: "Joe Mama",
@@ -111,7 +112,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: false,
 			publisher: "Joe Mama",
@@ -123,7 +124,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: true,
 			publisher: "Joe Mama",
@@ -135,7 +136,7 @@
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
-			category: "Card Mods",
+			categories: Category.CardMods,
 			colors: getRandomColorPair(),
 			downloaded: true,
 			publisher: "Joe Mama",
@@ -147,7 +148,7 @@
 	<div class="categories">
 		{#each categories as category}
 			<button
-				class:active={selectedCategory === category.name}
+				class:active={$currentCategory === category.name}
 				on:click={() => handleCategoryClick(category.name)}
 			>
 				<svelte:component this={category.icon} size={16} />
