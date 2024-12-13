@@ -9,12 +9,18 @@
 		LayoutDashboard,
 		FolderHeart,
 		Trash2,
+		Search,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { currentModView } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
+	import { open } from "@tauri-apps/plugin-shell";
+	import { stripMarkdown, truncateText } from "../../utils/helpers";
+	import SearchView from "./SearchView.svelte";
+
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
+		{ name: "Search", icon: Search },
 		{ name: "Popular", icon: Flame },
 		{ name: "Recent", icon: Clock },
 		{ name: "Featured", icon: Star },
@@ -43,13 +49,29 @@
 		currentModView.set(mod);
 	}
 
+	document.addEventListener("click", (e) => {
+		const target = e.target as HTMLElement;
+		const anchor = target.closest("a");
+
+		if (anchor && anchor.href.startsWith("https://") && anchor.href) {
+			e.preventDefault();
+			open(anchor.href);
+		}
+	});
+
 	let selectedCategory = "Popular";
+	let showSearch = false;
+
+	function handleCategoryClick(category: string) {
+		selectedCategory = category;
+		showSearch = category === "Search";
+	}
 
 	const mods: Mod[] = [
 		{
 			title: "Extended Deck",
 			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
+				"# Lorem ipsum\n## dolor sit amet,\n [consetetur sadipscing](https://dasguney.com) elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
 			image: "/images/cover.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
@@ -126,7 +148,7 @@
 		{#each categories as category}
 			<button
 				class:active={selectedCategory === category.name}
-				on:click={() => (selectedCategory = category.name)}
+				on:click={() => handleCategoryClick(category.name)}
 			>
 				<svelte:component this={category.icon} size={16} />
 				{category.name}
@@ -136,60 +158,64 @@
 
 	<div class="separator"></div>
 
-	<div class="mods-grid">
-		{#each mods as mod}
-			<div
-				class="mod-card"
-				style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod
-					.colors.color2};"
-				on:click={() => handleModClick(mod)}
-				on:keydown={(e) => e.key === "Enter" && handleModClick(mod)}
-				role="button"
-				tabindex="0"
-			>
-				<div class="mod-image">
-					<img src={mod.image} alt={mod.title} />
-					<div class="tags">
-						<span class="tag downloads">
-							<Download size={13} />
-							{mod.downloads}
-						</span>
-						<span class="tag updated">
-							<Clock size={13} />
-							{mod.lastUpdated}
-						</span>
+	{#if showSearch}
+		<SearchView />
+	{:else}
+		<div class="mods-grid">
+			{#each mods as mod}
+				<div
+					class="mod-card"
+					style="--orig-color1: {mod.colors
+						.color1}; --orig-color2: {mod.colors.color2};"
+					on:click={() => handleModClick(mod)}
+					on:keydown={(e) => e.key === "Enter" && handleModClick(mod)}
+					role="button"
+					tabindex="0"
+				>
+					<div class="mod-image">
+						<img src={mod.image} alt={mod.title} />
+						<div class="tags">
+							<span class="tag downloads">
+								<Download size={13} />
+								{mod.downloads}
+							</span>
+							<span class="tag updated">
+								<Clock size={13} />
+								{mod.lastUpdated}
+							</span>
+						</div>
 					</div>
-				</div>
-				<div class="mod-info">
-					<h3>{mod.title}</h3>
-					<p>{mod.description}</p>
-				</div>
-				<div class="button-container">
-					<button
-						class="download-button"
-						class:installed={mod.downloaded}
-						disabled={mod.downloaded}
-						on:click|stopPropagation={() => {
-							/* handle download */
-						}}
-					>
-						<Download size={16} />
-						{mod.downloaded ? "Installed" : "Download"}
-					</button>
-					{#if mod.downloaded}
+					<div class="mod-info">
+						<h3>{mod.title}</h3>
+						<p>{truncateText(stripMarkdown(mod.description))}</p>
+					</div>
+					<div class="button-container">
 						<button
-							class="delete-button"
+							class="download-button"
+							class:installed={mod.downloaded}
+							disabled={mod.downloaded}
 							on:click|stopPropagation={() => {
-								/* handle delete */
+								/* handle download */
 							}}
 						>
-							<Trash2 size={16} />
+							<Download size={16} />
+							{mod.downloaded ? "Installed" : "Download"}
 						</button>
-					{/if}
+						{#if mod.downloaded}
+							<button
+								class="delete-button"
+								on:click|stopPropagation={() => {
+									/* handle delete */
+								}}
+							>
+								<Trash2 size={16} />
+							</button>
+						{/if}
+					</div>
 				</div>
-			</div>
-		{/each}
-	</div>
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <ModView />
