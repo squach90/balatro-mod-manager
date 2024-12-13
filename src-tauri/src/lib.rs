@@ -38,6 +38,12 @@ async fn check_existing_installation(
 }
 
 #[tauri::command]
+async fn get_balatro_path(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_installation_path().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn set_modloader(state: tauri::State<'_, AppState>, modloader: String) -> Result<(), String> {
     let db = state.db.lock().unwrap();
     db.set_setting("current_modloader", &modloader)
@@ -111,7 +117,8 @@ pub fn run() {
             check_custom_balatro,
             check_existing_installation,
             set_modloader,
-            get_modloader
+            get_modloader,
+            get_balatro_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

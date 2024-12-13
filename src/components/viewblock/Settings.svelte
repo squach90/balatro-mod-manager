@@ -1,12 +1,15 @@
 <script>
 	import ModSwitch from "../ModSwitch.svelte";
+	import PathSelector from "../PathSelector.svelte";
 </script>
 
 <div class="settings-container">
 	<h2>Settings</h2>
 	<div class="content">
-	<h3>Mod Loader</h3>
+		<h3>Mod Loader</h3>
 		<ModSwitch />
+		<h3>Game Path</h3>
+		<PathSelector />
 	</div>
 </div>
 

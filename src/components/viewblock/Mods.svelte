@@ -1,4 +1,5 @@
 <script lang="ts">
+	// TODO: Implement Image Caching with Tauri/Rust
 	import {
 		Download,
 		Flame,
