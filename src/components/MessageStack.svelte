@@ -1,56 +1,60 @@
-<script lang="ts">
-    import { fly } from "svelte/transition";
+<script context="module">
+import { writable } from 'svelte/store';
 
-    type Message = {
-        id: number;
-        text: string;
-        type: "success" | "error" | "warning" | "info";
-        position: number;
-    };
+export const messageStore = writable<Message[]>([]);
 
-    const types = {
-        success: {
-            bg: "#459373",
-            border: "white",
-            icon: "✓",
-        },
-        error: {
-            bg: "#644047",
-            border: "#A25B5B",
-            icon: "✕",
-        },
-        warning: {
-            bg: "#625C43",
-            border: "#A39358",
-            icon: "!",
-        },
-        info: {
-            bg: "#435662",
-            border: "#587A93",
-            icon: "i",
-        },
-    };
+type Message = {
+    id: number;
+    text: string;
+    type: "success" | "error" | "warning" | "info";
+    position: number;
+};
 
-    let messages: Message[] = [];
-    let counter = 0;
+let counter = 0;
 
-    export function addMessage(
-        text: string,
-        type: "success" | "error" | "warning" | "info",
-    ) {
-        const id = counter++;
-        // Find the lowest available position
-        const usedPositions = messages.map((m) => m.position);
-        let position = 0;
-        while (usedPositions.includes(position)) {
-            position++;
-        }
-
-        messages = [...messages, { id, text, type, position }];
-        setTimeout(() => {
-            messages = messages.filter((m) => m.id !== id);
-        }, 3000);
+export function addMessage(text: string, type: "success" | "error" | "warning" | "info") {
+    const id = counter++;
+    const usedPositions = get(messageStore).map(m => m.position);
+    let position = 0;
+    while (usedPositions.includes(position)) {
+        position++;
     }
+
+    messageStore.update(messages => [...messages, { id, text, type, position }]);
+    setTimeout(() => {
+        messageStore.update(messages => messages.filter(m => m.id !== id));
+    }, 3000);
+}
+</script>
+
+<script lang="ts">
+import { fly } from "svelte/transition";
+import { get } from 'svelte/store';
+
+const types = {
+    success: {
+        bg: "#459373",
+        border: "white",
+        icon: "✓",
+    },
+    error: {
+        bg: "#644047",
+        border: "#A25B5B",
+        icon: "✕",
+    },
+    warning: {
+        bg: "#625C43",
+        border: "#A39358",
+        icon: "!",
+    },
+    info: {
+        bg: "#435662",
+        border: "#587A93",
+        icon: "i",
+    },
+};
+
+$: messages = $messageStore;
 </script>
 
 <div class="message-stack">
@@ -116,3 +120,4 @@
         line-height: 1.4;
     }
 </style>
+

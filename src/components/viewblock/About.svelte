@@ -105,8 +105,6 @@
 			background-color: transparent;
 		}
 
-		/* scrollbar-width: thin; */
-		/* scrollbar-color: #f4eee0 transparent; */
 	}
 
 	.profile-section {

@@ -43,7 +43,7 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     steam_path.push_str("\\steamapps\\libraryfolders.vdf");
     let libraryfolders_path = Path::new(&steam_path);
     if !libraryfolders_path.exists() {
-        red_ln!("'{}' not found.", libraryfolders_path.to_str().unwrap());
+        error!("'{}' not found.", libraryfolders_path.to_str().unwrap());
         return vec![];
     }
 
@@ -94,7 +94,7 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
             path.push(".local/share/Steam/steamapps/common/Balatro");
             paths.push(path);
         }
-        None => red_ln!("Impossible to get your home dir!"),
+        None => error!("Impossible to get your home dir!"),
     }
     remove_unexisting_paths(&mut paths);
     paths
