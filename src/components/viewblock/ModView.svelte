@@ -31,7 +31,11 @@
 			<div class="content-grid">
 				<div class="left-column">
 					<div class="image-container">
-						<img src={mod.image} alt={mod.title} />
+						<img
+							src={mod.image}
+							alt={mod.title}
+							draggable="false"
+						/>
 					</div>
 
 					<div class="button-container">

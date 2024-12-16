@@ -175,7 +175,11 @@
 					tabindex="0"
 				>
 					<div class="mod-image">
-						<img src={mod.image} alt={mod.title} />
+						<img
+							src={mod.image}
+							alt={mod.title}
+							draggable="false"
+						/>
 						<div class="tags">
 							<span class="tag downloads">
 								<Download size={13} />
