@@ -1,15 +1,16 @@
-use std::path::PathBuf;
+use log::error;
 use log::info;
+#[cfg(target_os = "windows")]
+use std::fs::File;
+#[cfg(target_os = "windows")]
+use std::io::{BufReader, Read};
+#[cfg(target_os = "windows")]
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
-#[cfg(target_os = "windows")]
-use std::path::Path;
-#[cfg(target_os = "windows")]
-use std::io::{BufReader, Read};
-#[cfg(target_os = "windows")]
-use std::fs::File;
 
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
@@ -33,8 +34,6 @@ fn remove_unexisting_paths(paths: &mut Vec<PathBuf>) {
 
 #[cfg(target_os = "windows")]
 pub fn get_balatro_paths() -> Vec<PathBuf> {
-    use log::error;
-
     let steam_path = read_path_from_registry();
     let mut steam_path = steam_path.unwrap_or_else(|_| {
         error!("Could not read steam install path from Registry! Trying standard installation path in C:\\");
@@ -70,8 +69,6 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
 
 #[cfg(target_os = "macos")]
 pub fn get_balatro_paths() -> Vec<PathBuf> {
-    use log::error;
-
     let mut paths: Vec<PathBuf> = vec![];
     match home::home_dir() {
         Some(path) => {
