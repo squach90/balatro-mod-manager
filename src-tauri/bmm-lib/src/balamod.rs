@@ -8,8 +8,6 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 use zip::{write::FileOptions, CompressionMethod, ZipWriter};
 
-// TODO: Do a custom Error Type (for future: Message will be then displayed in frontend)
-
 #[derive(Clone, Debug)]
 pub struct Balatro {
     pub path: PathBuf,
