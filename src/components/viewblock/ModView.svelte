@@ -172,6 +172,10 @@
 		cursor: not-allowed;
 	}
 
+	.download-button:active:not(.installed) {
+		transform: translateY(1px);
+	}
+
 	.delete-button {
 		padding: 0.75rem;
 		background: #c14139;
@@ -295,6 +299,9 @@
 		color: rgba(244, 238, 224, 0.8);
 	}
 
+	.delete-button:active {
+		transform: translateY(1px);
+	}
 	@media (max-width: 1160px) {
 		.content-grid {
 			grid-template-columns: 1fr;
