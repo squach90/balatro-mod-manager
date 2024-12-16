@@ -28,4 +28,17 @@
 	.content {
 		flex: 1;
 	}
+	
+	@media (max-width: 1160px) {
+		h2 {
+			font-size: 2rem;
+			transition: all 0.2s ease;
+		}
+		h3 {
+			font-size: 1.5rem;
+			transition: all 0.2s ease;
+		}
+	}
+
+
 </style>

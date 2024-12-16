@@ -180,12 +180,19 @@
 		transform: none;
 	}
 	.throbber {
-		width: 24px;
-		height: 24px;
+		width: 20px;
+		height: 20px;
 		border: 3px solid #f4eee0;
 		border-radius: 50%;
 		border-top-color: transparent;
 		animation: spin 1s linear infinite;
+	}
+
+	@media (max-width: 1160px) {
+		.steam-button {
+			width: 10rem;
+			font-size: 0.9rem;
+		}
 	}
 
 	@keyframes spin {
