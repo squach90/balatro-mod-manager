@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
+	import { FolderDot } from "lucide-svelte";
 	import MessageStack from "./MessageStack.svelte";
 
 	let messageStack: MessageStack;
@@ -99,6 +100,7 @@
 		{#if isLoading}
 			<div class="throbber"></div>
 		{:else}
+			<FolderDot size={20} />
 			Set to Steam Path
 		{/if}
 	</button>
@@ -147,7 +149,7 @@
 	}
 
 	.steam-button {
-		padding: 0.5rem 1.5rem;
+		padding: 0.5rem 1rem;
 		border: 2px solid #2e6b9a;
 		border-radius: 8px;
 		background-color: #1a9fff;
@@ -155,11 +157,12 @@
 		font-family: inherit;
 		font-size: 1.2rem;
 		cursor: pointer;
-		width: 12rem;
+		width: 13rem;
 		height: 40px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.5rem;
 		transition: all 0.2s ease;
 		overflow: hidden;
 	}
@@ -191,7 +194,14 @@
 	@media (max-width: 1160px) {
 		.steam-button {
 			width: 10rem;
-			font-size: 0.9rem;
+			font-size: 0.8rem;
+		}
+		.steam-button :global(svg) {
+			scale: 0.8;
+		}
+		.steam-button .throbber {
+			width: 15px;
+			height: 15px;
 		}
 	}
 
