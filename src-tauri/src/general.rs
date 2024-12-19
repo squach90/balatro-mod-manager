@@ -25,21 +25,45 @@ impl CurrentModLoader {
         &self.0
     }
 
+    pub fn initialize() {
+        let steamodded_path = dirs::config_dir()
+            .unwrap()
+            .join("Balatro")
+            .join("steamodded-mods");
+        let balamod_path = dirs::config_dir()
+            .unwrap()
+            .join("Balatro")
+            .join("balamod-mods");
+        if !steamodded_path.exists() {
+            std::fs::create_dir_all(&steamodded_path).unwrap();
+        }
+        if !balamod_path.exists() {
+            std::fs::create_dir_all(&balamod_path).unwrap();
+        }
+    }
+
     pub fn get_path(&self) -> ModsPath {
         match self.0 {
             ModLoader::Steamodded => {
-                let path = std::env::var("STEAMODDED_PATH").unwrap_or_else(|_| "".to_string()); // TODO:implement
-                ModsPath {
-                    mods_collection: None,
-                    path,
-                }
-            }
-            ModLoader::Balamod => {
-                let path = std::env::var("BALAMOD_PATH").unwrap_or_else(|_| "".to_string()); // TODO:implement
+                let path = dirs::config_dir()
+                    .unwrap()
+                    .join("Balatro")
+                    .join("steamodded-mods");
 
                 ModsPath {
                     mods_collection: None,
-                    path,
+                    path: path.to_string_lossy().to_string(),
+                }
+            }
+            ModLoader::Balamod => {
+                let path = dirs::config_dir()
+                    .unwrap()
+                    .join("Balatro")
+                    .join("balamod-mods");
+
+                ModsPath {
+                    mods_collection: None,
+                    path: path.to_string_lossy().to_string(),
                 }
             }
         }
