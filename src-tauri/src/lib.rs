@@ -1,3 +1,7 @@
+// TODO: 1. Create a way to handle the different paths for mods, which the modloader will use
+// (Steamodded, Balamod, etc.) (Also make sure for Mod-Collections!)
+// TODO: 2. If the user presses "Launch",  the modloader will be called with the path to the mods
+// (also implement animations for it)
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -5,6 +9,9 @@ use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
 
 use tauri::Manager;
+
+mod general;
+mod lovely;
 
 // #[tauri::command]
 // async fn find_steam_balatro() -> Result<Vec<String>, String> {
@@ -46,8 +53,7 @@ async fn get_balatro_path(state: tauri::State<'_, AppState>) -> Result<Option<St
 #[tauri::command]
 async fn set_balatro_path(state: tauri::State<'_, AppState>, path: String) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.set_installation_path(&path)
-        .map_err(|e| e.to_string())
+    db.set_installation_path(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
