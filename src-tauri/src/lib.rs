@@ -9,24 +9,51 @@ use std::sync::Mutex;
 
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
+use bmm_lib::lovely;
+use crate::lovely::ensure_lovely_exists;
+use std::process::Command;
 
 use tauri::Manager;
-
-mod general;
-mod lovely;
-
-// #[tauri::command]
-// async fn find_steam_balatro() -> Result<Vec<String>, String> {
-//     let balatros = find_balatros();
-//     Ok(balatros
-//         .iter()
-//         .map(|b| b.path.to_string_lossy().into_owned())
-//         .collect())
-// }
 
 // Create a state structure to hold the database
 struct AppState {
     db: Mutex<Database>,
+}
+
+// Add launch command
+#[tauri::command]
+async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let path_str = db
+        .get_installation_path()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No Balatro installation path set".to_string())?;
+
+    let path = PathBuf::from(&path_str);
+
+    #[cfg(target_os = "macos")]
+    {
+        let lovely_path = ensure_lovely_exists()?;
+        let balatro_exe = path.join("Balatro.app/Contents/MacOS/love");
+
+        let mut command = Command::new(&balatro_exe);
+        command.env("DYLD_INSERT_LIBRARIES", &lovely_path);
+        command.current_dir(&path);
+
+        command
+            .spawn()
+            .map_err(|e| format!("Failed to launch Balatro: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut command = Command::new(&path);
+        command
+            .spawn()
+            .map_err(|e| format!("Failed to launch Balatro: {}", e))?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -88,11 +115,6 @@ async fn find_steam_balatro(state: tauri::State<'_, AppState>) -> Result<Vec<Str
         .collect())
 }
 
-// #[tauri::command]
-// async fn check_custom_balatro(path: String) -> Result<bool, String> {
-//     let path = PathBuf::from(path);
-//     Ok(bmm_lib::balamod::Balatro::from_custom_path(path).is_some())
-// }
 #[tauri::command]
 async fn check_custom_balatro(
     state: tauri::State<'_, AppState>,
@@ -120,6 +142,13 @@ pub fn run() {
             let db = Database::new().map_err(|e| e.to_string())?;
             app.manage(AppState { db: Mutex::new(db) });
 
+            // Ensure lovely exists in config directory
+            #[cfg(target_os = "macos")]
+            {
+                lovely::ensure_lovely_exists()
+                    .map_err(|e| format!("Failed to setup lovely: {}", e))?;
+            }
+
             #[cfg(debug_assertions)]
             {
                 let window = app.get_webview_window("main").unwrap();
@@ -134,7 +163,8 @@ pub fn run() {
             set_modloader,
             get_modloader,
             get_balatro_path,
-            set_balatro_path
+            set_balatro_path,
+            launch_balatro
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

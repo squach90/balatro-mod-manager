@@ -3,16 +3,17 @@
 use core::slice;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString};
+use std::fs;
 use std::os::raw::c_void;
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::time::Instant;
-use std::{env, fs};
 
 use log::*;
 
+use bmm_lib::finder;
 use crop::Rope;
-use getargs::{Arg, Options};
+// use getargs::{Arg, Options};
 use itertools::Itertools;
 use patch::{Patch, PatchFile, Priority};
 use sha2::{Digest, Sha256};
@@ -28,7 +29,7 @@ type LoadBuffer =
 
 pub struct Lovely {
     pub mod_dir: PathBuf,
-    pub is_vanilla: bool,
+    // pub is_vanilla: bool,
     loadbuffer: &'static LoadBuffer,
     patch_table: PatchTable,
     rt_init: Once,
@@ -38,31 +39,19 @@ impl Lovely {
     /// Initialize the Lovely patch runtime.
     pub fn init(loadbuffer: &'static LoadBuffer) -> Self {
         let start = Instant::now();
+        //
+        // let args = std::env::args().skip(1).collect_vec();
+        // let opts = Options::new(args.iter().map(String::as_str));
 
-        let args = std::env::args().skip(1).collect_vec();
-        let mut opts = Options::new(args.iter().map(String::as_str));
-        let cur_exe =
-            env::current_exe().expect("Failed to get the path of the current executable.");
-        let game_name = if env::consts::OS == "macos" {
-            cur_exe
-                .parent()
-                .and_then(Path::parent)
-                .and_then(Path::parent)
-                .expect("Couldn't find parent .app of current executable path")
-                .file_name()
-                .expect("Failed to get file_name of parent directory of current executable")
-                .to_string_lossy()
-                .strip_suffix(".app")
-                .expect("Parent directory of current executable path was not an .app")
-                .replace(".", "_")
-        } else {
-            cur_exe
-                .file_stem()
-                .expect("Failed to get file_stem component of current executable path.")
-                .to_string_lossy()
-                .replace(".", "_")
-        };
-        let mut mod_dir = dirs::config_dir().unwrap().join(game_name).join("Mods");
+        let game_path = finder::get_balatro_paths();
+        let game_name: PathBuf = game_path.first().unwrap_or_else(|| {
+            panic!("Failed to find Balatro installation path. Is it installed?")
+        }).to_path_buf();
+
+        let mod_dir = dirs::config_dir()
+            .unwrap()
+            .join(&game_name)
+            .join("steamodded-mods");
 
         let log_dir = mod_dir.join("lovely").join("log");
 
@@ -71,34 +60,33 @@ impl Lovely {
         let version = env!("CARGO_PKG_VERSION");
         info!("Lovely {version}");
 
-        let mut is_vanilla = false;
-
-        while let Some(opt) = opts.next_arg().expect("Failed to parse argument.") {
-            match opt {
-                Arg::Long("mod-dir") => {
-                    mod_dir = opts.value().map(PathBuf::from).unwrap_or(mod_dir)
-                }
-                Arg::Long("vanilla") => is_vanilla = true,
-                _ => (),
-            }
-        }
-
-        // Stop here if we're running in vanilla mode.
-        if is_vanilla {
-            info!("Running in vanilla mode");
-
-            return Lovely {
-                mod_dir,
-                is_vanilla,
-                loadbuffer,
-                patch_table: Default::default(),
-                rt_init: Once::new(),
-            };
-        }
-
+        // let mut is_vanilla = false;
+        //
+        // while let Some(opt) = opts.next_arg().expect("Failed to parse argument.") {
+        //     match opt {
+        //         Arg::Long("mod-dir") => {
+        //             mod_dir = opts.value().map(PathBuf::from).unwrap_or(mod_dir)
+        //         }
+        //         Arg::Long("vanilla") => is_vanilla = true,
+        //         _ => (),
+        //     }
+        // }
+        //
+        // // Stop here if we're running in vanilla mode.
+        // if is_vanilla {
+        //     info!("Running in vanilla mode");
+        //
+        //     return Lovely {
+        //         mod_dir,
+        //         is_vanilla,
+        //         loadbuffer,
+        //         patch_table: Default::default(),
+        //         rt_init: Once::new(),
+        //     };
+        // }
+        //
         // Validate that an older Lovely install doesn't already exist within the game directory.
-        let exe_path = env::current_exe().unwrap();
-        let game_dir = exe_path.parent().unwrap();
+        let game_dir = game_name;
         let dwmapi = game_dir.join("dwmapi.dll");
 
         if dwmapi.is_file() {
@@ -134,7 +122,7 @@ impl Lovely {
 
         Lovely {
             mod_dir,
-            is_vanilla,
+            // is_vanilla,
             loadbuffer,
             patch_table,
             rt_init: Once::new(),
@@ -159,7 +147,7 @@ impl Lovely {
         self.rt_init.call_once(|| {
             let closure = sys::override_print as *const c_void;
             sys::lua_pushcclosure(state, closure, 0);
-            sys::lua_setfield(state, sys::LUA_GLOBALSINDEX, b"print\0".as_ptr() as _);
+            sys::lua_setfield(state, sys::LUA_GLOBALSINDEX, c"print".as_ptr() as _);
 
             // Inject Lovely functions into the runtime.
             self.patch_table.inject_metadata(state);
@@ -310,9 +298,7 @@ impl PatchTable {
                 });
 
                 // HACK: Replace instances of {{lovely:patch_file_path}} with patch_file.
-                let clean_mod_dir = &mod_dir
-                    .to_string_lossy()
-                    .replace("\\", "\\\\");
+                let clean_mod_dir = &mod_dir.to_string_lossy().replace("\\", "\\\\");
                 let str = str.replace("{{lovely:mod_dir}}", clean_mod_dir);
 
                 // Handle invalid fields in a non-explosive way.
@@ -452,7 +438,7 @@ impl PatchTable {
         // Apply module injection patches.
         let loadbuffer = self.loadbuffer.unwrap();
         for (patch, path) in module_patches {
-            let result = unsafe { patch.apply(target, lua_state, &path, &loadbuffer) };
+            let result = unsafe { patch.apply(target, lua_state, path, &loadbuffer) };
 
             if result {
                 patch_count += 1;
@@ -461,7 +447,7 @@ impl PatchTable {
 
         // Apply copy patches.
         for (patch, path) in copy_patches {
-            if patch.apply(target, &mut rope, &path) {
+            if patch.apply(target, &mut rope, path) {
                 patch_count += 1;
             }
         }
@@ -469,12 +455,12 @@ impl PatchTable {
         for (patch, path) in pattern_or_regex_patches {
             match patch {
                 Patch::Pattern(patch) => {
-                    if patch.apply(target, &mut rope, &path) {
+                    if patch.apply(target, &mut rope, path) {
                         patch_count += 1;
                     }
                 }
                 Patch::Regex(patch) => {
-                    if patch.apply(target, &mut rope, &path) {
+                    if patch.apply(target, &mut rope, path) {
                         patch_count += 1;
                     }
                 }

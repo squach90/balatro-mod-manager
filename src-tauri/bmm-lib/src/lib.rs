@@ -1,3 +1,5 @@
 pub mod balamod;
 pub mod database;
-mod finder;
+pub mod mod_collections;
+pub mod lovely;
+pub mod finder;

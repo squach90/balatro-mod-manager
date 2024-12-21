@@ -1,6 +1,9 @@
 <script lang="ts">
-	const handleLaunch = () => {
+	import { invoke } from "@tauri-apps/api/core";
+
+	const handleLaunch = async () => {
 		console.log("Launch button clicked");
+		await invoke("launch_balatro");
 	};
 </script>
 

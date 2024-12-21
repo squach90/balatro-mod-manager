@@ -13,7 +13,7 @@ pub struct ChunkVecCursor<'a> {
     offset: usize,
 }
 
-impl<'a> regex_cursor::Cursor for ChunkVecCursor<'a> {
+impl regex_cursor::Cursor for ChunkVecCursor<'_> {
     fn chunk(&self) -> &[u8] {
         self.chunks[self.idx].as_bytes()
     }

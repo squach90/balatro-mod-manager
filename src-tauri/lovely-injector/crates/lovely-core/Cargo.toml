@@ -21,3 +21,5 @@ chrono = "0.4.38"
 serde_ignored = "0.1.10"
 itertools = "0.13.0"
 crop = "0.4.2"
+home = "0.5.11"
+bmm-lib = { path = "../../../bmm-lib" }

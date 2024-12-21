@@ -1,8 +1,10 @@
+use crate::mod_collections::ModCollectionManager;
 use rusqlite::{Connection, Result};
 use std::path::Path;
 
 pub struct Database {
     conn: Connection,
+    pub mod_manager: ModCollectionManager,
 }
 
 impl Database {
@@ -14,7 +16,10 @@ impl Database {
             Self::initialize_database(&conn)?;
         }
 
-        Ok(Database { conn })
+        Ok(Database {
+            conn,
+            mod_manager: ModCollectionManager::new(),
+        })
     }
 
     fn initialize_database(conn: &Connection) -> Result<()> {
@@ -25,12 +30,19 @@ impl Database {
             )",
             [],
         )?;
-        // Set modlauncher setting to "steamodded" if current_modloader doesn't exist
+
+        ModCollectionManager::initialize_table(conn)?;
+
         conn.execute(
             "INSERT OR IGNORE INTO settings (setting, value) VALUES ('current_modloader', 'steamodded')",
             [],
         )?;
+
         Ok(())
+    }
+
+    pub fn get_connection(&self) -> &Connection {
+        &self.conn
     }
 
     pub fn get_installation_path(&self) -> Result<Option<String>> {
