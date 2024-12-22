@@ -43,16 +43,11 @@ To start the project in development mode, use the provided Makefile:
 
 To build the project for production:
 
-1. Build the Svelte frontend:
+1. Build the release target:
     ```sh
-    cd src-tauri
-    deno task build
+    make release
     ```
 
-2. Build the Tauri application:
-    ```sh
-    cargo tauri build
-    ```
 
 The built application will be located in the `src-tauri/target/release` directory.
 

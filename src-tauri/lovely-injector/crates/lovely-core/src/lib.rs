@@ -52,8 +52,9 @@ impl Lovely {
             .unwrap()
             .join(&game_name)
             .join("steamodded-mods");
+        dbg!(&mod_dir);
 
-        let log_dir = mod_dir.join("lovely").join("log");
+        let log_dir = mod_dir.join(".lovely").join("log");
 
         log::init(&log_dir).unwrap_or_else(|e| panic!("Failed to initialize logger: {e:?}"));
 
