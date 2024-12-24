@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
 use bmm_lib::lovely;
+use bmm_lib::finder::is_steam_running;
 use crate::lovely::ensure_lovely_exists;
 use std::process::Command;
 
@@ -18,6 +19,11 @@ use tauri::Manager;
 // Create a state structure to hold the database
 struct AppState {
     db: Mutex<Database>,
+}
+
+#[tauri::command]
+async fn check_steam_running() -> bool {
+    is_steam_running()
 }
 
 // Add launch command
@@ -164,7 +170,8 @@ pub fn run() {
             get_modloader,
             get_balatro_path,
             set_balatro_path,
-            launch_balatro
+            launch_balatro,
+            check_steam_running
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

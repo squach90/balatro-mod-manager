@@ -10,6 +10,7 @@ libflate = "2.1.0"
 libloading = "0.8.6"
 log = "0.4.22"
 rusqlite = "0.32.1"
+sysinfo = "0.33.0"
 zip = "2.2.1"
 
 [build-dependencies]

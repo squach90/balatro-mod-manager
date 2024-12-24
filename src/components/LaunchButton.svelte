@@ -1,15 +1,32 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
+	import LaunchAlertBox from "./LaunchAlertBox.svelte";
+
+	let showAlert = false;
 
 	const handleLaunch = async () => {
-		console.log("Launch button clicked");
-		await invoke("launch_balatro");
+		const path = await invoke("get_balatro_path");
+		if (path && path.toString().includes("Steam")) {
+			const is_steam_running = await invoke("check_steam_running");
+			console.log(is_steam_running);
+			if (!is_steam_running) {
+				showAlert = true;
+			}
+		} else {
+			await invoke("launch_balatro");
+		}
+	};
+
+	const handleAlertClose = () => {
+		showAlert = false;
 	};
 </script>
 
 <div class="launch-container">
 	<button class="launch-button" on:click={handleLaunch}> Launch </button>
 </div>
+
+<LaunchAlertBox show={showAlert} onClose={handleAlertClose} />
 
 <style>
 	.launch-container {
