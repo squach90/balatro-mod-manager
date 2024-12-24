@@ -4,7 +4,8 @@ use log::error;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+// use std::path::Path;
 use zip::ZipArchive;
 use zip::{write::FileOptions, CompressionMethod, ZipWriter};
 
@@ -141,20 +142,20 @@ impl Balatro {
             .ok_or("ZIP start not found")
     }
 
-    #[allow(dead_code)]
-    fn copy_dir_all(&self, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-        fs::create_dir_all(&dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let ty = entry.file_type()?;
-            if ty.is_dir() {
-                self.copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            } else {
-                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            }
-        }
-        Ok(())
-    }
+    // #[allow(dead_code)]
+    // fn copy_dir_all(&self, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    //     fs::create_dir_all(&dst)?;
+    //     for entry in fs::read_dir(src)? {
+    //         let entry = entry?;
+    //         let ty = entry.file_type()?;
+    //         if ty.is_dir() {
+    //             self.copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+    //         } else {
+    //             fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub fn compress_file(&self, input_path: &str, output_path: &str) -> Result<(), std::io::Error> {
         // Open the input file for reading

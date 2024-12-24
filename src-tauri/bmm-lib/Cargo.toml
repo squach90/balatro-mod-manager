@@ -13,5 +13,11 @@ rusqlite = "0.32.1"
 sysinfo = "0.33.0"
 zip = "2.2.1"
 
+[target.'cfg(windows)'.dependencies]
+tasklist = "0.2.15"
+
+[target.'cfg(unix)'.dependencies]
+libproc = "0.14.10"
+
 [build-dependencies]
 dirs = "5.0.1"

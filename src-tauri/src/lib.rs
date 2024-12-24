@@ -7,11 +7,11 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::lovely::ensure_lovely_exists;
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
-use bmm_lib::lovely;
 use bmm_lib::finder::is_steam_running;
-use crate::lovely::ensure_lovely_exists;
+use bmm_lib::lovely;
 use std::process::Command;
 
 use tauri::Manager;

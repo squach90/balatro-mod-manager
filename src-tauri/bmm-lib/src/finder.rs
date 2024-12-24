@@ -12,9 +12,6 @@ use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 
-use std::ffi::OsStr;
-use sysinfo::System;
-
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -101,18 +98,26 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
 }
 
 pub fn is_steam_running() -> bool {
-    let system = System::new_all();
-    #[cfg(target_os = "windows")]
-    let steam_processes = ["steam.exe", "steamservice.exe"];
-    #[cfg(target_os = "macos")]
-    let steam_processes = ["Steam", "steamservice"];
-    #[cfg(target_os = "linux")]
-    let steam_processes = ["steam", "steamservice"];
+    #[cfg(windows)]
+    {
+        use tasklist::find_process_id_by_name;
+        !find_process_id_by_name("steam.exe").is_empty()
+    }
 
-    steam_processes.iter().any(|&process_name| {
-        system
-            .processes_by_exact_name(OsStr::new(process_name))
-            .next()
-            .is_some()
-    })
+    #[cfg(unix)]
+    {
+        use libproc::processes;
+        use libproc::proc_pid::name;
+
+        if let Ok(pids) = processes::pids_by_type(processes::ProcFilter::All) {
+            for pid in pids {
+                if let Ok(name) = name(pid as i32) {
+                    if name.to_lowercase().contains("steam") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
 }

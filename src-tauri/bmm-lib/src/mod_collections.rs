@@ -32,6 +32,12 @@ pub struct ModCollectionManager {
     collections: HashMap<u64, ModCollection>,
 }
 
+impl Default for ModCollectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModCollectionManager {
     pub fn new() -> Self {
         Self {

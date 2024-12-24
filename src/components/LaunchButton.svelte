@@ -8,12 +8,16 @@
 		const path = await invoke("get_balatro_path");
 		if (path && path.toString().includes("Steam")) {
 			const is_steam_running = await invoke("check_steam_running");
-			console.log(is_steam_running);
+			console.log(`Steam running: ${is_steam_running}`);
 			if (!is_steam_running) {
 				showAlert = true;
+			} else {
+				await invoke("launch_balatro");
+				return;
 			}
 		} else {
 			await invoke("launch_balatro");
+			return;
 		}
 	};
 

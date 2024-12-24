@@ -1,115 +1,184 @@
 <script lang="ts">
-// TODO: Add Transtition & animation to the alert box
-// FIX: Steam won't get detected as running for some reason
-import { invoke } from "@tauri-apps/api/core";
+	import { fade } from "svelte/transition";
+	import { invoke } from "@tauri-apps/api/core";
 
-export let show = false;
-export let onClose: () => void;
+	export let show = false;
+	export let onClose: () => void;
 
-async function handleLaunch() {
-    try {
-        await invoke('launch_balatro');
-        onClose();
-    } catch (error) {
-        console.error('Failed to launch game:', error);
-    }
-}
+	let isError = false;
 
-async function handleCheckAgain() {
-    // Add Steam check logic here
-    onClose();
-}
+	async function handleLaunch() {
+		try {
+			await invoke("launch_balatro");
+			onClose();
+		} catch (error) {
+			console.error("Failed to launch game:", error);
+		}
+	}
+
+	async function handleCheckAgain() {
+		try {
+			let steam_running: boolean = await invoke("check_steam_running");
+			if (!steam_running) {
+				isError = true;
+				setTimeout(() => {
+					isError = false;
+				}, 2000);
+			} else {
+				await invoke("launch_balatro");
+				onClose();
+				return;
+			}
+		} catch (error) {
+			console.error("Failed to check if Steam is running:", error);
+		}
+	}
 </script>
 
 {#if show}
-<div class="overlay">
-    <div class="alert-box">
-        <h2>Steam is not running. Are you sure?</h2>
-        
-        <div class="button-container">
-            <button 
-                class="launch-button" 
-                on:click={handleLaunch}
-            >
-                Yes, launch without Steam
-            </button>
-            
-            <button 
-                class="check-button" 
-                on:click={handleCheckAgain}
-            >
-                Check again
-            </button>
-        </div>
-    </div>
-</div>
+	<div class="overlay" transition:fade={{ duration: 100 }}>
+		<div class="alert-box">
+			<div class="content" class:hidden={isError}>
+				<h2 id="alert-title-first">Steam is not running. Are you sure?</h2>
+				<div class="button-container">
+					<button class="launch-button" on:click={handleLaunch}>
+						Yes, launch without Steam
+					</button>
+					<button class="check-button" on:click={handleCheckAgain}>
+						Check again
+					</button>
+				</div>
+			</div>
+			{#if isError}
+				<div class="error-message" transition:fade={{ duration: 200 }}>
+					<h2 id="alert-title" class:shake={isError}>
+						Steam is still not running!
+					</h2>
+				</div>
+			{/if}
+		</div>
+	</div>
 {/if}
 
 <style>
-.overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
+	.overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		z-index: 1000;
+	}
 
-.alert-box {
-    background: #393646;
-    border: 2px solid #f4eee0;
-    border-radius: 8px;
-    padding: 2rem;
-    width: 400px;
-    text-align: center;
-}
+	.alert-box {
+		background: #393646;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		padding: 2rem;
+		width: 400px;
+		text-align: center;
+		position: relative;
+		overflow: hidden;
+	}
 
-.alert-box h2 {
-    color: #f4eee0;
-    margin-bottom: 2rem;
-    font-family: "M6X11", sans-serif;
-}
+	.content {
+		transition: opacity 0.2s;
+		margin-bottom: 1rem;
+	}
+	
+	.content.hidden {
+		opacity: 0;
+	}
 
-.button-container {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-}
+	#alert-title {
+		color: #f4eee0;
+		margin-bottom: 2rem;
+		font-family: "M6X11", sans-serif;
+		font-size: 2.5rem;
+	}
 
-.launch-button {
-    background: #c14139;
-    border: 2px solid #a13029;
-    color: #f4eee0;
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: "M6X11", sans-serif;
-    transition: all 0.2s ease;
-}
+	#alert-title.shake {
+		animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+	}
 
-.launch-button:hover {
-    background: #d4524a;
-    transform: translateY(-2px);
-}
+	#alert-title-first {
+		color: #f4eee0;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.6rem;
+	}
 
-.check-button {
-    background: #56a786;
-    border: 2px solid #459373;
-    color: #f4eee0;
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: "M6X11", sans-serif;
-    transition: all 0.2s ease;
-}
+	.error-message {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(193, 65, 57, 0.9);
+	}
 
-.check-button:hover {
-    background: #74cca8;
-    transform: translateY(-2px);
-}
+	@keyframes shake {
+		10%,
+		90% {
+			transform: translate3d(-1px, 0, 0);
+		}
+		20%,
+		80% {
+			transform: translate3d(2px, 0, 0);
+		}
+		30%,
+		50%,
+		70% {
+			transform: translate3d(-4px, 0, 0);
+		}
+		40%,
+		60% {
+			transform: translate3d(4px, 0, 0);
+		}
+	}
+
+	.launch-button {
+		background: #c14139;
+		border: 2px solid #a13029;
+		color: #f4eee0;
+		padding: 0.75rem 1.5rem;
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
+		transition: all 0.2s ease;
+	}
+	.launch-button:hover {
+		background: #a13029;
+		border: 2px solid #c14139;
+	}
+	.launch-button:active {
+		transform: translateY(2px);
+	}
+
+	.check-button {
+		background: #56a786;
+		border: 2px solid #459373;
+		color: #f4eee0;
+		padding: 0.75rem 1.5rem;
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
+		transition: all 0.2s ease;
+	}
+
+	.check-button:hover {
+		background: #459373;
+		border: 2px solid #56a786;
+	}
+	.check-button:active {
+		transform: translateY(2px);
+	}
 </style>
-
