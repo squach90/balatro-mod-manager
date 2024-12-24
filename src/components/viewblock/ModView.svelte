@@ -299,6 +299,14 @@
 		color: rgba(244, 238, 224, 0.8);
 	}
 
+	.description :global(a) {
+		-webkit-user-drag: none;
+		user-select: none;
+		-moz-user-select: none;
+		-webkit-user-select: none;
+		-ms-user-select: none;
+	}
+
 	.delete-button:active {
 		transform: translateY(1px);
 	}
