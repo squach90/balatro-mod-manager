@@ -52,7 +52,7 @@ impl Lovely {
             .unwrap()
             .join(&game_name)
             .join("steamodded-mods");
-        dbg!(&mod_dir);
+        // dbg!(&mod_dir);
 
         let log_dir = mod_dir.join(".lovely").join("log");
 
