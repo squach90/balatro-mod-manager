@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fade } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
+	import { X } from "lucide-svelte";
 
 	export let show = false;
 	export let onClose: () => void;
@@ -38,8 +39,15 @@
 {#if show}
 	<div class="overlay" transition:fade={{ duration: 100 }}>
 		<div class="alert-box">
+			<button class="close-button" on:click={onClose}>
+				<div class="circle">
+					<X size={10} />
+				</div>
+			</button>
 			<div class="content" class:hidden={isError}>
-				<h2 id="alert-title-first">Steam is not running. Are you sure?</h2>
+				<h2 id="alert-title-first">
+					Steam is not running. Are you sure?
+				</h2>
 				<div class="button-container">
 					<button class="launch-button" on:click={handleLaunch}>
 						Yes, launch without Steam
@@ -89,7 +97,7 @@
 		transition: opacity 0.2s;
 		margin-bottom: 1rem;
 	}
-	
+
 	.content.hidden {
 		opacity: 0;
 	}
@@ -121,6 +129,40 @@
 		align-items: center;
 		justify-content: center;
 		background: rgba(193, 65, 57, 0.9);
+	}
+
+	.close-button {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		z-index: 1001;
+	}
+
+	.circle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: #f4eee0;
+		border: 2px solid #f4eee0;
+		color: #393646;
+		transition: all 0.2s ease;
+	}
+
+	.close-button:hover .circle {
+		background: #c14139;
+		transform: scale(1.1);
+		color: #f4eee0;
+	}
+
+	.close-button:active .circle {
+		transform: scale(0.9);
 	}
 
 	@keyframes shake {
