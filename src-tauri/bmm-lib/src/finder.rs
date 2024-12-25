@@ -98,13 +98,13 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
 }
 
 pub fn is_steam_running() -> bool {
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
         use tasklist::find_process_id_by_name;
         !find_process_id_by_name("steam.exe").is_empty()
     }
 
-    #[cfg(unix)]
+    #[cfg(target_family = "unix")]
     {
         use libproc::processes;
         use libproc::proc_pid::name;
