@@ -11,16 +11,39 @@
 		FolderHeart,
 		Trash2,
 		Search,
+		Play,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
+	import { invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
+	import { onMount } from "svelte";
 
-	const categories = [
+	let currentModLoader: "steamodded" | "balamod";
+
+	onMount(async () => {
+		try {
+			currentModLoader = (await invoke("get_modloader")) as
+				| "balamod"
+				| "steamodded";
+
+			// Check if current view is "Active Mods" and modloader is not balamod
+			if (
+				$currentCategory === "Active Mods" &&
+				currentModLoader !== "balamod"
+			) {
+				currentCategory.set(baseCategories[2].name);
+			}
+		} catch (error) {
+			console.error("Failed to get modloader:", error);
+		}
+	});
+
+	const baseCategories = [
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
 		{ name: "Popular", icon: Flame },
@@ -31,6 +54,15 @@
 		{ name: "UI", icon: LayoutDashboard },
 		{ name: "Collections", icon: FolderHeart },
 	];
+
+	$: categories =
+		currentModLoader === "balamod"
+			? [
+					baseCategories[0],
+					{ name: "Active Mods", icon: Play },
+					...baseCategories.slice(1),
+				]
+			: baseCategories;
 
 	const colorPairs = [
 		{ color1: "#4f6367", color2: "#334461" }, // Blue-grey
