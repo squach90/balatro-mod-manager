@@ -3,13 +3,22 @@
 	// FIX: Balatro is not found  when it is running
 	import { invoke } from "@tauri-apps/api/core";
 	import LaunchAlertBox from "./LaunchAlertBox.svelte";
+	import MessageStack from "./MessageStack.svelte";
 
 	let showAlert = false;
+	let messageStack: MessageStack;
 
 	const handleLaunch = async () => {
 		const path = await invoke("get_balatro_path");
 		if (path && path.toString().includes("Steam")) {
-			const is_steam_running = await invoke("check_steam_running");
+			let is_balatro_running: boolean = await invoke(
+				"check_balatro_running",
+			);
+			if (is_balatro_running) {
+				messageStack.addMessage("Balatro is already running", "error");
+				return;
+			}
+			let is_steam_running: boolean = await invoke("check_steam_running");
 			if (!is_steam_running) {
 				showAlert = true;
 				return;
@@ -27,6 +36,8 @@
 		showAlert = false;
 	};
 </script>
+
+<MessageStack bind:this={messageStack} />
 
 <div class="launch-container">
 	<button class="launch-button" on:click={handleLaunch}> Launch </button>
