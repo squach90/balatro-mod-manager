@@ -10,7 +10,14 @@
 
 	async function handleLaunch() {
 		try {
-			await invoke("launch_balatro");
+			let is_balatro_running: boolean = await invoke("check_balatro_running");
+			if (!is_balatro_running) {
+				await invoke("launch_balatro");
+			} else {
+				// TODO: Implement alert message box for balatro already running
+				console.error("Balatro is already running!");
+				return;
+			}
 			onClose();
 		} catch (error) {
 			console.error("Failed to launch game:", error);

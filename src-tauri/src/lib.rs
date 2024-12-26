@@ -11,6 +11,7 @@ use crate::lovely::ensure_lovely_exists;
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
 use bmm_lib::finder::is_steam_running;
+use bmm_lib::finder::is_balatro_running;
 use bmm_lib::lovely;
 use std::process::Command;
 
@@ -24,6 +25,11 @@ struct AppState {
 #[tauri::command]
 async fn check_steam_running() -> bool {
     is_steam_running()
+}
+
+#[tauri::command]
+async fn check_balatro_running() -> bool {
+    is_balatro_running()
 }
 
 // Add launch command
@@ -171,7 +177,8 @@ pub fn run() {
             get_balatro_path,
             set_balatro_path,
             launch_balatro,
-            check_steam_running
+            check_steam_running,
+            check_balatro_running
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
