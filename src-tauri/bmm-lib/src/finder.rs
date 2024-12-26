@@ -102,13 +102,13 @@ pub fn is_steam_running() -> bool {
     #[cfg(target_os = "windows")]
     {
         use tasklist::find_process_id_by_name;
-        !find_process_id_by_name("steam.exe").is_empty()
+        unsafe { !find_process_id_by_name("steam.exe").is_empty() }
     }
 
     #[cfg(target_family = "unix")]
     {
-        use libproc::processes;
         use libproc::proc_pid::name;
+        use libproc::processes;
 
         if let Ok(pids) = processes::pids_by_type(processes::ProcFilter::All) {
             for pid in pids {
@@ -124,21 +124,24 @@ pub fn is_steam_running() -> bool {
 }
 
 pub fn is_balatro_running() -> bool {
-     #[cfg(target_os = "windows")]
+    #[cfg(target_os = "windows")]
     {
         use tasklist::find_process_id_by_name;
-        unsafe { !find_process_id_by_name("steam.exe").is_empty() }
+        unsafe { !find_process_id_by_name("Balatro.exe").is_empty() }
     }
 
     #[cfg(target_family = "unix")]
     {
-        use libproc::processes;
         use libproc::proc_pid::name;
+        use libproc::processes;
 
         if let Ok(pids) = processes::pids_by_type(processes::ProcFilter::All) {
             for pid in pids {
                 if let Ok(name) = name(pid as i32) {
-                    if (name.to_lowercase().contains("balatro") && name.to_lowercase() != "balatro-mod-manager") | (name == "love") {
+                    if (name.to_lowercase().contains("balatro")
+                        && name.to_lowercase() != "balatro-mod-manager")
+                        | (name == "love")
+                    {
                         return true;
                     }
                 }
