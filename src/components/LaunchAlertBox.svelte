@@ -39,9 +39,13 @@
 {#if show}
 	<div class="overlay" transition:fade={{ duration: 100 }}>
 		<div class="alert-box">
-			<button class="close-button" on:click={onClose}>
-				<div class="circle">
-					<X size={10} />
+			<button
+				class="close-button"
+				on:click={onClose}
+				class:hidden={isError}
+			>
+				<div class="close-icon-container">
+					<X size={13} />
 				</div>
 			</button>
 			<div class="content" class:hidden={isError}>
@@ -134,34 +138,38 @@
 	.close-button {
 		position: absolute;
 		top: 0.5rem;
-		left: 0.5rem;
+		right: 0.5rem;
 		background: transparent;
 		border: none;
 		cursor: pointer;
 		padding: 0;
-		z-index: 1001;
+		z-index: 1000;
 	}
 
-	.circle {
+	.close-button.hidden {
+		display: none;
+	}
+
+	.close-icon-container {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: #f4eee0;
-		border: 2px solid #f4eee0;
-		color: #393646;
+		width: 25px;
+		height: 25px;
+		border-radius: 4px; /* Changed from 50% to 4px for rounded corners */
+		background: #6e6e80;
+		/* border: 2px solid #f4eee0; */
+		color: #f4eee0;
 		transition: all 0.2s ease;
 	}
 
-	.close-button:hover .circle {
+	.close-button:hover .close-icon-container {
 		background: #c14139;
 		transform: scale(1.1);
 		color: #f4eee0;
 	}
 
-	.close-button:active .circle {
+	.close-button:active .close-icon-container {
 		transform: scale(0.9);
 	}
 
