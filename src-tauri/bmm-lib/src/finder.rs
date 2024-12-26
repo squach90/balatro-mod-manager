@@ -37,6 +37,7 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     let steam_path = read_path_from_registry();
     let mut steam_path = steam_path.unwrap_or_else(|_| {
         error!("Could not read steam install path from Registry! Trying standard installation path in C:\\");
+        String::from("C:\\Program Files (x86)\\Steam")
     });
 
     steam_path.push_str("\\steamapps\\libraryfolders.vdf");
@@ -55,16 +56,16 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
         .expect("Failed to read libraryfolders.vdf");
 
     let mut paths: Vec<PathBuf> = vec![];
-    let libraryfolders_contents = libraryfolders_contents.split("\n").collect::<Vec<&str>>();
+    let libraryfolders_contents = libraryfolders_contents.split('\n').collect::<Vec<&str>>();
     let mut libraryfolders_contents = libraryfolders_contents.iter();
     while let Some(line) = libraryfolders_contents.next() {
         if line.contains("\t\t\"path\"\t\t") {
-            let path = line.split("\"").collect::<Vec<&str>>()[3];
+            let path = line.split('\"').collect::<Vec<&str>>()[3];
             paths.push(PathBuf::from(path).join("steamapps\\common\\Balatro"));
         }
     }
     remove_unexisting_paths(&mut paths);
-    pat
+    paths
 }
 
 #[cfg(target_os = "macos")]
@@ -123,10 +124,10 @@ pub fn is_steam_running() -> bool {
 }
 
 pub fn is_balatro_running() -> bool {
-    #[cfg(target_os = "windows")]
+     #[cfg(target_os = "windows")]
     {
         use tasklist::find_process_id_by_name;
-        !find_process_id_by_name("Balatro.exe").is_empty()
+        unsafe { !find_process_id_by_name("steam.exe").is_empty() }
     }
 
     #[cfg(target_family = "unix")]

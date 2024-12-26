@@ -303,6 +303,7 @@ dependencies = [
  "rusqlite",
  "sysinfo",
  "tasklist",
+ "winreg",
  "zip",
 ]
 
