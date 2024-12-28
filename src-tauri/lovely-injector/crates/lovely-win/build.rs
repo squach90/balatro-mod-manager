@@ -3,6 +3,7 @@ fn main() {
     {
         use std::fs;
         use std::path::PathBuf;
+        use std::env;
 
         // First, forward the DLL
         forward_dll::forward_dll("C:\\Windows\\System32\\version.dll")
