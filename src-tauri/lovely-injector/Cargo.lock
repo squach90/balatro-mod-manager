@@ -785,6 +785,7 @@ dependencies = [
 name = "lovely-win"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "forward-dll",
  "itertools",
  "libc",
