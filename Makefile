@@ -1,6 +1,6 @@
 debug:
 ifeq ($(OS),Windows_NT)
-	cd src-tauri/lovely-injector/crates/lovely-win && set SKIP_BUILD_SCRIPT=1 && cargo build --release && cd $(CURDIR) && cargo tauri dev
+	cd src-tauri/lovely-injector/crates/lovely-win && cargo build --release && cd $(CURDIR) && cargo tauri dev
 else
 	clear
 	cd src-tauri/lovely-injector/crates/lovely-mac && rm -f ../../target/release/liblovely.d* && SKIP_BUILD_SCRIPT=1 cargo build --release && cd $(CURDIR) && cargo tauri dev
