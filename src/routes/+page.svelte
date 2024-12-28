@@ -69,6 +69,9 @@
 		padding: 2rem;
 		box-sizing: border-box;
 		overflow: hidden;
+		position: fixed;
+		top: 0;
+		left: 0;
 	}
 
 	h1 {
@@ -85,6 +88,9 @@
 
 	:global(html) {
 		overflow: hidden;
+		position: fixed;
+		width: 100%;
+		height: 100%;
 	}
 
 	:root {
@@ -165,5 +171,9 @@
 		margin: 0;
 		padding: 0;
 		background-color: transparent;
+		overflow: hidden;
+		position: fixed;
+		width: 100%;
+		height: 100%;
 	}
 </style>

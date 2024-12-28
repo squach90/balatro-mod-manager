@@ -3,10 +3,10 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { X } from "lucide-svelte";
 
-	export let show = false;
+	export let show: boolean = false;
 	export let onClose: () => void;
 
-	let isError = false;
+	let isError: boolean = false;
 
 	async function handleLaunch() {
 		try {
