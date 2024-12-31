@@ -107,6 +107,11 @@
 		color: #393646;
 	}
 
+	.search-button:active {
+		transform: scale(0.95);
+		padding: 0.75rem 0.95rem;
+	}
+
 	.results-container {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

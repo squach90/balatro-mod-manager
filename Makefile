@@ -1,6 +1,5 @@
 debug:
 ifeq ($(OS),Windows_NT)
-	echo $(OS) && echo $(CURDIR)
 	cd src-tauri/lovely-injector/crates/lovely-win && cargo build --release && cd $(CURDIR) && cargo tauri dev
 else
 	clear
