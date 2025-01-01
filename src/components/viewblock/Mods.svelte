@@ -23,18 +23,18 @@
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
 
-	let currentModLoader: "steamodded" | "balamod";
+	let currentModLoader: "steamodded" | "lovely-only";
 
 	onMount(async () => {
 		try {
 			currentModLoader = (await invoke("get_modloader")) as
-				| "balamod"
+				| "lovely-only"
 				| "steamodded";
 
-			// Check if current view is "Active Mods" and modloader is not balamod
+			// Check if current view is "Active Mods" and modloader is not lovely-only
 			if (
 				$currentCategory === "Active Mods" &&
-				currentModLoader !== "balamod"
+				currentModLoader !== "lovely-only"
 			) {
 				currentCategory.set(baseCategories[2].name);
 			}
@@ -56,7 +56,7 @@
 	];
 
 	$: categories =
-		currentModLoader === "balamod"
+		currentModLoader === "lovely-only"
 			? [
 					baseCategories[0],
 					{ name: "Active Mods", icon: Play },

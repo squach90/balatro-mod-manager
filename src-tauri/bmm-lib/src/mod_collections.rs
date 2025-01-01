@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum ModLoader {
     Steamodded,
-    Balamod,
+    LovelyOnly,
 }
 
 #[derive(Clone)]

@@ -2,12 +2,12 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { onMount } from "svelte";
 
-	let selectedModLoader: "steamodded" | "balamod"; // Default value
+	let selectedModLoader: "steamodded" | "lovely-only"; // Default value
 
 	onMount(async () => {
 		try {
 			selectedModLoader = (await invoke("get_modloader")) as
-				| "balamod"
+				| "lovely-only"
 				| "steamodded";
 		} catch (error) {
 			console.error("Failed to get modloader:", error);
@@ -16,7 +16,7 @@
 
 	async function handleModLoaderChange() {
 		const newValue =
-			selectedModLoader === "balamod" ? "steamodded" : "balamod";
+			selectedModLoader === "lovely-only" ? "steamodded" : "lovely-only";
 		try {
 			await invoke("set_modloader", { modloader: newValue });
 			selectedModLoader = newValue;
@@ -24,15 +24,15 @@
 			console.error("Failed to set modloader:", error);
 			// Revert the switch if database update fails
 			selectedModLoader =
-				selectedModLoader === "balamod" ? "steamodded" : "balamod";
+				selectedModLoader === "lovely-only" ? "steamodded" : "lovely-only";
 		}
 	}
 </script>
 
 <div class="switch-container">
 	<div class="switch-wrapper">
-		<span class:active={selectedModLoader === "balamod"} id="balamod">
-			Balamod
+		<span class:active={selectedModLoader === "lovely-only"} id="lovely-only">
+			lovely-only	
 		</span>
 		<label class="switch">
 			<input
@@ -70,7 +70,7 @@
 		color: #7c89f0;
 	}
 
-	#balamod.active {
+	#lovely-only.active {
 		color: #ee8242;
 	}
 

@@ -1,5 +1,5 @@
 // TODO: 1. Create a way to handle the different paths for mods, which the modloader will use
-// (Steamodded, Balamod, etc.) (Also make sure for Mod-Collections!)
+// (Steamodded, lovely-only, etc.) (Also make sure for Mod-Collections!)
 // TODO: 2. If the user presses "Launch",  the modloader will be called with the path to the mods
 // (also implement animations for it)
 // TODO: 2.1 Inject the game with the embedded binary from lovely (for steamodded)
