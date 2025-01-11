@@ -9,8 +9,8 @@ pub struct Database {
 
 impl Database {
     pub fn new() -> Result<Self> {
-        let db_exists = Path::new("settings.db").exists();
-        let conn = Connection::open("settings.db")?;
+        let db_exists = Path::new("storage.db").exists();
+        let conn = Connection::open("storage.db")?;
 
         if !db_exists {
             Self::initialize_database(&conn)?;

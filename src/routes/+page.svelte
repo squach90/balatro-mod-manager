@@ -5,46 +5,92 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { goto } from "$app/navigation";
 
-	onMount(async () => {
-		try {
-			const existingPath = await invoke("check_existing_installation");
-			if (existingPath) {
-				// Valid installation exists, skip to main page
-				await goto("/main", { replaceState: true });
+	let starsContainer: HTMLElement;
+
+	onMount(() => {
+		const init = async () => {
+			try {
+				const existingPath = await invoke("check_existing_installation");
+				if (existingPath) {
+					await goto("/main", { replaceState: true });
+				}
+				createStars();
+			} catch (error) {
+				console.error("Error checking existing installation:", error);
 			}
-		} catch (error) {
-			console.error("Error checking existing installation:", error);
-		}
+		};
+
+		init();
+
+		window.addEventListener("resize", createStars);
+
+		return () => window.removeEventListener("resize", createStars);
 	});
 
-	// Add context menu listener
+	function createStars() {
+		if (!starsContainer) return;
+		starsContainer.innerHTML = "";
+
+		const numberOfStars = 150;
+		const colors = ["#ffffff", "#fffacd", "#87ceeb"];
+
+		// Create normal stars
+		for (let i = 0; i < numberOfStars; i++) {
+			const star = document.createElement("div");
+			star.className = "star";
+
+			star.style.left = `${Math.random() * 100}%`;
+			star.style.top = `${Math.random() * 100}%`;
+
+			const size = Math.random() * 2 + 1;
+			star.style.width = `${size}px`;
+			star.style.height = `${size}px`;
+
+			star.style.backgroundColor =
+				colors[Math.floor(Math.random() * colors.length)];
+
+			const duration = 2 + Math.random() * 3;
+			const delay = Math.random() * 2;
+			star.style.animation = `twinkle ${duration}s infinite ${delay}s`;
+
+			starsContainer.appendChild(star);
+		}
+
+		// Create shooting stars [1]
+		const numberOfShootingStars = 5;
+		for (let i = 0; i < numberOfShootingStars; i++) {
+			const shootingStar = document.createElement("div");
+			shootingStar.className = "shooting-star";
+
+			shootingStar.style.left = `${Math.random() * 100}%`;
+			shootingStar.style.top = `${Math.random() * 50}%`;
+
+			const duration = 1 + Math.random() * 2;
+			shootingStar.style.animation = `shoot ${duration}s linear infinite`;
+
+			starsContainer.appendChild(shootingStar);
+		}
+	}
+
 	window.addEventListener("contextmenu", async (e) => {
 		e.preventDefault();
-
 		const menuItems = [
 			await MenuItem.new({
 				text: "Copy",
-				action: () => {
-					// Copy action
-				},
+				action: () => {},
 			}),
 			await MenuItem.new({
 				text: "Paste",
-				action: () => {
-					// Paste action
-				},
+				action: () => {},
 			}),
 		];
-
 		const menu = await Menu.new({ items: menuItems });
 		menu.popup();
 	});
 </script>
 
-<div class="video-background">
-	<video autoplay loop muted playsinline>
-		<source src="/videos/BalatroGameplay.mov" type="video/quicktime" />
-	</video>
+<div class="night-sky">
+	<div class="stars" bind:this={starsContainer}></div>
 </div>
 
 <div class="app">
@@ -59,10 +105,93 @@
 		src: url("/fonts/m6x11.ttf") format("truetype");
 		font-display: swap;
 	}
+
+	.night-sky {
+		width: 100vw;
+		height: 100vh;
+		background: linear-gradient(
+			to bottom,
+			#0f1016 0%,
+			#1a1b2e 50%,
+			#232b4e 100%
+		);
+		position: fixed;
+		top: 0;
+		left: 0;
+		z-index: -1;
+		overflow: hidden;
+	}
+
+	.stars {
+		width: 100%;
+		height: 100%;
+		position: fixed;
+		top: 0;
+		left: 0;
+	}
+
+	:global(.star) {
+		position: absolute;
+		border-radius: 50%;
+		pointer-events: none;
+		box-shadow:
+			0 0 4px currentColor,
+			0 0 8px currentColor;
+		will-change: transform, opacity;
+		transition: all 0.3s ease;
+	}
+
+	@keyframes twinkle {
+		0% {
+			opacity: 0.2;
+			transform: scale(0.8);
+			box-shadow:
+				0 0 2px currentColor,
+				0 0 4px currentColor;
+		}
+		50% {
+			opacity: 1;
+			transform: scale(1.2);
+			box-shadow:
+				0 0 6px currentColor,
+				0 0 12px currentColor,
+				0 0 18px currentColor;
+		}
+		100% {
+			opacity: 0.2;
+			transform: scale(0.8);
+			box-shadow:
+				0 0 2px currentColor,
+				0 0 4px currentColor;
+		}
+	}
+
+	/* Shooting stars [1] */
+	:global(.shooting-star) {
+		position: absolute;
+		width: 2px;
+		height: 2px;
+		background-color: #ffffff;
+		box-shadow: 0 0 6px #ffffff;
+		border-radius: 50%;
+		transform: translateX(-50%) translateY(-50%);
+		animation: shoot 2s linear infinite;
+	}
+
+	@keyframes shoot {
+		0% {
+			opacity: 1;
+			transform: translateX(0) translateY(0);
+		}
+		100% {
+			opacity: 0;
+			transform: translateX(100px) translateY(100px);
+		}
+	}
+
 	.app {
 		width: 100vw;
 		height: 100vh;
-		background-color: transparent;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -101,7 +230,6 @@
 		line-height: 24px;
 		font-weight: 400;
 		color: var(--text-primary);
-		background-color: #c14139;
 		font-synthesis: none;
 		text-rendering: optimizeLegibility;
 		-webkit-font-smoothing: antialiased;
@@ -117,36 +245,6 @@
 			1px 1px 0 #000;
 	}
 
-	:root {
-		/* Base Colors */
-		--color-dark: #459373;
-		--color-medium: #56a786;
-		--color-light: #74cca8;
-		--color-cream: #f4eee0;
-
-		/* Functional Colors */
-		--text-primary: var(--color-cream);
-		--text-secondary: var(--color-medium);
-		--background-primary: var(--color-dark);
-		--background-secondary: var(--color-medium);
-		--accent: var(--color-light);
-
-		/* System Colors */
-		--error: rgb(244, 67, 54);
-		--success: rgb(76, 175, 80);
-		--warning: rgb(255, 152, 0);
-	}
-
-	.video-background {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		z-index: -1;
-		overflow: hidden;
-		filter: blur(1px);
-	}
 	.version-text {
 		position: fixed;
 		bottom: 1rem;
@@ -162,20 +260,13 @@
 			1px 1px 0 #000;
 	}
 
-	video {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		opacity: 0.8; /* Dim the video to maintain readability */
-	}
-
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		background-color: transparent;
 		overflow: hidden;
 		position: fixed;
 		width: 100%;
 		height: 100%;
 	}
 </style>
+

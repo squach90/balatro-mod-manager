@@ -106,7 +106,7 @@
 			title: "Extended Deck",
 			description:
 				"# Lorem ipsum\n## dolor sit amet,\n [consetetur sadipscing](https://dasguney.com) elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
-			image: "/images/cover.jpg",
+			image: "/images/thumbnail.jpg",
 			downloads: "2.5k",
 			lastUpdated: "2 days",
 			categories: Category.CardMods,
