@@ -56,10 +56,10 @@
 		try {
 			const searchTerm = searchQuery.toLowerCase();
 			const results = searchIndex.search(searchTerm);
-			console.log("Search results:", results); // Debug
+			// console.log("Search results:", results); // Debug
 
 			searchResults = results.map((idx: number) => mods[idx]);
-			console.log("Mapped results:", searchResults); // Debug
+			// console.log("Mapped results:", searchResults); // Debug
 		} catch (error) {
 			console.error("Search failed:", error);
 			searchResults = [];
@@ -80,7 +80,7 @@
 				type="text"
 				bind:value={searchQuery}
 				on:input={handleInput}
-				placeholder="Search mods..."
+				placeholder="Search mods... (Author or Title)"
 				class="search-input"
 			/>
 			<button type="submit" class="search-button">

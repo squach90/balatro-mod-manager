@@ -217,7 +217,7 @@
 		padding: 1.25rem;
 		border-radius: 6px;
 		width: 50rem;
-		height: 21.5rem;
+		/* height: 21.5rem; */
 	}
 
 	.back-button {
@@ -247,7 +247,6 @@
 	.description :global(h2),
 	.description :global(h3),
 	.description :global(h4) {
-		margin-top: 1em;
 		margin-bottom: 0.5em;
 		color: #f4eee0;
 	}
