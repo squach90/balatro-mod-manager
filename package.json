@@ -17,7 +17,11 @@
     "@tauri-apps/plugin-dialog": "~2.0.1",
     "@tauri-apps/plugin-fs": "^2.2.0",
     "@tauri-apps/plugin-shell": "^2",
-    "axios": "^1.7.9"
+    "@types/flexsearch": "^0.7.6",
+    "@types/lodash": "4.14.202",
+    "axios": "^1.7.9",
+    "flexsearch": "^0.7.43",
+    "lodash": "^4.17.21"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.5",

@@ -28,18 +28,20 @@ export enum Category {
 
 export const currentModView = writable<Mod | null>(null);
 export const searchResults = writable<Mod[]>([]);
+export const modsStore = writable<Mod[]>([]);
+
 
 function createPersistentCategory() {
-    const storedCategory = localStorage.getItem('currentCategory') || "Popular";
-    const { subscribe, set } = writable(storedCategory);
+	const storedCategory = localStorage.getItem('currentCategory') || "Popular";
+	const { subscribe, set } = writable(storedCategory);
 
-    return {
-        subscribe,
-        set: (value: string) => {
-            localStorage.setItem('currentCategory', value);
-            set(value);
-        }
-    };
+	return {
+		subscribe,
+		set: (value: string) => {
+			localStorage.setItem('currentCategory', value);
+			set(value);
+		}
+	};
 }
 
 export const currentCategory = createPersistentCategory();

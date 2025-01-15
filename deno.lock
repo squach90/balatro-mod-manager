@@ -11,7 +11,11 @@
     "npm:@tauri-apps/plugin-dialog@~2.0.1": "2.0.1",
     "npm:@tauri-apps/plugin-fs@^2.2.0": "2.2.0",
     "npm:@tauri-apps/plugin-shell@2": "2.0.1",
+    "npm:@types/flexsearch@~0.7.6": "0.7.6",
+    "npm:@types/lodash@4.14.202": "4.14.202",
     "npm:axios@^1.7.9": "1.7.9",
+    "npm:flexsearch@~0.7.43": "0.7.43",
+    "npm:lodash@^4.17.21": "4.17.21",
     "npm:lucide-svelte@0.468": "0.468.0_svelte@5.6.2__acorn@8.14.0",
     "npm:marked@^15.0.3": "15.0.3",
     "npm:svelte-check@4": "4.1.1_svelte@5.6.2__acorn@8.14.0_typescript@5.6.3",
@@ -302,6 +306,12 @@
     "@types/estree@1.0.6": {
       "integrity": "sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw=="
     },
+    "@types/flexsearch@0.7.6": {
+      "integrity": "sha512-H5IXcRn96/gaDmo+rDl2aJuIJsob8dgOXDqf8K0t8rWZd1AFNaaspmRsElESiU+EWE33qfbFPgI0OC/B1g9FCA=="
+    },
+    "@types/lodash@4.14.202": {
+      "integrity": "sha512-OvlIYQK9tNneDlS0VN54LLd5uiPCBOp7gS5Z0f1mjoJYBrtStzgmJBxONW3U6OZqdtNzZPmn9BS/7WI7BFFcFQ=="
+    },
     "acorn-typescript@1.4.13_acorn@8.14.0": {
       "integrity": "sha512-xsc9Xv0xlVfwp2o7sQ+GCQ1PgbkdcpWdTzrwXxO3xDMTAywVS3oXVOcOHuRjAPkS4P9b+yc/qNF15460v+jp4Q==",
       "dependencies": [
@@ -399,6 +409,9 @@
     "fdir@6.4.2": {
       "integrity": "sha512-KnhMXsKSPZlAhp7+IjUkRZKPb4fUyccpDrdFXbi4QL1qkmFh9kVY09Yox+n4MaOb3lHZ1Tv829C3oaaXoMYPDQ=="
     },
+    "flexsearch@0.7.43": {
+      "integrity": "sha512-c5o/+Um8aqCSOXGcZoqZOm+NqtVwNsvVpWv6lfmSclU954O3wvQKxxK8zj74fPaSJbXpSLTs4PRhh+wnoCXnKg=="
+    },
     "follow-redirects@1.15.9": {
       "integrity": "sha512-gew4GsXizNgdoRyqmyfMHyAmXsZDk6mHkSxZFCzW9gwlbtOW44CDtYavM+y+72qD/Vq2l550kMF52DT8fOLJqQ=="
     },
@@ -433,6 +446,9 @@
     },
     "locate-character@3.0.0": {
       "integrity": "sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA=="
+    },
+    "lodash@4.17.21": {
+      "integrity": "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg=="
     },
     "lucide-svelte@0.468.0_svelte@5.6.2__acorn@8.14.0": {
       "integrity": "sha512-n0ecAFtCY5LEeL+PJ1Xj4n3c2gzj8tMpak0KMGnvoSJEjCsCnRB0mekBtJZAo7beyynW9Qj5Um1KfMBAeTNplw==",
@@ -614,7 +630,11 @@
         "npm:@tauri-apps/plugin-dialog@~2.0.1",
         "npm:@tauri-apps/plugin-fs@^2.2.0",
         "npm:@tauri-apps/plugin-shell@2",
+        "npm:@types/flexsearch@~0.7.6",
+        "npm:@types/lodash@4.14.202",
         "npm:axios@^1.7.9",
+        "npm:flexsearch@~0.7.43",
+        "npm:lodash@^4.17.21",
         "npm:lucide-svelte@0.468",
         "npm:marked@^15.0.3",
         "npm:svelte-check@4",

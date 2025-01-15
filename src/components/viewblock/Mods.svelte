@@ -16,6 +16,7 @@
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
+    import { modsStore } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
@@ -37,7 +38,6 @@
 		};
 	});
 
-	const modsStore = writable<Mod[]>([]);
 
 	let currentModLoader: "steamodded" | "lovely-only";
 	let mods: Mod[] = [];
