@@ -102,7 +102,7 @@
 <style>
 	@font-face {
 		font-family: "M6X11";
-		src: url("/fonts/m6x11.ttf") format("truetype");
+		src: url("/fonts/m6x11plus.ttf") format("truetype");
 		font-display: swap;
 	}
 

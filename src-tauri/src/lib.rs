@@ -148,6 +148,7 @@ async fn check_custom_balatro(
 pub fn run() {
     pretty_env_logger::init();
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {

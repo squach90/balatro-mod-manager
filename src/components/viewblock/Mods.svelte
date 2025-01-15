@@ -1,5 +1,4 @@
 <script lang="ts">
-	// TODO: Implement Image Caching with Tauri/Rust
 	import {
 		Download,
 		Flame,
@@ -22,26 +21,204 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
+	import { writable } from "svelte/store";
+
+	const modsStore = writable<Mod[]>([]);
 
 	let currentModLoader: "steamodded" | "lovely-only";
+	let mods: Mod[] = [];
 
-	onMount(async () => {
-		try {
-			currentModLoader = (await invoke("get_modloader")) as
-				| "lovely-only"
-				| "steamodded";
+	onMount(() => {
+		const initialize = async () => {
+			try {
+				currentModLoader = (await invoke("get_modloader")) as
+					| "lovely-only"
+					| "steamodded";
 
-			// Check if current view is "Active Mods" and modloader is not lovely-only
-			if (
-				$currentCategory === "Active Mods" &&
-				currentModLoader !== "lovely-only"
-			) {
-				currentCategory.set(baseCategories[2].name);
+				if (
+					$currentCategory === "Active Mods" &&
+					currentModLoader !== "lovely-only"
+				) {
+					currentCategory.set(baseCategories[2].name);
+				}
+
+				mods = await fetchModDirectories();
+			} catch (error) {
+				console.error("Failed to get modloader:", error);
 			}
-		} catch (error) {
-			console.error("Failed to get modloader:", error);
-		}
+		};
+
+		initialize();
+
+		// Return cleanup function
+		return () => {
+			// Any cleanup code here
+		};
 	});
+
+	interface ModMeta {
+		title: string;
+		"requires-steamodded": boolean;
+		categories: string[];
+		author: string;
+		repo: string;
+		downloadURL?: string;
+	}
+
+	const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+	// const CACHE_DURATION = 5 * 1000; // 5 seconds
+
+	// Store in localStorage
+	function saveToCache(mods: Mod[]) {
+		const cache = {
+			timestamp: Date.now(),
+			mods: mods,
+		};
+		localStorage.setItem("mods-cache", JSON.stringify(cache));
+	}
+
+	// Get from localStorage
+	function getFromCache(): { mods: Mod[]; timestamp: number } | null {
+		const cached = localStorage.getItem("mods-cache");
+		if (!cached) return null;
+		return JSON.parse(cached);
+	}
+
+	async function checkImageExists(imageUrl: string): Promise<string> {
+		try {
+			const response = await fetch(imageUrl, { method: "HEAD" });
+			return response.ok ? imageUrl : "images/cover.jpg";
+		} catch {
+			return "images/cover.jpg";
+		}
+	}
+
+	async function getLastUpdated(repoUrl: string): Promise<string> {
+		try {
+			const [owner, repo] = repoUrl
+				.replace("https://github.com/", "")
+				.split("/");
+
+			if (!owner || !repo) {
+				return "Unknown";
+			}
+
+			const response = await fetch(
+				`https://api.github.com/repos/${owner}/${repo}/commits/main`,
+			);
+
+			if (!response.ok) {
+				return "Unknown";
+			}
+
+			const data = await response.json();
+			if (!data?.commit?.committer?.date) {
+				return "Unknown";
+			}
+
+			const commitDate = new Date(data.commit.committer.date);
+			const currentDate = new Date();
+			const diffTime = Math.abs(
+				currentDate.getTime() - commitDate.getTime(),
+			);
+			const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+			if (diffDays === 0) return "Today";
+			if (diffDays === 1) return "Yesterday";
+			if (diffDays < 7) return `${diffDays} days ago`;
+			if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+			if (diffDays < 365)
+				return `${Math.floor(diffDays / 30)} months ago`;
+			return `${Math.floor(diffDays / 365)} years ago`;
+		} catch (error) {
+			console.error("Failed to fetch last commit date:", error);
+			return "Unknown";
+		}
+	}
+
+	async function fetchModDirectories() {
+		// Check cache
+		const cached = getFromCache();
+		if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+			modsStore.set(cached.mods);
+			return cached.mods;
+		}
+
+		try {
+			const response = await fetch(
+				"https://api.github.com/repos/skyline69/balatro-mod-index/contents/mods",
+			);
+			if (!response.ok) {
+				throw new Error(`GitHub API returned ${response.status}`);
+			}
+
+			const directories = await response.json();
+			const mods = await Promise.all(
+				directories.map(async (dir: any) => {
+					try {
+						const [metaResponse, descResponse] = await Promise.all([
+							fetch(
+								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/meta.json`,
+							),
+							fetch(
+								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/description.md`,
+							),
+						]);
+
+						if (!metaResponse.ok || !descResponse.ok) {
+							throw new Error("Failed to fetch mod data");
+						}
+
+						const meta: ModMeta = await metaResponse.json();
+						const description = await descResponse.text();
+
+						// Handle last updated date more gracefully
+						let lastUpdated = "Unknown";
+						try {
+							lastUpdated = await getLastUpdated(meta.repo);
+						} catch {
+							console.log(
+								`Failed to fetch last updated for ${meta.title}`,
+							);
+						}
+
+						// Check image existence without logging 404
+						const imageUrl = await checkImageExists(
+							`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/thumbnail.jpg`,
+						);
+
+						return {
+							title: meta.title,
+							description,
+							image: imageUrl,
+							downloads: "0",
+							lastUpdated,
+							categories: meta.categories.map(
+								(cat) => Category[cat as keyof typeof Category],
+							),
+							colors: getRandomColorPair(),
+							installed: false,
+							requires_steamodded: meta["requires-steamodded"],
+							publisher: meta.author,
+						};
+					} catch (error) {
+						console.error(
+							`Failed to process mod ${dir.name}:`,
+							error,
+						);
+						return null;
+					}
+				}),
+			);
+
+			saveToCache(mods);
+			modsStore.set(mods);
+			return mods;
+		} catch (error) {
+			console.error("Failed to fetch mods:", error);
+			return cached?.mods || [];
+		}
+	}
 
 	const baseCategories = [
 		{ name: "Installed Mods", icon: Download },
@@ -100,81 +277,6 @@
 			open(anchor.href);
 		}
 	});
-
-	const mods: Mod[] = [
-		{
-			title: "Extended Deck",
-			description:
-				"# Lorem ipsum\n## dolor sit amet,\n [consetetur sadipscing](https://dasguney.com) elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
-			image: "/images/thumbnail.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: false,
-			publisher: "Joe Mama",
-		},
-		{
-			title: "Extended Deck",
-			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
-			image: "/images/cover.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: true,
-			publisher: "Joe Mama",
-		},
-		{
-			title: "Extended Deck",
-			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
-			image: "/images/cover.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: false,
-			publisher: "Joe Mama",
-		},
-		{
-			title: "Extended Deck",
-			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
-			image: "/images/cover.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: false,
-			publisher: "Joe Mama",
-		},
-		{
-			title: "Extended Deck",
-			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
-			image: "/images/cover.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: true,
-			publisher: "Joe Mama",
-		},
-		{
-			title: "Extended Deck",
-			description:
-				"Adds 50+ new cards to the game with unique mechanics.",
-			image: "/images/cover.jpg",
-			downloads: "2.5k",
-			lastUpdated: "2 days",
-			categories: Category.CardMods,
-			colors: getRandomColorPair(),
-			downloaded: true,
-			publisher: "Joe Mama",
-		},
-	];
 </script>
 
 <div class="mods-container">
@@ -230,16 +332,16 @@
 					<div class="button-container">
 						<button
 							class="download-button"
-							class:installed={mod.downloaded}
-							disabled={mod.downloaded}
+							class:installed={mod.installed}
+							disabled={mod.installed}
 							on:click|stopPropagation={() => {
 								/* handle download */
 							}}
 						>
 							<Download size={16} />
-							{mod.downloaded ? "Installed" : "Download"}
+							{mod.installed ? "Installed" : "Download"}
 						</button>
-						{#if mod.downloaded}
+						{#if mod.installed}
 							<button
 								class="delete-button"
 								on:click|stopPropagation={() => {

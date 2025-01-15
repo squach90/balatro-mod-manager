@@ -8,7 +8,8 @@ export interface Mod {
 	lastUpdated: string;
 	categories: Category[] | Category;
 	colors: { color1: string; color2: string };
-	downloaded: boolean;
+	installed: boolean;
+	requires_steamodded: boolean;
 	publisher: string;
 }
 
@@ -16,10 +17,13 @@ export enum Category {
 	Popular,
 	Recent,
 	Featured,
-	CardMods,
-	Gamplay,
-	UI,
-	Collections,
+	Content,
+	Joker,
+	QualityOfLife,
+	Technical,
+	Miscellaneous,
+	ResourcePacks,
+	API
 }
 
 

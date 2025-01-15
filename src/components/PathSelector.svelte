@@ -155,7 +155,7 @@
 		background-color: #1a9fff;
 		color: #ffffff;
 		font-family: inherit;
-		font-size: 1.2rem;
+		font-size: 1.1rem;
 		cursor: pointer;
 		width: 13rem;
 		height: 40px;
@@ -193,8 +193,8 @@
 
 	@media (max-width: 1160px) {
 		.steam-button {
-			width: 10rem;
-			font-size: 0.8rem;
+			width: 12rem;
+			font-size: 1rem;
 		}
 		.steam-button :global(svg) {
 			scale: 0.8;

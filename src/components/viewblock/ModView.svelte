@@ -195,7 +195,6 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 1rem;
-		margin-top: 1rem;
 		font-size: 1.1rem;
 		padding: 1rem;
 		background: rgba(244, 238, 224, 0.1);
