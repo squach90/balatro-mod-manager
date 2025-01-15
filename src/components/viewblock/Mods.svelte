@@ -23,10 +23,25 @@
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
 
+	const loadingDots = writable(0);
+
+	// Animate the dots
+	let dotInterval: number;
+	onMount(() => {
+		dotInterval = setInterval(() => {
+			loadingDots.update((n) => (n + 1) % 4);
+		}, 500);
+
+		return () => {
+			clearInterval(dotInterval);
+		};
+	});
+
 	const modsStore = writable<Mod[]>([]);
 
 	let currentModLoader: "steamodded" | "lovely-only";
 	let mods: Mod[] = [];
+	let isLoading = true;
 
 	onMount(() => {
 		const initialize = async () => {
@@ -42,17 +57,20 @@
 					currentCategory.set(baseCategories[2].name);
 				}
 
+				isLoading = true;
 				mods = await fetchModDirectories();
+				isLoading = false;
 			} catch (error) {
 				console.error("Failed to get modloader:", error);
+				isLoading = false;
 			}
 		};
 
 		initialize();
 
-		// Return cleanup function
+		// Return synchronous cleanup function
 		return () => {
-			// Any cleanup code here
+			// Cleanup code here if needed
 		};
 	});
 
@@ -67,6 +85,10 @@
 
 	const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
+
+	function isValidCache(timestamp: number): boolean {
+		return Date.now() - timestamp < CACHE_DURATION;
+	}
 
 	// Store in localStorage
 	function saveToCache(mods: Mod[]) {
@@ -139,8 +161,7 @@
 	async function fetchModDirectories() {
 		// Check cache
 		const cached = getFromCache();
-		if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-			modsStore.set(cached.mods);
+		if (cached && isValidCache(cached.timestamp)) {
 			return cached.mods;
 		}
 
@@ -293,7 +314,11 @@
 
 	<div class="separator"></div>
 
-	{#if showSearch}
+	{#if isLoading}
+		<div class="loading-container">
+			<p class="loading-text">Loading mods{".".repeat($loadingDots)}</p>
+		</div>
+	{:else if showSearch}
 		<SearchView />
 	{:else}
 		<div class="mods-grid">
@@ -635,5 +660,20 @@
 
 	.delete-button:active {
 		transform: translateY(0);
+	}
+
+	.loading-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
+	}
+
+	.loading-text {
+		color: #f4eee0;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.5rem;
+		min-width: 150px;
 	}
 </style>
