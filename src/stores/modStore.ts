@@ -4,7 +4,6 @@ export interface Mod {
 	title: string;
 	description: string;
 	image: string;
-	downloads: string;
 	lastUpdated: string;
 	categories: Category[] | Category;
 	colors: { color1: string; color2: string };

@@ -191,7 +191,6 @@
 							title: meta.title,
 							description,
 							image: imageUrl,
-							downloads: "0",
 							lastUpdated,
 							categories: meta.categories.map(
 								(cat) => Category[cat as keyof typeof Category],
@@ -315,10 +314,6 @@
 							draggable="false"
 						/>
 						<div class="tags">
-							<span class="tag downloads">
-								<Download size={13} />
-								{mod.downloads}
-							</span>
 							<span class="tag updated">
 								<Clock size={13} />
 								{mod.lastUpdated}

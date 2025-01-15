@@ -41,13 +41,13 @@
 					<div class="button-container">
 						<button
 							class="download-button"
-							class:installed={mod.downloaded}
-							disabled={mod.downloaded}
+							class:installed={mod.installed}
+							disabled={mod.installed}
 						>
 							<Download size={18} />
-							{mod.downloaded ? "Installed" : "Download"}
+							{mod.installed ? "Installed" : "Download"}
 						</button>
-						{#if mod.downloaded}
+						{#if mod.installed}
 							<button class="delete-button" title="Remove Mod">
 								<Trash2 size={18} />
 							</button>
@@ -55,7 +55,6 @@
 					</div>
 
 					<div class="mod-stats">
-						<span><Download size={16} /> {mod.downloads}</span>
 						<span><Clock size={16} /> {mod.lastUpdated}</span>
 						<span><User size={16} /> {mod.publisher}</span>
 					</div>
