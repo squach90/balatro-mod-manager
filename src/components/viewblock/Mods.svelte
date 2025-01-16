@@ -11,6 +11,7 @@
 		Trash2,
 		Search,
 		Play,
+        BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { currentModView, currentCategory } from "../../stores/modStore";
@@ -244,6 +245,7 @@
 		{ name: "Search", icon: Search },
 		{ name: "All Mods", icon: LayoutDashboard },
 		{ name: "Content", icon: FolderHeart },
+		{ name: "Miscellaneous", icon: BookOpen },
 		{ name: "Joker", icon: Flame },
 		{ name: "Quality of Life", icon: Star },
 		{ name: "Technical", icon: Spade },
@@ -309,6 +311,10 @@
 				return Array.isArray(mod.categories)
 					? mod.categories.includes(Category.API)
 					: mod.categories === Category.API;
+			case "Miscellaneous":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.Miscellaneous)
+					: mod.categories === Category.Miscellaneous;
 			case "Installed Mods":
 				return mod.installed;
 			case "All Mods":
