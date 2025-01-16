@@ -6,6 +6,19 @@
 	import type { Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 
+	import { invoke } from "@tauri-apps/api/core";
+
+	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
+
+	async function openImagePopup() {
+		if (!isDefaultCover(mod.image)) {
+			await invoke("open_image_popup", {
+				imageUrl: mod.image,
+				title: mod.title,
+			});
+		}
+	}
+
 	let mod: Mod;
 	$: mod = $currentModView!;
 	$: renderedDescription = mod?.description ? marked(mod.description) : "";
@@ -31,11 +44,26 @@
 			<div class="content-grid">
 				<div class="left-column">
 					<div class="image-container">
-						<img
-							src={mod.image}
-							alt={mod.title}
-							draggable="false"
-						/>
+						{#if !isDefaultCover(mod.image)}
+							<button
+								class="image-button"
+								on:click={openImagePopup}
+								aria-label={`View full size image of ${mod.title}`}
+							>
+								<img
+									src={mod.image}
+									alt={mod.title}
+									class="clickable"
+									draggable="false"
+								/>
+							</button>
+						{:else}
+							<img
+								src={mod.image}
+								alt={mod.title}
+								draggable="false"
+							/>
+						{/if}
 					</div>
 
 					<div class="button-container">
@@ -109,6 +137,19 @@
 		font-family: "M6X11", sans-serif;
 	}
 
+	.image-button {
+		padding: 0;
+		margin: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		width: 100%;
+		height: 100%;
+		display: block;
+		line-height: 0; /* Add this to remove any spacing */
+		font-size: 0; /* Add this to remove any spacing */
+	}
+
 	h2 {
 		margin-bottom: 2rem;
 		font-size: 1.8rem;
@@ -132,6 +173,7 @@
 		height: 250px;
 		object-fit: cover;
 		transition: transform 0.2s ease;
+		display: block;
 	}
 
 	img:hover {
@@ -306,6 +348,13 @@
 
 	.delete-button:active {
 		transform: translateY(1px);
+	}
+	/* Make sure the original image is clickable */
+	.image-container img {
+		cursor: default;
+	}
+	.image-container .clickable {
+		cursor: pointer;
 	}
 	@media (max-width: 1160px) {
 		.content-grid {

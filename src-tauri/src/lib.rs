@@ -6,12 +6,14 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use tauri::WebviewUrl;
+use tauri::WebviewWindowBuilder;
 
 use crate::lovely::ensure_lovely_exists;
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
-use bmm_lib::finder::is_steam_running;
 use bmm_lib::finder::is_balatro_running;
+use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
 use std::process::Command;
 
@@ -144,6 +146,20 @@ async fn check_custom_balatro(
     Ok(is_valid)
 }
 
+#[tauri::command]
+async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: String) {
+    let _popup = WebviewWindowBuilder::new(
+        &app,
+        "image_popup",
+        WebviewUrl::App(format!("image-popup.html?image={}", image_url).into()),
+    )
+    .title(title)
+    .inner_size(800.0, 600.0)
+    .center()
+    .build()
+    .unwrap();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     pretty_env_logger::init();
@@ -179,7 +195,8 @@ pub fn run() {
             set_balatro_path,
             launch_balatro,
             check_steam_running,
-            check_balatro_running
+            check_balatro_running,
+            open_image_popup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

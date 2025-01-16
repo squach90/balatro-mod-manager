@@ -9,7 +9,7 @@
     "beforeBuildCommand": "deno task build",
     "frontendDist": "../build"
   },
-  "app": {
+"app": {
     "windows": [
       {
         "title": "Balatro Mod Manager",
@@ -43,6 +43,15 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+	"window": {
+      "create": true,
+      "close": true,
+      "maximize": true,
+      "minimize": true,
+      "unmaximize": true,
+      "unminimize": true,
+      "startDragging": true
     }
   }
 }
