@@ -344,7 +344,6 @@
 	}
 
 	const categories = [
-		{ name: "Active Mods", icon: Play },
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
 		{ name: "All Mods", icon: LayoutDashboard },
@@ -425,8 +424,6 @@
 
 			case "All Mods":
 				return true;
-			case "Active Mods":
-				return mod.active;
 			default:
 				return true;
 		}

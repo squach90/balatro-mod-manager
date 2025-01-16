@@ -10,7 +10,6 @@ export interface Mod {
 	installed: boolean;
 	requires_steamodded: boolean;
 	publisher: string;
-	active: boolean;
 	downloadURL: string;
 }
 
