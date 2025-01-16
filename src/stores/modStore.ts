@@ -43,6 +43,9 @@ export const searchResults = writable<Mod[]>([]);
 export const modsStore = writable<Mod[]>([]);
 export const installationStatus: Writable<InstallationStatus> = writable({});
 
+export const loadingStates2 = writable<{ [key: string]: boolean }>({});
+
+
 
 
 function createPersistentCategory() {

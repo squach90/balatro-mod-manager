@@ -2,7 +2,7 @@
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User, ArrowLeft } from "lucide-svelte";
-	import { currentModView, installationStatus } from "../../stores/modStore";
+	import { currentModView, installationStatus, loadingStates2 as loadingStates } from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 
@@ -63,6 +63,7 @@
 
 	const installMod = async (mod: Mod) => {
 		try {
+			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
@@ -73,14 +74,14 @@
 				collection_hash: null,
 			});
 
-			// Force immediate UI update
 			await getAllInstalledMods();
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 		} catch (error) {
 			console.error("Failed to install mod:", error);
+		} finally {
+			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
-
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
@@ -145,13 +146,18 @@
 						<button
 							class="download-button"
 							class:installed={$installationStatus[mod.title]}
-							disabled={$installationStatus[mod.title]}
+							disabled={$installationStatus[mod.title] ||
+								$loadingStates[mod.title]}
 							on:click={() => installMod(mod)}
 						>
-							<Download size={18} />
-							{$installationStatus[mod.title]
-								? "Installed"
-								: "Download"}
+							{#if $loadingStates[mod.title]}
+								<div class="spinner"></div>
+							{:else}
+								<Download size={18} />
+								{$installationStatus[mod.title]
+									? "Installed"
+									: "Download"}
+							{/if}
 						</button>
 						{#if $installationStatus[mod.title]}
 							<button
@@ -449,5 +455,28 @@
 			bottom: 2rem;
 			position: relative;
 		}
+	}
+	.spinner {
+		width: 18px;
+		height: 18px;
+		border: 2px solid #f4eee0;
+		border-bottom-color: transparent;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		margin: 0 auto;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.download-button:disabled {
+		opacity: 0.8;
+		cursor: not-allowed;
 	}
 </style>

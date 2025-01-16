@@ -17,7 +17,7 @@
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
-	import { modsStore, installationStatus } from "../../stores/modStore";
+	import { modsStore, installationStatus, loadingStates2 as loadingStates } from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -140,6 +140,7 @@
 
 	const installMod = async (mod: Mod) => {
 		try {
+			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
@@ -150,14 +151,14 @@
 				collection_hash: null,
 			});
 
-			// Force immediate UI update
 			await getAllInstalledMods();
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 		} catch (error) {
 			console.error("Failed to install mod:", error);
+		} finally {
+			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
-
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
@@ -500,14 +501,20 @@
 						<button
 							class="download-button"
 							class:installed={$installationStatus[mod.title]}
-							disabled={$installationStatus[mod.title]}
+							disabled={$installationStatus[mod.title] ||
+								$loadingStates[mod.title]}
 							on:click|stopPropagation={() => installMod(mod)}
 						>
-							<Download size={16} />
-							{$installationStatus[mod.title]
-								? "Installed"
-								: "Download"}
+							{#if $loadingStates[mod.title]}
+								<div class="spinner"></div>
+							{:else}
+								<Download size={16} />
+								{$installationStatus[mod.title]
+									? "Installed"
+									: "Download"}
+							{/if}
 						</button>
+
 						{#if $installationStatus[mod.title]}
 							<button
 								class="delete-button"
@@ -821,5 +828,28 @@
 		font-family: "M6X11", sans-serif;
 		font-size: 1.5rem;
 		min-width: 150px;
+	}
+
+	.spinner {
+		width: 13px;
+		height: 13px;
+		border: 2px solid #f4eee0;
+		border-bottom-color: transparent;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.download-button:disabled {
+		opacity: 0.8;
+		cursor: not-allowed;
 	}
 </style>
