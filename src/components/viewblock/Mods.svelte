@@ -27,7 +27,7 @@
 	import { writable } from "svelte/store";
 
 	const loadingDots = writable(0);
-	
+
 	let installedMods: InstalledMod[] = [];
 
 	// Animate the dots
@@ -73,6 +73,16 @@
 
 				isLoading = true;
 				mods = await fetchModDirectories();
+				await Promise.all(
+					mods.map(async (mod) => {
+						const status = await isModInstalled(mod);
+						installationStatus.update((s) => ({
+							...s,
+							[mod.title]: status,
+						}));
+					}),
+				);
+
 				isLoading = false;
 			} catch (error) {
 				console.error("Failed to get modloader:", error);
