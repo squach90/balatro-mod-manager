@@ -686,6 +686,7 @@
 		height: 100%;
 		border-radius: 5px;
 		object-fit: cover;
+		border: 2px solid #f4eee0;
 	}
 
 	.tags {
