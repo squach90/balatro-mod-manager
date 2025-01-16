@@ -12,6 +12,7 @@ use tauri::WebviewWindowBuilder;
 use crate::lovely::ensure_lovely_exists;
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::database::Database;
+use bmm_lib::database::InstalledMod;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
@@ -85,6 +86,39 @@ async fn check_existing_installation(
         }
     }
     Ok(None)
+}
+#[tauri::command]
+async fn install_mod(url: String) -> Result<PathBuf, String> {
+    bmm_lib::installer::install_mod(url).await
+}
+#[tauri::command]
+async fn get_installed_mods_from_db(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<InstalledMod>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_installed_mods().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn add_installed_mod(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    path: String,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.add_installed_mod(&name, &path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn remove_installed_mod(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    path: String,
+) -> Result<(), String> {
+    bmm_lib::installer::uninstall_mod(PathBuf::from(path));
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.remove_installed_mod(&name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -160,6 +194,11 @@ async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: Strin
     .unwrap();
 }
 
+// #[tauri::command]
+// async fn get_installed_mods() -> Vec<String> {
+//     bmm_lib::finder::get_installed_mods()
+// }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     pretty_env_logger::init();
@@ -196,7 +235,11 @@ pub fn run() {
             launch_balatro,
             check_steam_running,
             check_balatro_running,
-            open_image_popup
+            open_image_popup,
+            get_installed_mods_from_db,
+            install_mod,
+            add_installed_mod,
+            remove_installed_mod
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

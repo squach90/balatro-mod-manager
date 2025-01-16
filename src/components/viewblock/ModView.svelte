@@ -2,8 +2,8 @@
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User, ArrowLeft } from "lucide-svelte";
-	import { currentModView } from "../../stores/modStore";
-	import type { Mod } from "../../stores/modStore";
+	import { currentModView, installationStatus } from "../../stores/modStore";
+	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 
 	import { invoke } from "@tauri-apps/api/core";
@@ -16,6 +16,81 @@
 				imageUrl: mod.image,
 				title: mod.title,
 			});
+		}
+	}
+
+	let installedMods: InstalledMod[] = [];
+
+	const getAllInstalledMods = async () => {
+		try {
+			const installed: InstalledMod[] = await invoke(
+				"get_installed_mods_from_db",
+			);
+			// fill the installed mods Array
+			installedMods = installed.map((mod) => {
+				return {
+					name: mod.name,
+					path: mod.path,
+					collection_hash: mod.collection_hash,
+				};
+			});
+		} catch (error) {
+			console.error("Failed to get installed mods:", error);
+		}
+	};
+
+	const uninstallMod = async (mod: Mod) => {
+		try {
+			await getAllInstalledMods();
+			const installedMod = installedMods.find(
+				(m) => m.name === mod.title,
+			);
+			if (!installedMod) {
+				console.error("Mod not found in installed mods");
+				return;
+			}
+			await invoke("remove_installed_mod", {
+				name: mod.title,
+				path: installedMod.path,
+			});
+
+			// Force immediate UI update
+			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
+		} catch (error) {
+			console.error("Failed to uninstall mod:", error);
+		}
+	};
+
+	const installMod = async (mod: Mod) => {
+		try {
+			const installedPath = await invoke<string>("install_mod", {
+				url: mod.downloadURL,
+			});
+
+			await invoke("add_installed_mod", {
+				name: mod.title,
+				path: installedPath,
+				collection_hash: null,
+			});
+
+			// Force immediate UI update
+			await getAllInstalledMods();
+			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+		} catch (error) {
+			console.error("Failed to install mod:", error);
+		}
+	};
+
+	const isModInstalled = async (mod: Mod) => {
+		await getAllInstalledMods();
+		const status = installedMods.some((m) => m.name === mod.title);
+		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+		return status;
+	};
+
+	$: {
+		if (mod) {
+			isModInstalled(mod);
 		}
 	}
 
@@ -69,14 +144,21 @@
 					<div class="button-container">
 						<button
 							class="download-button"
-							class:installed={mod.installed}
-							disabled={mod.installed}
+							class:installed={$installationStatus[mod.title]}
+							disabled={$installationStatus[mod.title]}
+							on:click={() => installMod(mod)}
 						>
 							<Download size={18} />
-							{mod.installed ? "Installed" : "Download"}
+							{$installationStatus[mod.title]
+								? "Installed"
+								: "Download"}
 						</button>
-						{#if mod.installed}
-							<button class="delete-button" title="Remove Mod">
+						{#if $installationStatus[mod.title]}
+							<button
+								class="delete-button"
+								title="Remove Mod"
+								on:click={() => uninstallMod(mod)}
+							>
 								<Trash2 size={18} />
 							</button>
 						{/if}

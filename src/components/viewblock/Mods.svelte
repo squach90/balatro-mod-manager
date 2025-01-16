@@ -17,7 +17,8 @@
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
-	import { modsStore } from "../../stores/modStore";
+	import { modsStore, installationStatus } from "../../stores/modStore";
+	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
@@ -26,6 +27,8 @@
 	import { writable } from "svelte/store";
 
 	const loadingDots = writable(0);
+	
+	let installedMods: InstalledMod[] = [];
 
 	// Animate the dots
 	let dotInterval: number;
@@ -43,6 +46,17 @@
 	let mods: Mod[] = [];
 	let isLoading = true;
 
+	export let mod: Mod;
+
+	async function updateInstallStatus(mod: Mod) {
+		const status = await isModInstalled(mod);
+		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+	}
+
+	$: {
+		updateInstallStatus(mod);
+	}
+
 	onMount(() => {
 		const initialize = async () => {
 			try {
@@ -50,12 +64,12 @@
 					| "lovely-only"
 					| "steamodded";
 
-				if (
-					$currentCategory === "Active Mods" &&
-					currentModLoader !== "lovely-only"
-				) {
-					currentCategory.set(baseCategories[2].name);
-				}
+				// if (
+				// 	$currentCategory === "Active Mods" &&
+				// 	currentModLoader !== "lovely-only"
+				// ) {
+				// 	currentCategory.set(baseCategories[2].name);
+				// }
 
 				isLoading = true;
 				mods = await fetchModDirectories();
@@ -73,6 +87,73 @@
 			// Cleanup code here if needed
 		};
 	});
+
+	const getAllInstalledMods = async () => {
+		try {
+			const installed: InstalledMod[] = await invoke(
+				"get_installed_mods_from_db",
+			);
+			// fill the installed mods Array
+			installedMods = installed.map((mod) => {
+				return {
+					name: mod.name,
+					path: mod.path,
+					collection_hash: mod.collection_hash,
+				};
+			});
+		} catch (error) {
+			console.error("Failed to get installed mods:", error);
+		}
+	};
+
+	const uninstallMod = async (mod: Mod) => {
+		try {
+			await getAllInstalledMods();
+			const installedMod = installedMods.find(
+				(m) => m.name === mod.title,
+			);
+			if (!installedMod) {
+				console.error("Mod not found in installed mods");
+				return;
+			}
+			await invoke("remove_installed_mod", {
+				name: mod.title,
+				path: installedMod.path,
+			});
+
+			// Force immediate UI update
+			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
+		} catch (error) {
+			console.error("Failed to uninstall mod:", error);
+		}
+	};
+
+	const installMod = async (mod: Mod) => {
+		try {
+			const installedPath = await invoke<string>("install_mod", {
+				url: mod.downloadURL,
+			});
+
+			await invoke("add_installed_mod", {
+				name: mod.title,
+				path: installedPath,
+				collection_hash: null,
+			});
+
+			// Force immediate UI update
+			await getAllInstalledMods();
+			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+		} catch (error) {
+			console.error("Failed to install mod:", error);
+		}
+	};
+
+	const isModInstalled = async (mod: Mod) => {
+		await getAllInstalledMods();
+		const status = installedMods.some((m) => m.name === mod.title);
+		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+		return status;
+	};
 
 	interface ModMeta {
 		title: string;
@@ -230,6 +311,7 @@
 							installed: false,
 							requires_steamodded: meta["requires-steamodded"],
 							publisher: meta.author,
+							downloadURL: meta.downloadURL,
 						};
 					} catch (error) {
 						console.error(
@@ -250,7 +332,8 @@
 		}
 	}
 
-	const baseCategories = [
+	const categories = [
+		{ name: "Active Mods", icon: Play },
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
 		{ name: "All Mods", icon: LayoutDashboard },
@@ -263,14 +346,14 @@
 		{ name: "API", icon: Gamepad2 },
 	];
 
-	$: categories =
-		currentModLoader === "lovely-only"
-			? [
-					baseCategories[0],
-					{ name: "Active Mods", icon: Play },
-					...baseCategories.slice(1),
-				]
-			: baseCategories;
+	// $: categories =
+	// 	currentModLoader === "lovely-only"
+	// 		? [
+	// 				baseCategories[0],
+	// 				{ name: "Active Mods", icon: Play },
+	// 				...baseCategories.slice(1),
+	// 			]
+	// 		: baseCategories;
 
 	const colorPairs = [
 		{ color1: "#4f6367", color2: "#334461" }, // Blue-grey
@@ -330,6 +413,8 @@
 				return mod.installed;
 			case "All Mods":
 				return true;
+			case "Active Mods":
+				return mod.active;
 			default:
 				return true;
 		}
@@ -403,21 +488,20 @@
 					<div class="button-container">
 						<button
 							class="download-button"
-							class:installed={mod.installed}
-							disabled={mod.installed}
-							on:click|stopPropagation={() => {
-								/* handle download */
-							}}
+							class:installed={$installationStatus[mod.title]}
+							disabled={$installationStatus[mod.title]}
+							on:click|stopPropagation={() => installMod(mod)}
 						>
 							<Download size={16} />
-							{mod.installed ? "Installed" : "Download"}
+							{$installationStatus[mod.title]
+								? "Installed"
+								: "Download"}
 						</button>
-						{#if mod.installed}
+						{#if $installationStatus[mod.title]}
 							<button
 								class="delete-button"
-								on:click|stopPropagation={() => {
-									/* handle delete */
-								}}
+								on:click|stopPropagation={() =>
+									uninstallMod(mod)}
 							>
 								<Trash2 size={16} />
 							</button>

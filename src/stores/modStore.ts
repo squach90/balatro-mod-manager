@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, type Writable } from 'svelte/store';
 
 export interface Mod {
 	title: string;
@@ -10,7 +10,21 @@ export interface Mod {
 	installed: boolean;
 	requires_steamodded: boolean;
 	publisher: string;
+	active: boolean;
+	downloadURL: string;
 }
+
+
+export interface InstalledMod {
+	name: string;
+	path: string;
+	collection_hash: string | null;
+}
+
+interface InstallationStatus {
+	[key: string]: boolean;
+}
+
 
 export enum Category {
 	Content,
@@ -27,6 +41,8 @@ export const currentModView = writable<Mod | null>(null);
 export const currentJokerView = writable<Mod | null>(null);
 export const searchResults = writable<Mod[]>([]);
 export const modsStore = writable<Mod[]>([]);
+export const installationStatus: Writable<InstallationStatus> = writable({});
+
 
 
 function createPersistentCategory() {

@@ -1,10 +1,18 @@
 use crate::mod_collections::ModCollectionManager;
 use rusqlite::{Connection, Result};
+use serde::Serialize;
 use std::path::Path;
 
 pub struct Database {
     conn: Connection,
     pub mod_manager: ModCollectionManager,
+}
+
+#[derive(Serialize)]
+pub struct InstalledMod {
+    pub name: String,
+    pub path: String,
+    pub collection_hash: Option<String>,
 }
 
 impl Database {
@@ -31,6 +39,16 @@ impl Database {
             [],
         )?;
 
+        // create a table called "installed_mods" with the primary key being the mod's name
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS installed_mods (
+                name TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                collection_hash TEXT
+            )",
+            [],
+        )?;
+
         ModCollectionManager::initialize_table(conn)?;
 
         conn.execute(
@@ -38,6 +56,44 @@ impl Database {
             [],
         )?;
 
+        Ok(())
+    }
+
+    pub fn get_installed_mods(&self) -> Result<Vec<InstalledMod>> {
+        let mut stmt = self.conn.prepare("SELECT * FROM installed_mods")?;
+        let mut mods: Vec<InstalledMod> = Vec::new();
+        let mut rows = stmt.query([])?;
+
+        while let Some(row) = rows.next()? {
+            mods.push(InstalledMod {
+                name: row.get(0)?,
+                path: row.get(1)?,
+                collection_hash: row.get(2)?,
+            });
+        }
+
+        Ok(mods)
+    }
+
+    pub fn add_installed_mod(&self, name: &str, path: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO installed_mods (name, path) VALUES (?1, ?2)",
+            [name, path],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_mod_to_collection(&self, name: &str, collection_hash: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE installed_mods SET collection_hash = ?1 WHERE name = ?2",
+            [collection_hash, name],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_installed_mod(&self, name: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM installed_mods WHERE name = ?1", [name])?;
         Ok(())
     }
 
