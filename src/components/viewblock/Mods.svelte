@@ -16,7 +16,7 @@
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
-    import { modsStore } from "../../stores/modStore";
+	import { modsStore } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
@@ -37,7 +37,6 @@
 			clearInterval(dotInterval);
 		};
 	});
-
 
 	let currentModLoader: "steamodded" | "lovely-only";
 	let mods: Mod[] = [];
@@ -243,13 +242,13 @@
 	const baseCategories = [
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
-		{ name: "Popular", icon: Flame },
-		{ name: "Recent", icon: Clock },
-		{ name: "Featured", icon: Star },
-		{ name: "Card Mods", icon: Spade },
-		{ name: "Gameplay", icon: Gamepad2 },
-		{ name: "UI", icon: LayoutDashboard },
-		{ name: "Collections", icon: FolderHeart },
+		{ name: "All Mods", icon: LayoutDashboard },
+		{ name: "Content", icon: FolderHeart },
+		{ name: "Joker", icon: Flame },
+		{ name: "Quality of Life", icon: Star },
+		{ name: "Technical", icon: Spade },
+		{ name: "Resource Packs", icon: FolderHeart },
+		{ name: "API", icon: Gamepad2 },
 	];
 
 	$: categories =
@@ -280,9 +279,44 @@
 		currentModView.set(mod);
 	}
 
-	let showSearch: boolean;
+	let showSearch: boolean = false;
 
 	$: showSearch = $currentCategory === "Search";
+
+	$: filteredMods = mods.filter((mod) => {
+		switch ($currentCategory) {
+			case "Content":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.Content)
+					: mod.categories === Category.Content;
+			case "Joker":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.Joker)
+					: mod.categories === Category.Joker;
+			case "Quality of Life":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.QualityOfLife)
+					: mod.categories === Category.QualityOfLife;
+			case "Technical":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.Technical)
+					: mod.categories === Category.Technical;
+			case "Resource Packs":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.ResourcePacks)
+					: mod.categories === Category.ResourcePacks;
+			case "API":
+				return Array.isArray(mod.categories)
+					? mod.categories.includes(Category.API)
+					: mod.categories === Category.API;
+			case "Installed Mods":
+				return mod.installed;
+			case "All Mods":
+				return true;
+			default:
+				return true;
+		}
+	});
 
 	function handleCategoryClick(category: string) {
 		currentCategory.set(category);
@@ -322,7 +356,7 @@
 		<SearchView />
 	{:else}
 		<div class="mods-grid">
-			{#each mods as mod}
+			{#each filteredMods as mod}
 				<div
 					class="mod-card"
 					style="--orig-color1: {mod.colors
@@ -394,7 +428,7 @@
 	}
 
 	.categories {
-		width: 180px;
+		width: 190px;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;

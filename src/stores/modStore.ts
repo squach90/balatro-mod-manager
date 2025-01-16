@@ -13,9 +13,6 @@ export interface Mod {
 }
 
 export enum Category {
-	Popular,
-	Recent,
-	Featured,
 	Content,
 	Joker,
 	QualityOfLife,
@@ -27,6 +24,7 @@ export enum Category {
 
 
 export const currentModView = writable<Mod | null>(null);
+export const currentJokerView = writable<Mod | null>(null);
 export const searchResults = writable<Mod[]>([]);
 export const modsStore = writable<Mod[]>([]);
 
@@ -45,12 +43,3 @@ function createPersistentCategory() {
 }
 
 export const currentCategory = createPersistentCategory();
-
-
-
-export async function searchMods(query: string): Promise<Mod[]> {
-	// Implement your search logic here
-	return [];
-}
-
-
