@@ -282,6 +282,7 @@
 	}
 
 	let showSearch: boolean = false;
+	$currentCategory = "All Mods";
 
 	$: showSearch = $currentCategory === "Search";
 
