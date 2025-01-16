@@ -420,7 +420,8 @@
 					? mod.categories.includes(Category.Miscellaneous)
 					: mod.categories === Category.Miscellaneous;
 			case "Installed Mods":
-				return mod.installed;
+				return $installationStatus[mod.title] === true;
+
 			case "All Mods":
 				return true;
 			case "Active Mods":
