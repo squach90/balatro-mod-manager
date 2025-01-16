@@ -11,7 +11,7 @@
 		Trash2,
 		Search,
 		Play,
-        BookOpen,
+		BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { currentModView, currentCategory } from "../../stores/modStore";
@@ -108,7 +108,17 @@
 
 	async function checkImageExists(imageUrl: string): Promise<string> {
 		try {
-			const response = await fetch(imageUrl, { method: "HEAD" });
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+			const response = await fetch(imageUrl, {
+				method: "HEAD",
+				signal: controller.signal,
+				// Suppress console errors
+				credentials: "omit",
+			});
+
+			clearTimeout(timeoutId);
 			return response.ok ? imageUrl : "images/cover.jpg";
 		} catch {
 			return "images/cover.jpg";
