@@ -10,7 +10,6 @@
 		FolderHeart,
 		Trash2,
 		Search,
-		Play,
 		BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
