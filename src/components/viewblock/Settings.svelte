@@ -24,7 +24,7 @@
 		font-size: 1.8rem;
 		margin-bottom: 1rem;
 		align-self: flex-start;
-		color: #fde700;
+		color: #fdcf51;
 	}
 	.content {
 		flex: 1;

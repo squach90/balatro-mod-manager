@@ -9,7 +9,7 @@
     "beforeBuildCommand": "deno task build",
     "frontendDist": "../build"
   },
-"app": {
+  "app": {
     "windows": [
       {
         "title": "Balatro Mod Manager",
@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost data: https:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost https:"
     }
   },
   "bundle": {
@@ -34,17 +34,25 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-	"resources": [
-	  "../static/fonts",
-	  "../static/images",
-	  "../static/videos"
-	]
+    "resources": [
+      "../static/fonts",
+      "../static/images",
+      "../static/videos"
+    ],
+    "macOS": {
+      "entitlements": "Entitlements.plist",
+      "minimumSystemVersion": "10.13",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "frameworks": []
+    }
   },
   "plugins": {
     "shell": {
       "open": true
     },
-	"window": {
+    "window": {
       "create": true,
       "close": true,
       "maximize": true,

@@ -4,6 +4,7 @@
 // (also implement animations for it)
 // TODO: 2.1 Inject the game with the embedded binary from lovely (for steamodded)
 
+use std::panic;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::WebviewUrl;
@@ -201,16 +202,38 @@ async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: Strin
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    pretty_env_logger::init();
-    tauri::Builder::default()
+    // Set up panic hook with proper logging
+    panic::set_hook(Box::new(|panic_info| {
+        log::error!("Application crashed: {:?}", panic_info);
+    }));
+
+    // Initialize logging with error handling
+    if let Err(e) = pretty_env_logger::try_init() {
+        eprintln!("Failed to initialize logger: {}", e);
+    }
+
+    let result = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let db = Database::new().map_err(|e| e.to_string())?;
+            // Get app handle first
+            let app_handle = app.handle();
+
+            // Initialize database with error handling
+            let db =
+                Database::new().map_err(|e| format!("Failed to initialize database: {}", e))?;
             app.manage(AppState { db: Mutex::new(db) });
 
-            // Ensure lovely exists in config directory
+            // Create required directories using path resolver
+            let app_dir = app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+            std::fs::create_dir_all(&app_dir)
+                .map_err(|e| format!("Failed to create app directory: {}", e))?;
+
             #[cfg(target_os = "macos")]
             {
                 lovely::ensure_lovely_exists()
@@ -218,10 +241,10 @@ pub fn run() {
             }
 
             #[cfg(debug_assertions)]
-            {
-                let window = app.get_webview_window("main").unwrap();
+            if let Some(window) = app.get_webview_window("main") {
                 window.open_devtools();
             }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -241,6 +264,9 @@ pub fn run() {
             add_installed_mod,
             remove_installed_mod
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+    if let Err(e) = result {
+        log::error!("Failed to run application: {}", e);
+        std::process::exit(1);
+    }
 }

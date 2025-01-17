@@ -2,7 +2,11 @@
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User, ArrowLeft } from "lucide-svelte";
-	import { currentModView, installationStatus, loadingStates2 as loadingStates } from "../../stores/modStore";
+	import {
+		currentModView,
+		installationStatus,
+		loadingStates2 as loadingStates,
+	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 
@@ -191,7 +195,9 @@
 		right: 0;
 		width: 100%;
 		height: 100%;
-		background: linear-gradient(to bottom, #393646, #4a4458);
+		/* background: linear-gradient(to bottom, #393646, #4a4458); */
+		background: rgba(133, 35, 27, 0.8);
+		backdrop-filter: blur(20px);
 		z-index: 1000;
 		overflow-y: auto;
 		font-family: "M6X11", sans-serif;

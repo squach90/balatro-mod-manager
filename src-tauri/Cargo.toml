@@ -28,6 +28,8 @@ lovely-mac = { path = "lovely-injector/crates/lovely-mac" }
 pretty_env_logger = "0.5.0"
 dirs = "5.0.1"
 tauri-plugin-fs = "2"
+log = "0.4.25"
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 
 [[bin]]
 name = "BMM"

@@ -208,7 +208,7 @@
 	h3 {
 		font-size: 1.8rem;
 		margin-bottom: 0.5rem;
-		color: #fde700;
+		color: #fdcf51;
 	}
 
 	p {
