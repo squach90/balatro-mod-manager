@@ -17,6 +17,7 @@ use bmm_lib::database::InstalledMod;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
+use bmm_lib::smods_installer::SteamoddedInstaller;
 use std::process::Command;
 
 use tauri::Manager;
@@ -149,6 +150,25 @@ async fn find_steam_balatro(state: tauri::State<'_, AppState>) -> Result<Vec<Str
         .collect())
 }
 
+// Add these new commands
+#[tauri::command]
+async fn get_steamodded_versions() -> Result<Vec<String>, String> {
+    let installer = SteamoddedInstaller::new();
+    installer
+        .get_available_versions()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn install_steamodded_version(version: String) -> Result<(), String> {
+    let installer = SteamoddedInstaller::new();
+    installer
+        .install_version(&version)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn check_custom_balatro(
     state: tauri::State<'_, AppState>,
@@ -245,7 +265,9 @@ pub fn run() {
             get_installed_mods_from_db,
             install_mod,
             add_installed_mod,
-            remove_installed_mod
+            remove_installed_mod,
+            get_steamodded_versions,
+            install_steamodded_version,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

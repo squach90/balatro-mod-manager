@@ -60,7 +60,12 @@
       "unmaximize": true,
       "unminimize": true,
       "startDragging": true
+    },
+	"allowlist": {
+    "menu": {
+      "all": true
     }
+  }
   }
 }
 

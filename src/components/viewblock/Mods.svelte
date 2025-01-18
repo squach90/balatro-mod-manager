@@ -525,7 +525,7 @@
 	{/if}
 </div>
 
-<ModView />
+<ModView mod={$currentModView as Mod}/>
 
 <style>
 	.mods-container {

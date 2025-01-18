@@ -2,6 +2,7 @@
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Clock, Trash2, User, ArrowLeft } from "lucide-svelte";
+	import { onMount } from "svelte";
 	import {
 		currentModView,
 		installationStatus,
@@ -9,7 +10,6 @@
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
-
 	import { invoke } from "@tauri-apps/api/core";
 
 	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
@@ -24,13 +24,37 @@
 	}
 
 	let installedMods: InstalledMod[] = [];
+	let steamoddedVersions: string[] = [];
+	let selectedVersion: string = "";
+	let loadingVersions = false;
+	let initialLoadDone = false;
+	let versionLoadStarted = false;
+	let prevModTitle = "";
+
+	async function loadSteamoddedVersions() {
+		if (loadingVersions) return;
+
+		loadingVersions = true;
+		try {
+			const versions: string[] = await invoke("get_steamodded_versions");
+			// Make sure to update the state with the new : string[]versions
+			steamoddedVersions = versions;
+			if (versions.length > 0) {
+				selectedVersion = versions[0];
+			}
+		} catch (error) {
+			console.error("Failed to load Steamodded versions:", error);
+			steamoddedVersions = [];
+		} finally {
+			loadingVersions = false;
+		}
+	}
 
 	const getAllInstalledMods = async () => {
 		try {
 			const installed: InstalledMod[] = await invoke(
 				"get_installed_mods_from_db",
 			);
-			// fill the installed mods Array
 			installedMods = installed.map((mod) => {
 				return {
 					name: mod.name,
@@ -58,7 +82,6 @@
 				path: installedMod.path,
 			});
 
-			// Force immediate UI update
 			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
 		} catch (error) {
 			console.error("Failed to uninstall mod:", error);
@@ -68,24 +91,32 @@
 	const installMod = async (mod: Mod) => {
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-			const installedPath = await invoke<string>("install_mod", {
-				url: mod.downloadURL,
-			});
 
-			await invoke("add_installed_mod", {
-				name: mod.title,
-				path: installedPath,
-				collection_hash: null,
-			});
+			if (mod.title.toLowerCase() === "steamodded") {
+				await invoke("install_steamodded_version", {
+					version: selectedVersion,
+				});
+				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+			} else {
+				const installedPath = await invoke<string>("install_mod", {
+					url: mod.downloadURL,
+				});
 
-			await getAllInstalledMods();
-			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+				await invoke("add_installed_mod", {
+					name: mod.title,
+					path: installedPath,
+					collection_hash: null,
+				});
+				await getAllInstalledMods();
+				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+			}
 		} catch (error) {
 			console.error("Failed to install mod:", error);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
+
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
@@ -93,19 +124,55 @@
 		return status;
 	};
 
+	export let mod: Mod;
+
+	// $: mod = $currentModView!;
+	let renderedDescription = "";
+
 	$: {
-		if (mod) {
-			isModInstalled(mod);
+		if (mod?.description) {
+			Promise.resolve(marked(mod.description)).then((result) => {
+				renderedDescription = result;
+			});
+		} else {
+			renderedDescription = "";
 		}
 	}
-
-	let mod: Mod;
-	$: mod = $currentModView!;
-	$: renderedDescription = mod?.description ? marked(mod.description) : "";
 
 	function handleClose() {
 		currentModView.set(null);
 	}
+
+	onMount(async () => {
+		if (mod) {
+			await getAllInstalledMods();
+			await isModInstalled(mod);
+		}
+	});
+
+	$: {
+		const currentModTitle = mod?.title?.toLowerCase();
+		if (
+			currentModTitle === "steamodded" &&
+			currentModTitle !== prevModTitle
+		) {
+			prevModTitle = currentModTitle;
+			loadSteamoddedVersions();
+		}
+	}
+
+	//
+	// $: if (mod) {
+	// 	isModInstalled(mod);
+	// }
+	// $: if (mod?.title?.toLowerCase() === "steamodded") {
+	// 	loadSteamoddedVersions();
+	// }
+
+	// $: if (mod?.title?.toLowerCase() === "steamodded") {
+	// 	versionLoadAttempted = false;
+	// 	loadSteamoddedVersions();
+	// }
 </script>
 
 {#if $currentModView}
@@ -173,7 +240,30 @@
 							</button>
 						{/if}
 					</div>
-
+					{#if mod.title.toLowerCase() === "steamodded" && !$installationStatus[mod.title]}
+						<div class="version-selector">
+							{#if loadingVersions}
+								<div class="loading-text">
+									Loading versions...
+								</div>
+							{:else if steamoddedVersions.length === 0}
+								<div class="loading-text">
+									No versions available
+								</div>
+							{:else}
+								<select
+									bind:value={selectedVersion}
+									disabled={$loadingStates[mod.title]}
+								>
+									{#each steamoddedVersions as version}
+										<option value={version}
+											>{version}</option
+										>
+									{/each}
+								</select>
+							{/if}
+						</div>
+					{/if}
 					<div class="mod-stats">
 						<span><Clock size={16} /> {mod.lastUpdated}</span>
 						<span><User size={16} /> {mod.publisher}</span>
@@ -484,5 +574,60 @@
 	.download-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
+	}
+
+	.version-selector {
+		margin-top: 0.5rem;
+		width: 100%;
+	}
+
+	.loading-text {
+		width: 100%;
+		padding: 0.75rem;
+		background: rgba(133, 35, 27, 0.8);
+		color: #f4eee0;
+		border: 1px solid rgba(193, 65, 57, 0.6);
+		border-radius: 6px;
+		font-family: "M6X11", sans-serif;
+		font-size: 1rem;
+		text-align: center;
+	}
+
+	.version-selector select {
+		width: 100%;
+		padding: 0.75rem;
+		background: rgba(133, 35, 27, 0.8);
+		color: #f4eee0;
+		border: 1px solid rgba(193, 65, 57, 0.6);
+		border-radius: 6px;
+		font-family: "M6X11", sans-serif;
+		cursor: pointer;
+		font-size: 1rem;
+		transition: all 0.2s ease;
+		-webkit-appearance: none;
+		-moz-appearance: none;
+		appearance: none;
+		background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23F4EEE0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.7em top 50%;
+		background-size: 0.65em auto;
+		padding-right: 2.5em;
+	}
+
+	.version-selector select:hover:not(:disabled) {
+		background-color: rgba(133, 35, 27, 0.9);
+		border-color: rgba(193, 65, 57, 0.8);
+		transform: translateY(-2px);
+	}
+
+	.version-selector select:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.version-selector select option {
+		background: rgba(133, 35, 27, 0.9);
+		color: #f4eee0;
+		padding: 0.75rem;
 	}
 </style>
