@@ -39,7 +39,6 @@ impl Database {
             [],
         )?;
 
-        // create a table called "installed_mods" with the primary key being the mod's name
         conn.execute(
             "CREATE TABLE IF NOT EXISTS installed_mods (
                 name TEXT PRIMARY KEY,
@@ -50,11 +49,6 @@ impl Database {
         )?;
 
         ModCollectionManager::initialize_table(conn)?;
-
-        conn.execute(
-            "INSERT OR IGNORE INTO settings (setting, value) VALUES ('current_modloader', 'steamodded')",
-            [],
-        )?;
 
         Ok(())
     }
@@ -151,26 +145,4 @@ impl Database {
         Ok(())
     }
 }
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::fs;
-//
-//     #[test]
-//     fn test_database_creation() {
-//         let _ = fs::remove_file("settings.db");
-//         let db = Database::new().unwrap();
-//         assert!(Path::new("settings.db").exists());
-//
-//         // Test installation path
-//         assert!(db.get_installation_path().unwrap().is_none());
-//         db.set_installation_path("/test/path").unwrap();
-//         assert_eq!(db.get_installation_path().unwrap().unwrap(), "/test/path");
-//
-//         // Test settings
-//         assert!(db.get_setting("theme").unwrap().is_none());
-//         db.set_setting("theme", "dark").unwrap();
-//         assert_eq!(db.get_setting("theme").unwrap().unwrap(), "dark");
-//     }
-// }
+

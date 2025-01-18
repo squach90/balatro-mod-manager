@@ -3,12 +3,6 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
-pub enum ModLoader {
-    Steamodded,
-    LovelyOnly,
-}
-
 #[derive(Clone)]
 pub struct ModCollection {
     pub name: String,
@@ -50,29 +44,22 @@ impl ModCollectionManager {
             "CREATE TABLE IF NOT EXISTS mod_collections (
                 hash INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
-                path TEXT NOT NULL,
-                mod_loader TEXT NOT NULL
+                path TEXT NOT NULL
             )",
             [],
         )?;
         Ok(())
     }
 
-    pub fn add_collection(
-        &mut self,
-        conn: &Connection,
-        collection: ModCollection,
-        loader: ModLoader,
-    ) -> Result<()> {
+    pub fn add_collection(&mut self, conn: &Connection, collection: ModCollection) -> Result<()> {
         self.collections.insert(collection.hash, collection.clone());
 
         conn.execute(
-            "INSERT OR REPLACE INTO mod_collections (hash, name, path, mod_loader) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR REPLACE INTO mod_collections (hash, name, path) VALUES (?1, ?2, ?3)",
             [
                 &collection.hash.to_string(),
                 &collection.name,
                 &collection.path.to_string_lossy().to_string(),
-                &format!("{:?}", loader),
             ],
         )?;
 
@@ -92,15 +79,10 @@ impl ModCollectionManager {
         Ok(())
     }
 
-    pub fn load_collections(
-        &mut self,
-        conn: &Connection,
-        loader: ModLoader,
-    ) -> Result<Vec<ModCollection>> {
-        let mut stmt =
-            conn.prepare("SELECT hash, name, path FROM mod_collections WHERE mod_loader = ?1")?;
+    pub fn load_collections(&mut self, conn: &Connection) -> Result<Vec<ModCollection>> {
+        let mut stmt = conn.prepare("SELECT hash, name, path FROM mod_collections")?;
 
-        let collections = stmt.query_map([format!("{:?}", loader)], |row| {
+        let collections = stmt.query_map([], |row| {
             let hash: u64 = row.get::<_, String>(0)?.parse().unwrap();
             let name: String = row.get(1)?;
             let path: String = row.get(2)?;
@@ -122,15 +104,10 @@ impl ModCollectionManager {
         Ok(result)
     }
 
-    pub fn get_all_collections(
-        &self,
-        conn: &Connection,
-        loader: ModLoader,
-    ) -> Result<Vec<ModCollection>> {
-        let mut stmt =
-            conn.prepare("SELECT hash, name, path FROM mod_collections WHERE mod_loader = ?1")?;
+    pub fn get_all_collections(&self, conn: &Connection) -> Result<Vec<ModCollection>> {
+        let mut stmt = conn.prepare("SELECT hash, name, path FROM mod_collections")?;
 
-        let collections = stmt.query_map([format!("{:?}", loader)], |row| {
+        let collections = stmt.query_map([], |row| {
             let hash: u64 = row.get::<_, String>(0)?.parse().unwrap();
             let name: String = row.get(1)?;
             let path: String = row.get(2)?;
@@ -150,3 +127,4 @@ impl ModCollectionManager {
         Ok(result)
     }
 }
+

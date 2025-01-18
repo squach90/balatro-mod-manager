@@ -1,14 +1,11 @@
 <script>
 	// TODO: Add ability to switch between versions (through GitHub Releases) from steamodded through a combobox (dropdown)
-	import ModSwitch from "../ModSwitch.svelte";
 	import PathSelector from "../PathSelector.svelte";
 </script>
 
 <div class="settings-container">
 	<h2>Settings</h2>
 	<div class="content">
-		<h3>Mod Loader</h3>
-		<ModSwitch />
 		<h3>Game Path</h3>
 		<PathSelector />
 	</div>

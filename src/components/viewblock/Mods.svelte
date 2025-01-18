@@ -45,7 +45,6 @@
 		};
 	});
 
-	let currentModLoader: "steamodded" | "lovely-only";
 	let mods: Mod[] = [];
 	let isLoading = true;
 
@@ -66,17 +65,6 @@
 	onMount(() => {
 		const initialize = async () => {
 			try {
-				currentModLoader = (await invoke("get_modloader")) as
-					| "lovely-only"
-					| "steamodded";
-
-				// if (
-				// 	$currentCategory === "Active Mods" &&
-				// 	currentModLoader !== "lovely-only"
-				// ) {
-				// 	currentCategory.set(baseCategories[2].name);
-				// }
-
 				isLoading = true;
 				mods = await fetchModDirectories();
 				await Promise.all(
