@@ -16,7 +16,11 @@
 	import { currentModView, currentCategory } from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
-	import { modsStore, installationStatus, loadingStates2 as loadingStates } from "../../stores/modStore";
+	import {
+		modsStore,
+		installationStatus,
+		loadingStates2 as loadingStates,
+	} from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -45,15 +49,18 @@
 	let mods: Mod[] = [];
 	let isLoading = true;
 
-	export let mod: Mod;
+	export let mod: Mod | undefined;
 
-	async function updateInstallStatus(mod: Mod) {
-		const status = await isModInstalled(mod);
+	async function updateInstallStatus(mod: Mod | undefined) {
+		if (!mod) return;
+		const status: boolean = await isModInstalled(mod);
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
 	}
 
 	$: {
-		updateInstallStatus(mod);
+		if (mod) {
+			updateInstallStatus(mod);
+		}
 	}
 
 	onMount(() => {
@@ -116,6 +123,7 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
+		if (!mod?.title) return;
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
@@ -138,6 +146,7 @@
 	};
 
 	const installMod = async (mod: Mod) => {
+		if (!mod?.title || !mod?.downloadURL) return;
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
@@ -159,6 +168,7 @@
 		}
 	};
 	const isModInstalled = async (mod: Mod) => {
+		if (!mod?.title) return false;
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
