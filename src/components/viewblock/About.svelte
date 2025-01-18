@@ -12,7 +12,11 @@
 		buttonRect = button.getBoundingClientRect();
 		showConfetti = true;
 		setTimeout(() => (showConfetti = false), 2000);
-		await open("https://ko-fi.com/skyline69/goal?g=0");
+		try {
+			await open("https://ko-fi.com/skyline69/goal?g=0");
+		} catch (error) {
+			console.error("Failed to open URL:", error);
+		}
 	};
 </script>
 
@@ -104,7 +108,6 @@
 		&::-webkit-scrollbar-corner {
 			background-color: transparent;
 		}
-
 	}
 
 	.profile-section {

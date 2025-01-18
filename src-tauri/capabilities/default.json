@@ -4,6 +4,8 @@
   "description": "Capability for the main window",
   "windows": ["main"],
   "permissions": [
+    "shell:allow-open",
+    "shell:default",
     "dialog:default",
     "fs:default",
     "fs:read-app-specific-dirs-recursive",
