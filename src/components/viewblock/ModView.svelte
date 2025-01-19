@@ -27,7 +27,6 @@
 	let steamoddedVersions: string[] = [];
 	let selectedVersion: string = "";
 	let loadingVersions = false;
-	let initialLoadDone = false;
 	let versionLoadStarted = false;
 	let prevModTitle = "";
 
