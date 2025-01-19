@@ -363,14 +363,17 @@
 	// 		: baseCategories;
 
 	const colorPairs = [
-		{ color1: "#4f6367", color2: "#334461" }, // Blue-grey
-		{ color1: "#7E4E60", color2: "#6A3D4F" }, // Wine red
-		{ color1: "#4A6670", color2: "#395660" }, // Steel blue
-		{ color1: "#5B6E4C", color2: "#4A5C3D" }, // Forest green
-		{ color1: "#6B4C6E", color2: "#593E5C" }, // Purple
-		{ color1: "#735D45", color2: "#604B35" }, // Brown
-		{ color1: "#664E4C", color2: "#523D3B" }, // Rust
-		{ color1: "#4E665C", color2: "#3D534A" }, // Pine green
+		{ color1: "#4f6367", color2: "#425556" },
+		{ color1: "#AA778D", color2: "#906577" },
+		{ color1: "#A2615E", color2: "#89534F" },
+		{ color1: "#A48447", color2: "#8B703C" },
+		{ color1: "#4F7869", color2: "#436659" },
+		{ color1: "#728DBF", color2: "#6177A3" },
+		{ color1: "#5D5E8F", color2: "#4F4F78" },
+		{ color1: "#796E9E", color2: "#655D86" },
+		{ color1: "#64825D", color2: "#556E4E" },
+		{ color1: "#86A367", color2: "#728A57" },
+		{ color1: "#748C8A", color2: "#627775" },
 	];
 
 	function getRandomColorPair() {
@@ -525,7 +528,7 @@
 	{/if}
 </div>
 
-<ModView mod={$currentModView as Mod}/>
+<ModView mod={$currentModView as Mod} />
 
 <style>
 	.mods-container {

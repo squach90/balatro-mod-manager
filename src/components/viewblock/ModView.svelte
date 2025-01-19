@@ -577,7 +577,7 @@
 	}
 
 	.version-selector {
-		margin-top: 0.5rem;
+		margin-bottom: 1rem;
 		width: 100%;
 	}
 

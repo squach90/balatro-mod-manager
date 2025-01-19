@@ -164,10 +164,14 @@
 <style>
 	:root {
 		/* Base Colors */
-		--color-dark: #459373;
-		--color-medium: #56a786;
-		--color-light: #74cca8;
-		--color-cream: #f4eee0;
+		/* --color-dark: #459373; */
+		/* --color-medium: #56a786; */
+		/* --color-light: #74cca8; */
+		/* --color-cream: #f4eee0; */
+		--color-dark: #3b41a8; /* Brighter base blue */
+		--color-medium: #4b52d1; /* Vibrant medium blue */
+		--color-light: #6166ff; /* Bright highlight blue */
+		--color-cream: #f4eee0; /* Original cream color */
 
 		--text-primary: var(--color-cream);
 		--text-secondary: var(--color-light);
