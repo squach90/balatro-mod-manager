@@ -161,12 +161,16 @@ async fn get_steamodded_versions() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn install_steamodded_version(version: String) -> Result<(), String> {
+async fn install_steamodded_version(version: String) -> Result<String, String> {
     let installer = SteamoddedInstaller::new();
     installer
         .install_version(&version)
         .await
         .map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn verify_path_exists(path: String) ->  bool {
+    std::fs::exists(PathBuf::from(path)).unwrap()
 }
 
 #[tauri::command]
@@ -268,6 +272,7 @@ pub fn run() {
             remove_installed_mod,
             get_steamodded_versions,
             install_steamodded_version,
+            verify_path_exists
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

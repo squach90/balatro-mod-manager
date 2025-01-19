@@ -74,7 +74,8 @@
 				(m) => m.name === mod.title,
 			);
 			if (!installedMod) {
-				console.error("Mod not found in installed mods");
+				console.error(`Mod "${mod.title}" not found in installed mods`);
+				console.log(installedMods);
 				return;
 			}
 			await invoke("remove_installed_mod", {
@@ -93,14 +94,45 @@
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 
 			if (mod.title.toLowerCase() === "steamodded") {
-				await invoke("install_steamodded_version", {
-					version: selectedVersion,
+				let installedPath;
+
+				if (selectedVersion === "newest") {
+					// Use regular mod installation for newest version
+					installedPath = await invoke<string>("install_mod", {
+						url: mod.downloadURL,
+					});
+				} else {
+					// Use version-specific installation
+					installedPath = await invoke<string>(
+						"install_steamodded_version",
+						{
+							version: selectedVersion,
+						},
+					);
+				}
+
+				// Verify the path exists before updating UI state
+				const pathExists = await invoke("verify_path_exists", {
+					path: installedPath,
 				});
+				if (!pathExists) {
+					throw new Error(
+						"Installation failed - files not found at destination",
+					);
+				}
+
+				await invoke("add_installed_mod", {
+					name: mod.title,
+					path: installedPath,
+					collection_hash: null,
+				});
+				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 			} else {
 				const installedPath = await invoke<string>("install_mod", {
 					url: mod.downloadURL,
 				});
+				console.log(installedPath);
 
 				await invoke("add_installed_mod", {
 					name: mod.title,
@@ -154,10 +186,14 @@
 		const currentModTitle = mod?.title?.toLowerCase();
 		if (
 			currentModTitle === "steamodded" &&
-			currentModTitle !== prevModTitle
+			currentModTitle !== prevModTitle &&
+			!versionLoadStarted
 		) {
 			prevModTitle = currentModTitle;
-			loadSteamoddedVersions();
+			versionLoadStarted = true;
+			loadSteamoddedVersions().then(() => {
+				versionLoadStarted = false;
+			});
 		}
 	}
 
@@ -255,6 +291,9 @@
 									bind:value={selectedVersion}
 									disabled={$loadingStates[mod.title]}
 								>
+									<option value="newest"
+										>newest (could be unstable)</option
+									>
 									{#each steamoddedVersions as version}
 										<option value={version}
 											>{version}</option

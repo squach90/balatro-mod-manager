@@ -17,6 +17,8 @@ struct Release {
     assets: Vec<ReleaseAsset>,
     published_at: String,
     html_url: String,
+    prerelease: bool,
+    zipball_url: String, // Add this field
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,7 +74,6 @@ impl SteamoddedInstaller {
             .await
             .context("Failed to fetch Steamodded releases")?;
 
-        // Check status and clone the response for error handling
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await?;
@@ -88,14 +89,18 @@ impl SteamoddedInstaller {
             .await
             .context("Failed to decode Steamodded releases")?;
 
-        let mut versions: Vec<String> = releases.into_iter().map(|r| r.tag_name).collect();
+        let mut versions: Vec<String> = releases
+            .into_iter()
+            .filter(|r| !r.prerelease) // Filter out pre-releases
+            .map(|r| r.tag_name)
+            .collect();
 
         versions.sort_by(|a, b| b.cmp(a));
 
         Ok(versions)
     }
 
-    pub async fn install_version(&self, version: &str) -> Result<()> {
+    pub async fn install_version(&self, version: &str) -> Result<String> {
         let installation_path = self.get_installation_path()?;
         info!(
             "Installing Steamodded version {} to {:?}",
@@ -108,35 +113,27 @@ impl SteamoddedInstaller {
             HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
         );
 
+        let url = format!(
+            "https://api.github.com/repos/Steamodded/smods/releases/tags/{}",
+            version
+        );
         // Get the specific release
         let release: Release = self
             .client
-            .get(format!(
-                "https://api.github.com/repos/Steamodded/smods/releases/tags/{}",
-                version
-            ))
-            .headers(headers)
+            .get(url)
+            .headers(headers.clone())
             .send()
             .await?
             .json()
             .await?;
 
-        // Find the .zip asset
-        let zip_asset = release
-            .assets
-            .iter()
-            .find(|asset| asset.name.ends_with(".zip"))
-            .context("No zip file found in release assets")?;
+        info!("Downloading from {}", release.zipball_url);
 
-        info!(
-            "Downloading {} from {}",
-            zip_asset.name, zip_asset.browser_download_url
-        );
-
-        // Download the zip file
+        // Download the zip file directly using zipball_url
         let response = self
             .client
-            .get(&zip_asset.browser_download_url)
+            .get(&release.zipball_url)
+            .headers(headers)
             .send()
             .await?;
 
@@ -150,18 +147,18 @@ impl SteamoddedInstaller {
         let mut archive = ZipArchive::new(cursor)?;
 
         // Create a temporary directory for extraction
-        let temp_dir = installation_path.join("temp_steamodded");
-        if temp_dir.exists() {
-            fs::remove_dir_all(&temp_dir)?;
-        }
-        fs::create_dir_all(&temp_dir)?;
+        // let temp_dir = installation_path.join("temp_steamodded");
+        // if temp_dir.exists() {
+        //     fs::remove_dir_all(&temp_dir)?;
+        // }
+        // fs::create_dir_all(&temp_dir)?;
 
         info!("Extracting files to temporary directory");
 
         // Extract all files
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
-            let outpath = temp_dir.join(file.name());
+            let outpath = installation_path.join(file.name());
 
             if file.name().ends_with('/') {
                 fs::create_dir_all(&outpath)?;
@@ -175,16 +172,16 @@ impl SteamoddedInstaller {
         }
 
         // Move files to final location
-        let steamodded_dir = installation_path.join("steamodded");
-        if steamodded_dir.exists() {
-            fs::remove_dir_all(&steamodded_dir)?;
-        }
-        fs::rename(&temp_dir, &steamodded_dir)?;
+        // let steamodded_dir = installation_path.join("steamodded");
+        // if steamodded_dir.exists() {
+        //     fs::remove_dir_all(&steamodded_dir)?;
+        // }
+        // fs::rename(&temp_dir, installation_path)?;
 
         info!("Successfully installed Steamodded version {}", version);
-        Ok(())
+        dbg!(&installation_path);
+        Ok(installation_path.to_string_lossy().to_string())
     }
-
     pub async fn uninstall(&self) -> Result<()> {
         let installation_path = self.get_installation_path()?;
         let steamodded_dir = installation_path.join("steamodded");
