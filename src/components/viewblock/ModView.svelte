@@ -291,7 +291,7 @@
 									disabled={$loadingStates[mod.title]}
 								>
 									<option value="newest"
-										>newest (could be unstable)</option
+										>latest (could be unstable)</option
 									>
 									{#each steamoddedVersions as version}
 										<option value={version}
