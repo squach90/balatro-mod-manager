@@ -21,6 +21,12 @@ pub async fn install_mod(url: String) -> Result<PathBuf, String> {
         .join(&game_name)
         .join("steamodded-mods");
 
+    let mod_name = url
+        .split('/')
+        .last()
+        .and_then(|s| s.split('.').next())
+        .unwrap_or("unknown_mod");
+
     log::info!("Installing mod: {}", url);
 
     let mut installed_path = mod_dir.clone();
@@ -30,26 +36,50 @@ pub async fn install_mod(url: String) -> Result<PathBuf, String> {
         let cursor = Cursor::new(file);
         let mut zip = zip::ZipArchive::new(cursor).unwrap();
 
-        // Get the first entry to determine the root path
-        if let Ok(first_entry) = zip.by_index(0) {
-            installed_path = mod_dir.join(first_entry.mangled_name());
-            if installed_path.is_file() {
-                installed_path = installed_path.parent().unwrap_or(&mod_dir).to_path_buf();
-            }
-        }
+        // Check if there are any files directly in the root
+        let has_root_files = (0..zip.len()).any(|i| {
+            let file = zip.by_index(i).unwrap();
+            !file.name().contains('/')
+        });
 
-        for i in 0..zip.len() {
-            let mut file = zip.by_index(i).unwrap();
-            let path = mod_dir.join(file.mangled_name());
+        if has_root_files {
+            // Create a directory for the loose files
+            let new_dir = mod_dir.join(mod_name);
+            fs::create_dir_all(&new_dir).unwrap();
+            installed_path = new_dir.clone();
 
-            if file.is_dir() {
-                fs::create_dir_all(&path).unwrap();
-            } else {
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).unwrap();
+            // Extract all files into the new directory
+            for i in 0..zip.len() {
+                let mut file = zip.by_index(i).unwrap();
+                let path = new_dir.join(file.name());
+
+                if file.is_dir() {
+                    fs::create_dir_all(&path).unwrap();
+                } else {
+                    if let Some(parent) = path.parent() {
+                        fs::create_dir_all(parent).unwrap();
+                    }
+                    let mut output = fs::File::create(&path).unwrap();
+                    io::copy(&mut file, &mut output).unwrap();
                 }
-                let mut output = fs::File::create(&path).unwrap();
-                io::copy(&mut file, &mut output).unwrap();
+            }
+        } else {
+            // Files are already in directories, extract normally
+            for i in 0..zip.len() {
+                let mut file = zip.by_index(i).unwrap();
+                let path = mod_dir.join(file.mangled_name());
+
+                if file.is_dir() {
+                    fs::create_dir_all(&path).unwrap();
+                    installed_path = path;
+                } else {
+                    if let Some(parent) = path.parent() {
+                        fs::create_dir_all(parent).unwrap();
+                        installed_path = parent.to_path_buf();
+                    }
+                    let mut output = fs::File::create(&path).unwrap();
+                    io::copy(&mut file, &mut output).unwrap();
+                }
             }
         }
     } else if file_type == "application/x-tar" {
@@ -119,6 +149,9 @@ pub async fn install_mod(url: String) -> Result<PathBuf, String> {
 
 pub fn uninstall_mod(path: PathBuf) {
     log::info!("Uninstalling mod: {:?}", path);
-    fs::remove_dir_all(path).unwrap();
+    match fs::remove_dir_all(path) {
+        Ok(_) => log::info!("Mod uninstalled successfully"),
+        Err(e) => eprintln!("Error at uninstalling mod: {}", e),
+    };
     log::info!("Mod uninstalled successfully");
 }

@@ -620,7 +620,7 @@
 	}
 
 	.loading-text {
-		width: 100%;
+		/* width: 100%; */
 		padding: 0.75rem;
 		background: rgba(133, 35, 27, 0.8);
 		color: #f4eee0;
