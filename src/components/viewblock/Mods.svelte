@@ -356,6 +356,7 @@
 							requires_steamodded: meta["requires-steamodded"],
 							requires_talisman: meta["requires-talisman"],
 							publisher: meta.author,
+							repo: meta.repo,
 							downloadURL: meta.downloadURL,
 						};
 					} catch (error) {

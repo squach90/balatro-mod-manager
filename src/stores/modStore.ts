@@ -11,6 +11,7 @@ export interface Mod {
 	requires_steamodded: boolean;
 	requires_talisman: boolean;
 	publisher: string;
+	repo: string;
 	downloadURL: string;
 }
 

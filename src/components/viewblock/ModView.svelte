@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
-	import { Download, Clock, Trash2, User, ArrowLeft } from "lucide-svelte";
+	import {
+		Download,
+		Clock,
+		Trash2,
+		User,
+		ArrowLeft,
+		GithubIcon,
+	} from "lucide-svelte";
 	import { onMount } from "svelte";
 	import {
 		currentModView,
@@ -465,6 +472,18 @@
 						<span><Clock size={16} /> {mod.lastUpdated}</span>
 						<span><User size={16} /> {mod.publisher}</span>
 					</div>
+
+					{#if mod.repo}
+						<a
+							href={mod.repo}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="repo-button"
+						>
+							<GithubIcon size={16} />
+							Repository
+						</a>
+					{/if}
 				</div>
 
 				<div class="right-column">
@@ -822,6 +841,29 @@
 		cursor: not-allowed;
 	}
 
+	.repo-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: #2b3137;
+		color: #f4eee0;
+		border: none;
+		outline: #1b2127 solid 2px;
+		border-radius: 4px;
+		font-family: "M6X11", sans-serif;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-decoration: none;
+		margin-top: 1rem;
+		justify-content: center;
+	}
+
+	.repo-button:hover {
+		background: #3b4147;
+		transform: translateY(-2px);
+	}
 	.version-selector select option {
 		background: rgba(133, 35, 27, 0.9);
 		color: #f4eee0;
