@@ -102,7 +102,7 @@
 				return {
 					name: mod.name,
 					path: mod.path,
-					collection_hash: mod.collection_hash,
+					// collection_hash: mod.collection_hash,
 				};
 			});
 		} catch (error) {
@@ -144,7 +144,7 @@
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				collection_hash: null,
+				// collection_hash: null,
 			});
 
 			await getAllInstalledMods();

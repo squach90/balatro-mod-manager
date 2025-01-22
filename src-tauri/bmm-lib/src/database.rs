@@ -1,24 +1,28 @@
-use crate::mod_collections::ModCollectionManager;
+// use crate::mod_collections::ModCollectionManager;
 use rusqlite::{Connection, Result};
 use serde::Serialize;
-use std::path::Path;
 
 pub struct Database {
     conn: Connection,
-    pub mod_manager: ModCollectionManager,
+    // pub mod_manager: ModCollectionManager,
 }
 
 #[derive(Serialize)]
 pub struct InstalledMod {
     pub name: String,
     pub path: String,
-    pub collection_hash: Option<String>,
+    // pub collection_hash: Option<String>,
 }
 
 impl Database {
     pub fn new() -> Result<Self> {
-        let db_exists = Path::new("storage.db").exists();
-        let conn = Connection::open("storage.db")?;
+        let storage_path = dirs::config_dir()
+            .expect("Could not find config directory")
+            .join("Balatro")
+            .join("bmm_storage.db");
+
+        let db_exists = storage_path.exists();
+        let conn = Connection::open(storage_path)?;
 
         if !db_exists {
             Self::initialize_database(&conn)?;
@@ -26,7 +30,7 @@ impl Database {
 
         Ok(Database {
             conn,
-            mod_manager: ModCollectionManager::new(),
+            // mod_manager: ModCollectionManager::new(),
         })
     }
 
@@ -42,13 +46,13 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS installed_mods (
                 name TEXT PRIMARY KEY,
-                path TEXT NOT NULL,
-                collection_hash TEXT
+                path TEXT NOT NULL
             )",
             [],
         )?;
+        // collection_hash TEXT
 
-        ModCollectionManager::initialize_table(conn)?;
+        // ModCollectionManager::initialize_table(conn)?;
 
         Ok(())
     }
@@ -62,7 +66,7 @@ impl Database {
             mods.push(InstalledMod {
                 name: row.get(0)?,
                 path: row.get(1)?,
-                collection_hash: row.get(2)?,
+                // collection_hash: row.get(2)?,
             });
         }
 
@@ -77,14 +81,14 @@ impl Database {
         Ok(())
     }
 
-    pub fn add_mod_to_collection(&self, name: &str, collection_hash: &str) -> Result<()> {
-        self.conn.execute(
-            "UPDATE installed_mods SET collection_hash = ?1 WHERE name = ?2",
-            [collection_hash, name],
-        )?;
-        Ok(())
-    }
-
+    // pub fn add_mod_to_collection(&self, name: &str, collection_hash: &str) -> Result<()> {
+    //     self.conn.execute(
+    //         "UPDATE installed_mods SET collection_hash = ?1 WHERE name = ?2",
+    //         [collection_hash, name],
+    //     )?;
+    //     Ok(())
+    // }
+    //
     pub fn remove_installed_mod(&self, name: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM installed_mods WHERE name = ?1", [name])?;
@@ -145,4 +149,3 @@ impl Database {
         Ok(())
     }
 }
-

@@ -229,11 +229,6 @@ pub fn run() {
         log::error!("Application crashed: {:?}", panic_info);
     }));
 
-    // Initialize logging with error handling
-    if let Err(e) = pretty_env_logger::try_init() {
-        eprintln!("Failed to initialize logger: {}", e);
-    }
-
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())

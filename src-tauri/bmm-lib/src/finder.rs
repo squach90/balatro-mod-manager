@@ -125,16 +125,13 @@ pub fn is_steam_running() -> bool {
 
 pub fn get_installed_mods() -> Vec<String> {
     let mut installed_mods_paths: Vec<PathBuf> = vec![];
-    let game_path = get_balatro_paths();
-    let game_name: PathBuf = game_path
-        .first()
-        .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
-        .to_path_buf();
+    // let game_path = get_balatro_paths();
+    // let game_name: PathBuf = game_path
+    //     .first()
+    //     .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
+    //     .to_path_buf();
 
-    let mod_dir = dirs::config_dir()
-        .unwrap()
-        .join(&game_name)
-        .join("steamodded-mods");
+    let mod_dir = dirs::config_dir().unwrap().join("Balatro").join("Mods");
 
     // dbg!(&mod_dir);
 

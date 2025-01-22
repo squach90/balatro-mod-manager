@@ -1,5 +1,4 @@
-use anyhow::{Context, Result};
-
+use anyhow::{anyhow, Context, Result};
 use dirs;
 use log::info;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
@@ -64,17 +63,11 @@ impl ModInstaller {
     }
 
     fn get_installation_path(&self) -> Result<PathBuf> {
-        let game_paths = crate::finder::get_balatro_paths();
-        let game_path = game_paths
-            .first()
-            .context("Failed to find Balatro installation path. Is it installed?")?
-            .to_path_buf();
-
-        // Construct the steamodded-mods path
+        // Construct the mods path
         let mod_path = dirs::config_dir()
             .context("Failed to get config directory")?
-            .join(&game_path)
-            .join("steamodded-mods");
+            .join("Balatro")
+            .join("Mods");
 
         // dbg!(&mod_path);
 
@@ -147,12 +140,12 @@ impl ModInstaller {
                     HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
                 );
 
+                // Get release details
                 let url = format!(
                     "https://api.github.com/repos/{}/releases/tags/{}",
                     self.mod_type.get_repo_url(),
                     version
                 );
-                // Get the specific release
                 let release: Release = self
                     .client
                     .get(url)
@@ -164,57 +157,50 @@ impl ModInstaller {
 
                 info!("Downloading from {}", release.zipball_url);
 
-                // Download the zip file directly using zipball_url
+                // Download the zip file
                 let response = self
                     .client
                     .get(&release.zipball_url)
                     .headers(headers)
                     .send()
                     .await?;
-
                 let bytes = response.bytes().await?;
 
-                // Create installation directory if it doesn't exist
-                tokio_fs::create_dir_all(&installation_path).await?;
+                // Create temp directory
+                let temp_dir = installation_path.join("temp_smods");
+                if temp_dir.exists() {
+                    fs::remove_dir_all(&temp_dir)?;
+                }
+                fs::create_dir_all(&temp_dir)?;
 
-                // Extract the zip
+                // Extract to temp directory
                 let cursor = Cursor::new(bytes);
                 let mut archive = ZipArchive::new(cursor)?;
+                archive.extract(&temp_dir)?;
 
-                // Create a temporary directory for extraction
-                // let temp_dir = installation_path.join("temp_steamodded");
-                // if temp_dir.exists() {
-                //     fs::remove_dir_all(&temp_dir)?;
-                // }
-                // fs::create_dir_all(&temp_dir)?;
+                // Find the root directory name (GitHub format: Steamodded-smods-commitHash)
+                let root_dir = fs::read_dir(&temp_dir)?
+                    .next()
+                    .ok_or(anyhow!("Empty archive"))??
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| anyhow!("Invalid directory name"))?;
 
-                info!("Extracting files to temporary directory");
-
-                // Extract all files
-                for i in 0..archive.len() {
-                    let mut file = archive.by_index(i)?;
-                    let outpath = installation_path.join(file.name());
-
-                    if file.name().ends_with('/') {
-                        fs::create_dir_all(&outpath)?;
-                    } else {
-                        if let Some(p) = outpath.parent() {
-                            fs::create_dir_all(p)?;
-                        }
-                        let mut outfile = fs::File::create(&outpath)?;
-                        std::io::copy(&mut file, &mut outfile)?;
-                    }
+                // Move to final location
+                let final_dir = installation_path.join(&root_dir);
+                if final_dir.exists() {
+                    fs::remove_dir_all(&final_dir)?;
                 }
+                fs::rename(temp_dir.join(&root_dir), &final_dir)?;
 
-                // Move files to final location
-                // let steamodded_dir = installation_path.join("steamodded");
-                // if steamodded_dir.exists() {
-                //     fs::remove_dir_all(&steamodded_dir)?;
-                // }
-                // fs::rename(&temp_dir, installation_path)?;
+                // Cleanup
+                fs::remove_dir_all(temp_dir)?;
 
-                info!("Successfully installed Steamodded version {}", version);
-                // dbg!(&installation_path);
+                info!(
+                    "Successfully installed Steamodded version {} to {:?}",
+                    version, final_dir
+                );
+                Ok(final_dir.to_string_lossy().to_string())
             }
             ModType::Talisman => {
                 let url = format!(
@@ -249,26 +235,65 @@ impl ModInstaller {
                         std::io::copy(&mut file, &mut outfile)?;
                     }
                 }
+                Ok(installation_path.to_string_lossy().to_string())
             }
         }
-        Ok(installation_path.to_string_lossy().to_string())
     }
+
     pub async fn uninstall(&self) -> Result<()> {
         let installation_path = self.get_installation_path()?;
-        let steamodded_dir = installation_path.join("steamodded");
-        if steamodded_dir.exists() {
-            info!("Uninstalling Steamodded from {:?}", steamodded_dir);
-            tokio_fs::remove_dir_all(steamodded_dir).await?;
-            info!("Successfully uninstalled Steamodded");
-        } else {
-            info!("Steamodded is not installed");
+        let mods_dir = installation_path.join("Mods");
+
+        if !mods_dir.exists() {
+            info!("Mods directory not found");
+            return Ok(());
         }
+
+        let mut entries = tokio::fs::read_dir(&mods_dir).await?;
+        let mut found = false;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                    // Match both Steamodded and specific commit formats
+                    if dir_name.to_lowercase().contains("steamodded")
+                        || dir_name.starts_with("smods-")
+                        || dir_name.starts_with("Steamodded-smods-")
+                    {
+                        found = true;
+                        info!("Removing mod directory: {:?}", path);
+                        tokio_fs::remove_dir_all(&path).await?;
+                    }
+                }
+            }
+        }
+
+        if !found {
+            info!("No Steamodded installations found");
+        }
+
         Ok(())
     }
 
     pub fn is_installed(&self) -> bool {
         match self.get_installation_path() {
-            Ok(path) => path.join("steamodded").exists(),
+            Ok(path) => {
+                fs::read_dir(path)
+                    .map(|mut entries| {
+                        entries.any(|e| {
+                            e.ok()
+                                .and_then(|entry| {
+                                    entry
+                                        .file_name()
+                                        .to_str()
+                                        .map(|name| name.starts_with("Steamodded-smods-"))
+                                })
+                                .unwrap_or(false)
+                        })
+                    })
+                    .unwrap_or(false)
+            }
             Err(_) => false,
         }
     }

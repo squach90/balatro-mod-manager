@@ -44,14 +44,13 @@ impl Lovely {
         // let opts = Options::new(args.iter().map(String::as_str));
 
         let game_path = finder::get_balatro_paths();
-        let game_name: PathBuf = game_path.first().unwrap_or_else(|| {
-            panic!("Failed to find Balatro installation path. Is it installed?")
-        }).to_path_buf();
+        let game_name: PathBuf = game_path
+            .first()
+            .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
+            .to_path_buf();
 
-        let mod_dir = dirs::config_dir()
-            .unwrap()
-            .join(&game_name)
-            .join("steamodded-mods");
+        let mod_dir = dirs::config_dir().unwrap().join("Balatro").join("Mods");
+
         // dbg!(&mod_dir);
 
         let log_dir = mod_dir.join(".lovely").join("log");

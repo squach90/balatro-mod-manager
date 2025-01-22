@@ -17,7 +17,7 @@ export interface Mod {
 export interface InstalledMod {
 	name: string;
 	path: string;
-	collection_hash: string | null;
+	// collection_hash: string | null;
 }
 
 interface InstallationStatus {
