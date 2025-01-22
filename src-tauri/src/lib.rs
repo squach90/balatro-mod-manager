@@ -1,9 +1,3 @@
-// TODO: 1. Create a way to handle the different paths for mods, which the modloader will use
-// (Steamodded, lovely-only, etc.) (Also make sure for Mod-Collections!)
-// TODO: 2. If the user presses "Launch",  the modloader will be called with the path to the mods
-// (also implement animations for it)
-// TODO: 2.1 Inject the game with the embedded binary from lovely (for steamodded)
-
 use std::panic;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -17,7 +11,7 @@ use bmm_lib::database::InstalledMod;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
-use bmm_lib::smods_installer::SteamoddedInstaller;
+use bmm_lib::smods_installer::{ModType, ModInstaller};
 use std::process::Command;
 
 use tauri::Manager;
@@ -150,10 +144,9 @@ async fn find_steam_balatro(state: tauri::State<'_, AppState>) -> Result<Vec<Str
         .collect())
 }
 
-// Add these new commands
 #[tauri::command]
 async fn get_steamodded_versions() -> Result<Vec<String>, String> {
-    let installer = SteamoddedInstaller::new();
+    let installer = ModInstaller::new(ModType::Steamodded);
     installer
         .get_available_versions()
         .await
@@ -162,12 +155,32 @@ async fn get_steamodded_versions() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 async fn install_steamodded_version(version: String) -> Result<String, String> {
-    let installer = SteamoddedInstaller::new();
+    let installer = ModInstaller::new(ModType::Steamodded);
     installer
         .install_version(&version)
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+async fn get_talisman_versions() -> Result<Vec<String>, String> {
+    let installer = ModInstaller::new(ModType::Talisman);
+    installer
+        .get_available_versions()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn install_talisman_version(version: String) -> Result<String, String> {
+    let installer = ModInstaller::new(ModType::Talisman);
+    installer
+        .install_version(&version)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+
 #[tauri::command]
 async fn verify_path_exists(path: String) ->  bool {
     std::fs::exists(PathBuf::from(path)).unwrap()
@@ -272,6 +285,8 @@ pub fn run() {
             remove_installed_mod,
             get_steamodded_versions,
             install_steamodded_version,
+            install_talisman_version,
+            get_talisman_versions,
             verify_path_exists
         ])
         .run(tauri::generate_context!());

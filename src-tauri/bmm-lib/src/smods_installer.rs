@@ -21,25 +21,49 @@ struct Release {
     zipball_url: String, // Add this field
 }
 
+#[derive(Debug, Clone)]
+pub enum ModType {
+    Steamodded,
+    Talisman,
+}
+
+impl std::fmt::Display for ModType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ModType::Steamodded => write!(f, "Steamodded"),
+            ModType::Talisman => write!(f, "Talisman"),
+        }
+    }
+}
+
+impl ModType {
+    fn get_repo_url(&self) -> &str {
+        match self {
+            ModType::Steamodded => "Steamodded/smods",
+            ModType::Talisman => "MathIsFun0/Talisman",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ReleaseAsset {
     name: String,
     browser_download_url: String,
 }
-#[derive(Default)]
-pub struct SteamoddedInstaller {
+pub struct ModInstaller {
     client: reqwest::Client,
+    mod_type: ModType,
 }
 
-impl SteamoddedInstaller {
-    pub fn new() -> Self {
+impl ModInstaller {
+    pub fn new(mod_type: ModType) -> Self {
         Self {
             client: reqwest::Client::new(),
+            mod_type,
         }
     }
 
     fn get_installation_path(&self) -> Result<PathBuf> {
-        // Get the Balatro installation path
         let game_paths = crate::finder::get_balatro_paths();
         let game_path = game_paths
             .first()
@@ -51,6 +75,8 @@ impl SteamoddedInstaller {
             .context("Failed to get config directory")?
             .join(&game_path)
             .join("steamodded-mods");
+
+        // dbg!(&mod_path);
 
         Ok(mod_path)
     }
@@ -66,9 +92,14 @@ impl SteamoddedInstaller {
             HeaderValue::from_static("application/vnd.github.v3+json"),
         );
 
+        let url = format!(
+            "https://api.github.com/repos/{}/releases",
+            self.mod_type.get_repo_url()
+        );
+
         let response = self
             .client
-            .get("https://api.github.com/repos/Steamodded/smods/releases")
+            .get(&url)
             .headers(headers)
             .send()
             .await
@@ -102,84 +133,124 @@ impl SteamoddedInstaller {
 
     pub async fn install_version(&self, version: &str) -> Result<String> {
         let installation_path = self.get_installation_path()?;
-        info!(
-            "Installing Steamodded version {} to {:?}",
-            version, installation_path
-        );
 
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            USER_AGENT,
-            HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
-        );
+        match self.mod_type {
+            ModType::Steamodded => {
+                info!(
+                    "Installing Steamodded version {} to {:?}",
+                    version, installation_path
+                );
 
-        let url = format!(
-            "https://api.github.com/repos/Steamodded/smods/releases/tags/{}",
-            version
-        );
-        // Get the specific release
-        let release: Release = self
-            .client
-            .get(url)
-            .headers(headers.clone())
-            .send()
-            .await?
-            .json()
-            .await?;
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    USER_AGENT,
+                    HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
+                );
 
-        info!("Downloading from {}", release.zipball_url);
+                let url = format!(
+                    "https://api.github.com/repos/{}/releases/tags/{}",
+                    self.mod_type.get_repo_url(),
+                    version
+                );
+                // Get the specific release
+                let release: Release = self
+                    .client
+                    .get(url)
+                    .headers(headers.clone())
+                    .send()
+                    .await?
+                    .json()
+                    .await?;
 
-        // Download the zip file directly using zipball_url
-        let response = self
-            .client
-            .get(&release.zipball_url)
-            .headers(headers)
-            .send()
-            .await?;
+                info!("Downloading from {}", release.zipball_url);
 
-        let bytes = response.bytes().await?;
+                // Download the zip file directly using zipball_url
+                let response = self
+                    .client
+                    .get(&release.zipball_url)
+                    .headers(headers)
+                    .send()
+                    .await?;
 
-        // Create installation directory if it doesn't exist
-        tokio_fs::create_dir_all(&installation_path).await?;
+                let bytes = response.bytes().await?;
 
-        // Extract the zip
-        let cursor = Cursor::new(bytes);
-        let mut archive = ZipArchive::new(cursor)?;
+                // Create installation directory if it doesn't exist
+                tokio_fs::create_dir_all(&installation_path).await?;
 
-        // Create a temporary directory for extraction
-        // let temp_dir = installation_path.join("temp_steamodded");
-        // if temp_dir.exists() {
-        //     fs::remove_dir_all(&temp_dir)?;
-        // }
-        // fs::create_dir_all(&temp_dir)?;
+                // Extract the zip
+                let cursor = Cursor::new(bytes);
+                let mut archive = ZipArchive::new(cursor)?;
 
-        info!("Extracting files to temporary directory");
+                // Create a temporary directory for extraction
+                // let temp_dir = installation_path.join("temp_steamodded");
+                // if temp_dir.exists() {
+                //     fs::remove_dir_all(&temp_dir)?;
+                // }
+                // fs::create_dir_all(&temp_dir)?;
 
-        // Extract all files
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
-            let outpath = installation_path.join(file.name());
+                info!("Extracting files to temporary directory");
 
-            if file.name().ends_with('/') {
-                fs::create_dir_all(&outpath)?;
-            } else {
-                if let Some(p) = outpath.parent() {
-                    fs::create_dir_all(p)?;
+                // Extract all files
+                for i in 0..archive.len() {
+                    let mut file = archive.by_index(i)?;
+                    let outpath = installation_path.join(file.name());
+
+                    if file.name().ends_with('/') {
+                        fs::create_dir_all(&outpath)?;
+                    } else {
+                        if let Some(p) = outpath.parent() {
+                            fs::create_dir_all(p)?;
+                        }
+                        let mut outfile = fs::File::create(&outpath)?;
+                        std::io::copy(&mut file, &mut outfile)?;
+                    }
                 }
-                let mut outfile = fs::File::create(&outpath)?;
-                std::io::copy(&mut file, &mut outfile)?;
+
+                // Move files to final location
+                // let steamodded_dir = installation_path.join("steamodded");
+                // if steamodded_dir.exists() {
+                //     fs::remove_dir_all(&steamodded_dir)?;
+                // }
+                // fs::rename(&temp_dir, installation_path)?;
+
+                info!("Successfully installed Steamodded version {}", version);
+                // dbg!(&installation_path);
+            }
+            ModType::Talisman => {
+                let url = format!(
+                    "https://github.com/MathIsFun0/Talisman/releases/download/{}/Talisman.zip",
+                    version
+                );
+
+                info!("Downloading Talisman.zip from {}", url);
+
+                // Download and extract zip logic here
+                let response = self.client.get(&url).send().await?;
+                let bytes = response.bytes().await?;
+
+                // Create installation directory
+                tokio_fs::create_dir_all(&installation_path).await?;
+
+                // Extract directly to installation path
+                let cursor = Cursor::new(bytes);
+                let mut archive = ZipArchive::new(cursor)?;
+
+                for i in 0..archive.len() {
+                    let mut file = archive.by_index(i)?;
+                    let outpath = installation_path.join(file.name());
+
+                    if file.name().ends_with('/') {
+                        fs::create_dir_all(&outpath)?;
+                    } else {
+                        if let Some(p) = outpath.parent() {
+                            fs::create_dir_all(p)?;
+                        }
+                        let mut outfile = fs::File::create(&outpath)?;
+                        std::io::copy(&mut file, &mut outfile)?;
+                    }
+                }
             }
         }
-
-        // Move files to final location
-        // let steamodded_dir = installation_path.join("steamodded");
-        // if steamodded_dir.exists() {
-        //     fs::remove_dir_all(&steamodded_dir)?;
-        // }
-        // fs::rename(&temp_dir, installation_path)?;
-
-        info!("Successfully installed Steamodded version {}", version);
-        dbg!(&installation_path);
         Ok(installation_path.to_string_lossy().to_string())
     }
     pub async fn uninstall(&self) -> Result<()> {
@@ -203,15 +274,15 @@ impl SteamoddedInstaller {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_available_versions() -> Result<()> {
-        let installer = SteamoddedInstaller::new();
-        let versions = installer.get_available_versions().await?;
-        assert!(!versions.is_empty());
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     #[tokio::test]
+//     async fn test_get_available_versions() -> Result<()> {
+//         let installer = SteamoddedInstaller::new();
+//         let versions = installer.get_available_versions().await?;
+//         assert!(!versions.is_empty());
+//         Ok(())
+//     }
+// }

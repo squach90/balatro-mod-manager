@@ -25,6 +25,7 @@
 
 	let installedMods: InstalledMod[] = [];
 	let steamoddedVersions: string[] = [];
+	let talismanVersions: string[] = [];
 	let selectedVersion: string = "";
 	let loadingVersions = false;
 	let versionLoadStarted = false;
@@ -44,6 +45,25 @@
 		} catch (error) {
 			console.error("Failed to load Steamodded versions:", error);
 			steamoddedVersions = [];
+		} finally {
+			loadingVersions = false;
+		}
+	}
+
+	async function loadTalismanVersions() {
+		if (loadingVersions) return;
+
+		loadingVersions = true;
+		try {
+			const versions: string[] = await invoke("get_talisman_versions");
+			// Make sure to update the state with the new : string[]versions
+			talismanVersions = versions;
+			if (versions.length > 0) {
+				selectedVersion = versions[0];
+			}
+		} catch (error) {
+			console.error("Failed to load Talisman versions:", error);
+			talismanVersions = [];
 		} finally {
 			loadingVersions = false;
 		}
@@ -104,6 +124,41 @@
 					// Use version-specific installation
 					installedPath = await invoke<string>(
 						"install_steamodded_version",
+						{
+							version: selectedVersion,
+						},
+					);
+				}
+
+				// Verify the path exists before updating UI state
+				const pathExists = await invoke("verify_path_exists", {
+					path: installedPath,
+				});
+				if (!pathExists) {
+					throw new Error(
+						"Installation failed - files not found at destination",
+					);
+				}
+
+				await invoke("add_installed_mod", {
+					name: mod.title,
+					path: installedPath,
+					collection_hash: null,
+				});
+				await getAllInstalledMods();
+				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+			} else if (mod.title.toLowerCase() === "talisman") {
+				let installedPath;
+
+				if (selectedVersion === "newest") {
+					// Use regular mod installation for newest version
+					installedPath = await invoke<string>("install_mod", {
+						url: mod.downloadURL,
+					});
+				} else {
+					// Use version-specific installation
+					installedPath = await invoke<string>(
+						"install_talisman_version",
 						{
 							version: selectedVersion,
 						},
@@ -193,6 +248,16 @@
 			loadSteamoddedVersions().then(() => {
 				versionLoadStarted = false;
 			});
+		} else if (
+			currentModTitle === "talisman" &&
+			currentModTitle !== prevModTitle &&
+			!versionLoadStarted
+		) {
+			prevModTitle = currentModTitle;
+			versionLoadStarted = true;
+			loadTalismanVersions().then(() => {
+				versionLoadStarted = false;
+			});
 		}
 	}
 
@@ -275,6 +340,34 @@
 							</button>
 						{/if}
 					</div>
+					{#if mod.title.toLowerCase() === "talisman" && !$installationStatus[mod.title]}
+						<div class="version-selector">
+							{#if loadingVersions}
+								<div class="loading-text">
+									Loading versions...
+								</div>
+							{:else if talismanVersions.length === 0}
+								<div class="loading-text">
+									No versions available
+								</div>
+							{:else}
+								<select
+									bind:value={selectedVersion}
+									disabled={$loadingStates[mod.title]}
+								>
+									<option value="newest"
+										>latest (could be unstable)</option
+									>
+									{#each talismanVersions as version}
+										<option value={version}
+											>{version}</option
+										>
+									{/each}
+								</select>
+							{/if}
+						</div>
+					{/if}
+
 					{#if mod.title.toLowerCase() === "steamodded" && !$installationStatus[mod.title]}
 						<div class="version-selector">
 							{#if loadingVersions}
