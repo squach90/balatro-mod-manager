@@ -11,6 +11,13 @@
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 	import { invoke } from "@tauri-apps/api/core";
+	import { createEventDispatcher } from "svelte";
+	const dispatch = createEventDispatcher<{
+		checkDependencies: {
+			steamodded: boolean;
+			talisman: boolean;
+		};
+	}>();
 
 	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
 
@@ -109,6 +116,28 @@
 	};
 
 	const installMod = async (mod: Mod) => {
+		if (mod.requires_steamodded || mod.requires_talisman) {
+			// Check if dependencies are installed before showing popup
+			const steamoddedInstalled = mod.requires_steamodded
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Steamodded",
+					})
+				: true;
+			const talismanInstalled = mod.requires_talisman
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Talisman",
+					})
+				: true;
+
+			// Only show popup if any required dependency is missing
+			if (!steamoddedInstalled || !talismanInstalled) {
+				dispatch("checkDependencies", {
+					steamodded: mod.requires_steamodded && !steamoddedInstalled,
+					talisman: mod.requires_talisman && !talismanInstalled,
+				});
+				return;
+			}
+		}
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 

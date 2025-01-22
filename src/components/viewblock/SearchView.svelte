@@ -12,6 +12,7 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
+	import { createEventDispatcher } from "svelte";
 
 	let searchQuery = "";
 	let searchResults: Mod[] = [];
@@ -22,6 +23,12 @@
 	function handleModClick(mod: Mod) {
 		currentModView.set(mod);
 	}
+	const dispatch = createEventDispatcher<{
+		checkDependencies: {
+			steamodded: boolean;
+			talisman: boolean;
+		};
+	}>();
 
 	let installedMods: InstalledMod[] = [];
 
@@ -66,6 +73,29 @@
 	};
 
 	const installMod = async (mod: Mod) => {
+		if (mod.requires_steamodded || mod.requires_talisman) {
+			// Check if dependencies are installed before showing popup
+			const steamoddedInstalled = mod.requires_steamodded
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Steamodded",
+					})
+				: true;
+			const talismanInstalled = mod.requires_talisman
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Talisman",
+					})
+				: true;
+
+			// Only show popup if any required dependency is missing
+			if (!steamoddedInstalled || !talismanInstalled) {
+				dispatch("checkDependencies", {
+					steamodded: mod.requires_steamodded && !steamoddedInstalled,
+					talisman: mod.requires_talisman && !talismanInstalled,
+				});
+				return;
+			}
+		}
+
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
@@ -75,7 +105,6 @@
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				// collection_hash: null,
 			});
 
 			await getAllInstalledMods();
@@ -86,6 +115,7 @@
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
+
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);

@@ -48,6 +48,18 @@
 	let mods: Mod[] = [];
 	let isLoading = true;
 
+	interface DependencyCheck {
+		steamodded: boolean;
+		talisman: boolean;
+	}
+
+	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
+	function onDependencyCheck(
+		event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
+	) {
+		handleDependencyCheck(event.detail);
+	}
+
 	export let mod: Mod | undefined;
 
 	async function updateInstallStatus(mod: Mod | undefined) {
@@ -135,6 +147,30 @@
 
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
+
+		if (mod.requires_steamodded || mod.requires_talisman) {
+			// Check if dependencies are installed before showing popup
+			const steamoddedInstalled = mod.requires_steamodded
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Steamodded",
+					})
+				: true;
+			const talismanInstalled = mod.requires_talisman
+				? await invoke<boolean>("check_mod_installation", {
+						modType: "Talisman",
+					})
+				: true;
+
+			// Only show popup if any required dependency is missing
+			if (!steamoddedInstalled || !talismanInstalled) {
+				handleDependencyCheck({
+					steamodded: mod.requires_steamodded && !steamoddedInstalled,
+					talisman: mod.requires_talisman && !talismanInstalled,
+				});
+				return;
+			}
+		}
+
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
@@ -144,7 +180,6 @@
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				// collection_hash: null,
 			});
 
 			await getAllInstalledMods();
@@ -166,6 +201,7 @@
 	interface ModMeta {
 		title: string;
 		"requires-steamodded": boolean;
+		"requires-talisman": boolean;
 		categories: string[];
 		author: string;
 		repo: string;
@@ -318,6 +354,7 @@
 							colors: getRandomColorPair(),
 							installed: false,
 							requires_steamodded: meta["requires-steamodded"],
+							requires_talisman: meta["requires-talisman"],
 							publisher: meta.author,
 							downloadURL: meta.downloadURL,
 						};
@@ -528,7 +565,7 @@
 	{/if}
 </div>
 
-<ModView mod={$currentModView as Mod} />
+<ModView mod={$currentModView} on:checkDependencies={onDependencyCheck} />
 
 <style>
 	.mods-container {

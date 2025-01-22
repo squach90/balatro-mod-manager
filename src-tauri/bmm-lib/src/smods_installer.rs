@@ -42,6 +42,19 @@ impl ModType {
             ModType::Talisman => "MathIsFun0/Talisman",
         }
     }
+
+    pub async fn check_installation(&self) -> bool {
+        match self {
+            ModType::Steamodded => {
+                let installer = ModInstaller::new(ModType::Steamodded);
+                installer.is_installed()
+            }
+            ModType::Talisman => {
+                let installer = ModInstaller::new(ModType::Talisman);
+                installer.is_installed()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +72,28 @@ impl ModInstaller {
         Self {
             client: reqwest::Client::new(),
             mod_type,
+        }
+    }
+
+    pub fn is_installed(&self) -> bool {
+        match self.get_installation_path() {
+            Ok(path) => fs::read_dir(path)
+                .map(|mut entries| {
+                    entries.any(|e| {
+                        e.ok()
+                            .map(|entry| {
+                                let binding = entry.file_name();
+                                let name = binding.to_str().unwrap_or("");
+                                match self.mod_type {
+                                    ModType::Steamodded => name.starts_with("Steamodded-smods-"),
+                                    ModType::Talisman => name.contains("Talisman"),
+                                }
+                            })
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false),
+            Err(_) => false,
         }
     }
 
@@ -274,28 +309,6 @@ impl ModInstaller {
         }
 
         Ok(())
-    }
-
-    pub fn is_installed(&self) -> bool {
-        match self.get_installation_path() {
-            Ok(path) => {
-                fs::read_dir(path)
-                    .map(|mut entries| {
-                        entries.any(|e| {
-                            e.ok()
-                                .and_then(|entry| {
-                                    entry
-                                        .file_name()
-                                        .to_str()
-                                        .map(|name| name.starts_with("Steamodded-smods-"))
-                                })
-                                .unwrap_or(false)
-                        })
-                    })
-                    .unwrap_or(false)
-            }
-            Err(_) => false,
-        }
     }
 }
 

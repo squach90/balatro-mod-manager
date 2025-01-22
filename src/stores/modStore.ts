@@ -9,10 +9,16 @@ export interface Mod {
 	colors: { color1: string; color2: string };
 	installed: boolean;
 	requires_steamodded: boolean;
+	requires_talisman: boolean;
 	publisher: string;
 	downloadURL: string;
 }
 
+
+export interface DependencyCheck {
+	steamodded: boolean;
+	talisman: boolean;
+}
 
 export interface InstalledMod {
 	name: string;

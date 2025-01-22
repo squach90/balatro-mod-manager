@@ -11,7 +11,7 @@ use bmm_lib::database::InstalledMod;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
-use bmm_lib::smods_installer::{ModType, ModInstaller};
+use bmm_lib::smods_installer::{ModInstaller, ModType};
 use std::process::Command;
 
 use tauri::Manager;
@@ -65,6 +65,18 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
+
+    match mod_type.as_str() {
+        "Steamodded" => Ok(installed_mods.iter().any(|m| m.name == "Steamodded")),
+        "Talisman" => Ok(installed_mods.iter().any(|m| m.name == "Talisman")),
+        _ => Err("Invalid mod type".to_string()),
+    }
 }
 
 #[tauri::command]
@@ -180,9 +192,8 @@ async fn install_talisman_version(version: String) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-
 #[tauri::command]
-async fn verify_path_exists(path: String) ->  bool {
+async fn verify_path_exists(path: String) -> bool {
     std::fs::exists(PathBuf::from(path)).unwrap()
 }
 
@@ -282,7 +293,8 @@ pub fn run() {
             install_steamodded_version,
             install_talisman_version,
             get_talisman_versions,
-            verify_path_exists
+            verify_path_exists,
+            check_mod_installation,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

@@ -4,7 +4,8 @@
 	import LaunchButton from "../../components/LaunchButton.svelte";
 	import Mods from "../../components/viewblock/Mods.svelte";
 	import Settings from "../../components/viewblock/Settings.svelte";
-
+	import RequiresPopup from "../../components/RequiresPopup.svelte";
+	import type { DependencyCheck } from "../../stores/modStore";
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
 	//     console.log(
@@ -15,6 +16,18 @@
 	$: if (currentSection !== "mods") {
 		// Store will retain the value but component won't show
 		// Will reappear when returning to mods section
+	}
+
+	// Add these for the RequiresPopup
+	let showRequiresPopup = false;
+	let modRequirements = {
+		steamodded: false,
+		talisman: false,
+	};
+
+	function handleDependencyCheck(requirements: DependencyCheck) {
+		modRequirements = requirements;
+		showRequiresPopup = true;
 	}
 </script>
 
@@ -49,7 +62,7 @@
 
 	<div class="content">
 		{#if currentSection === "mods"}
-			<Mods />
+			<Mods {handleDependencyCheck} />
 		{/if}
 
 		{#if currentSection === "settings"}
@@ -60,6 +73,11 @@
 			<About />
 		{/if}
 	</div>
+	<RequiresPopup
+		bind:show={showRequiresPopup}
+		requiresSteamodded={modRequirements.steamodded}
+		requiresTalisman={modRequirements.talisman}
+	/>
 
 	<div class="version-text">v0.1.0</div>
 </div>
