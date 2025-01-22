@@ -31,6 +31,45 @@ async fn check_balatro_running() -> bool {
     is_balatro_running()
 }
 
+#[tauri::command]
+async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mod_dir = dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("Balatro")
+        .join("Mods");
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
+
+    let entries = std::fs::read_dir(&mod_dir).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            let path = entry.path();
+            let mod_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or("Invalid mod directory name")?;
+
+            // Skip .lovely and lovely directories
+            if mod_name.contains(".lovely") || mod_name.contains("lovely") {
+                continue;
+            }
+
+            // Check if the mod exists in the database
+            let mod_exists = installed_mods.iter().any(|m| m.path.contains(mod_name));
+
+            // If mod is not in database, delete it
+            if !mod_exists {
+                log::info!("Removing untracked mod: {}", mod_name);
+                std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // Add launch command
 #[tauri::command]
 async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -295,6 +334,7 @@ pub fn run() {
             get_talisman_versions,
             verify_path_exists,
             check_mod_installation,
+            refresh_mods_folder,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

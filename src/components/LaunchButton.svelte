@@ -1,6 +1,4 @@
 <script lang="ts">
-	// TODO: Check if balatro is running when clicked on Launch button, and show alert box if it is
-	// FIX: Balatro is not found  when it is running
 	import { invoke } from "@tauri-apps/api/core";
 	import LaunchAlertBox from "./LaunchAlertBox.svelte";
 	import MessageStack from "./MessageStack.svelte";
