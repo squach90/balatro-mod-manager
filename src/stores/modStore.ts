@@ -14,6 +14,11 @@ export interface Mod {
 	downloadURL: string;
 }
 
+export const cachedVersions = writable({
+	steamodded: [] as string[],
+	talisman: [] as string[]
+});
+
 
 export interface DependencyCheck {
 	steamodded: boolean;

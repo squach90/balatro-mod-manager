@@ -208,7 +208,7 @@
 		downloadURL?: string;
 	}
 
-	const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
 
 	function isValidCache(timestamp: number): boolean {

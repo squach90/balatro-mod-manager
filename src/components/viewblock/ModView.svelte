@@ -12,12 +12,20 @@
 	import { marked } from "marked";
 	import { invoke } from "@tauri-apps/api/core";
 	import { createEventDispatcher } from "svelte";
+	import { cachedVersions } from "../../stores/modStore";
+
 	const dispatch = createEventDispatcher<{
 		checkDependencies: {
 			steamodded: boolean;
 			talisman: boolean;
 		};
 	}>();
+
+	let cachedVersionsValue: { steamodded: string[]; talisman: string[] };
+
+	cachedVersions.subscribe((value) => {
+		cachedVersionsValue = value;
+	});
 
 	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
 
@@ -41,14 +49,28 @@
 	async function loadSteamoddedVersions() {
 		if (loadingVersions) return;
 
+		// Check cache first
+		if (cachedVersionsValue.steamodded.length > 0) {
+			steamoddedVersions = cachedVersionsValue.steamodded;
+			if (steamoddedVersions.length > 0) {
+				selectedVersion = steamoddedVersions[0];
+			}
+			return;
+		}
+
 		loadingVersions = true;
+
 		try {
 			const versions: string[] = await invoke("get_steamodded_versions");
-			// Make sure to update the state with the new : string[]versions
 			steamoddedVersions = versions;
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
+			// Update cache
+			cachedVersions.update((cache) => ({
+				...cache,
+				steamodded: versions,
+			}));
 		} catch (error) {
 			console.error("Failed to load Steamodded versions:", error);
 			steamoddedVersions = [];
@@ -60,6 +82,15 @@
 	async function loadTalismanVersions() {
 		if (loadingVersions) return;
 
+		// Check cache first
+		if (cachedVersionsValue.talisman.length > 0) {
+			talismanVersions = cachedVersionsValue.talisman;
+			if (talismanVersions.length > 0) {
+				selectedVersion = talismanVersions[0];
+			}
+			return;
+		}
+
 		loadingVersions = true;
 		try {
 			const versions: string[] = await invoke("get_talisman_versions");
@@ -68,6 +99,12 @@
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
+
+			// Update cache
+			cachedVersions.update((cache) => ({
+				...cache,
+				talisman: versions,
+			}));
 		} catch (error) {
 			console.error("Failed to load Talisman versions:", error);
 			talismanVersions = [];
