@@ -44,26 +44,36 @@ async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), St
     let entries = std::fs::read_dir(&mod_dir).map_err(|e| e.to_string())?;
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
-            let path = entry.path();
-            let mod_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or("Invalid mod directory name")?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or("Invalid name")?;
 
-            // Skip .lovely and lovely directories
-            if mod_name.contains(".lovely") || mod_name.contains("lovely") {
-                continue;
+        // Skip .lovely and lovely
+        if name.contains(".lovely") || name.contains("lovely") {
+            continue;
+        }
+
+        match entry.file_type().map_err(|e| e.to_string())? {
+            // Handle directories
+            ft if ft.is_dir() => {
+                let mod_exists = installed_mods.iter().any(|m| m.path.contains(name));
+                if !mod_exists {
+                    log::info!("Removing untracked mod directory: {}", name);
+                    std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+                }
             }
-
-            // Check if the mod exists in the database
-            let mod_exists = installed_mods.iter().any(|m| m.path.contains(mod_name));
-
-            // If mod is not in database, delete it
-            if !mod_exists {
-                log::info!("Removing untracked mod: {}", mod_name);
-                std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+            // Handle files
+            ft if ft.is_file() => {
+                let mod_exists = installed_mods.iter().any(|m| m.path.contains(name));
+                if !mod_exists {
+                    log::info!("Removing untracked mod file: {}", name);
+                    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+                }
             }
+            // Skip other types (symlinks, etc.)
+            _ => continue,
         }
     }
 
