@@ -9,7 +9,14 @@ Balatro Mod Manager by Skyline.
 - [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites#installing-the-tauri-cli)
 - [Make](https://www.gnu.org/software/make/) (for running make commands)
 
-## Installation
+## Automatic Installation
+### For macOS
+run this command:
+```bash
+curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.sh | bash
+```
+
+## Manual Installation
 
 1. Clone the repository:
     ```sh
