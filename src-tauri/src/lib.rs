@@ -6,17 +6,22 @@ use tauri::WebviewWindowBuilder;
 
 use crate::lovely::ensure_lovely_exists;
 use bmm_lib::balamod::find_balatros;
+use bmm_lib::cache;
+use bmm_lib::cache::Mod;
 use bmm_lib::database::Database;
 use bmm_lib::database::InstalledMod;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
+use std::time::UNIX_EPOCH;
+use std::time::SystemTime;
+
 use std::process::Command;
 
 use tauri::Manager;
 
-// Create a state structure to hold the database
+// Create a state s;tructure to hold the database
 struct AppState {
     db: Mutex<Database>,
 }
@@ -29,6 +34,38 @@ async fn check_steam_running() -> bool {
 #[tauri::command]
 async fn check_balatro_running() -> bool {
     is_balatro_running()
+}
+
+#[tauri::command]
+async fn save_versions_cache(mod_type: String, versions: Vec<String>) -> Result<(), String> {
+    cache::save_versions_cache(&mod_type, &versions).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u64)>, String> {
+    cache::load_versions_cache(&mod_type)
+        .map(|res| {
+            res.map(|versions| {
+                (
+                    versions,
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                )
+            })
+        })
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn save_mods_cache(mods: Vec<Mod>) -> Result<(), String> {
+    cache::save_cache(&mods).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
+    cache::load_cache().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -211,6 +248,7 @@ async fn get_steamodded_versions() -> Result<Vec<String>, String> {
     installer
         .get_available_versions()
         .await
+        .map(|versions| versions.into_iter().map(|v| v.to_string()).collect())
         .map_err(|e| e.to_string())
 }
 
@@ -229,6 +267,7 @@ async fn get_talisman_versions() -> Result<Vec<String>, String> {
     installer
         .get_available_versions()
         .await
+        .map(|versions| versions.into_iter().map(|v| v.to_string()).collect())
         .map_err(|e| e.to_string())
 }
 
@@ -345,6 +384,10 @@ pub fn run() {
             verify_path_exists,
             check_mod_installation,
             refresh_mods_folder,
+            save_mods_cache,
+            load_mods_cache,
+            save_versions_cache,
+            load_versions_cache
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {
