@@ -22,7 +22,7 @@
 	import { cachedVersions } from "../../stores/modStore";
 	import { onDestroy } from "svelte";
 
-	const VERSION_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+	const VERSION_CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
 
 	const dispatch = createEventDispatcher<{
 		checkDependencies: {
