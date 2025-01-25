@@ -14,8 +14,8 @@ use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
-use std::time::UNIX_EPOCH;
 use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use std::process::Command;
 
@@ -61,6 +61,11 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
 #[tauri::command]
 async fn save_mods_cache(mods: Vec<Mod>) -> Result<(), String> {
     cache::save_cache(&mods).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn clear_cache() -> Result<(), String> {
+    cache::clear_cache().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -387,7 +392,8 @@ pub fn run() {
             save_mods_cache,
             load_mods_cache,
             save_versions_cache,
-            load_versions_cache
+            load_versions_cache,
+            clear_cache
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

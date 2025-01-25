@@ -78,6 +78,33 @@ impl From<i32> for Category {
     }
 }
 
+pub fn clear_cache() -> Result<(), String> {
+    let cache_dir = dirs::cache_dir()
+        .ok_or("Could not find cache directory")?
+        .join("balatro-mod-manager");
+
+    // Delete mods cache
+    let mods_cache = cache_dir.join("mods.cache.bin.gz");
+    if mods_cache.exists() {
+        std::fs::remove_file(&mods_cache)
+            .map_err(|e| format!("Failed to remove mods cache: {}", e))?;
+    }
+
+    // Delete version caches
+    let version_caches = vec![
+        "versions-steamodded.cache.bin.gz",
+        "versions-talisman.cache.bin.gz",
+    ];
+    for file in version_caches {
+        let path = cache_dir.join(file);
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| format!("Failed to remove {}: {}", file, e))?;
+        }
+    }
+
+    Ok(())
+}
+
 // Add to your existing cache module
 pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<()> {
     let mut path = dirs::cache_dir()
