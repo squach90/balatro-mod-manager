@@ -1,118 +1,146 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
-
-	type Message = {
-		id: number;
-		text: string;
-		type: "success" | "error" | "warning" | "info";
-		position: number;
-	};
-
-	const types = {
-		success: {
-			bg: "#459373",
-			border: "white",
-			icon: "✓",
-		},
-		error: {
-			bg: "#644047",
-			border: "#A25B5B",
-			icon: "✕",
-		},
-		warning: {
-			bg: "#625C43",
-			border: "#A39358",
-			icon: "!",
-		},
-		info: {
-			bg: "#435662",
-			border: "#587A93",
-			icon: "i",
-		},
-	};
-
-	let messages: Message[] = [];
-	let counter = 0;
-
-	export function addMessage(
-		text: string,
-		type: "success" | "error" | "warning" | "info",
-	) {
-		const id = counter++;
-		// Find the lowest available position
-		const usedPositions = messages.map((m) => m.position);
-		let position = 0;
-		while (usedPositions.includes(position)) {
-			position++;
-		}
-
-		messages = [...messages, { id, text, type, position }];
-		setTimeout(() => {
-			messages = messages.filter((m) => m.id !== id);
-		}, 3000);
-	}
+	import { messageStore } from "../lib/stores";
 </script>
 
 <div class="message-stack">
-	{#each messages as message (message.id)}
+	{#each $messageStore as message (message.id)}
 		<div
-			class="message-box {message.type}"
-			in:fly={{ x: 300, duration: 300 }}
-			out:fly={{ y: 100, duration: 200 }}
-			style="top: {2 + message.position * 4.5}rem"
+			class="message {message.type}"
+			transition:fly={{ y: -20, duration: 200 }}
 		>
-			<span class="icon">{types[message.type].icon}</span>
-			<p>{message.text}</p>
+			<div class="message-content">
+				{#if message.type === "success"}
+					<svg class="icon" viewBox="0 0 24 24">
+						<path
+							fill="#74CCA8"
+							d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+						/>
+					</svg>
+				{:else if message.type === "error"}
+					<svg class="icon" viewBox="0 0 24 24">
+						<path
+							fill="#A25B5B"
+							d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
+						/>
+					</svg>
+				{:else if message.type === "info"}
+					<svg class="icon" viewBox="0 0 24 24">
+						<path
+							fill="#587A93"
+							d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"
+						/>
+					</svg>
+				{:else if message.type === "warning"}
+					<svg class="icon" viewBox="0 0 24 24">
+						<path
+							fill="#A39358"
+							d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16"
+						/>
+					</svg>
+				{/if}
+				<span class="text">{message.text}</span>
+			</div>
 		</div>
 	{/each}
 </div>
 
 <style>
-	.message-box {
+	.message-stack {
 		position: fixed;
-		top: 2rem;
-		right: 2rem;
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
+		top: 20px;
+		right: 20px;
+		z-index: 9999;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		pointer-events: none;
+	}
+
+	.message {
+		padding: 16px 24px;
+		border-radius: 8px;
+		color: white;
+		font-weight: 500;
+		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+		min-width: 300px;
+	}
+
+	.message-content {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-		z-index: 1000;
-		min-width: 300px;
-		max-width: 400px;
-		color: #f4eee0;
-		font-family: inherit;
-	}
-
-	.success {
-		background-color: #459373;
-		border: 2px solid white;
-	}
-
-	.error {
-		background-color: #644047;
-		border: 2px solid #a25b5b;
-	}
-
-	.info {
-		background-color: #435662;
-		border: 2px solid #587a93;
-	}
-
-	.warning {
-		background-color: #625c43;
-		border: 2px solid #a39358;
+		gap: 14px;
 	}
 
 	.icon {
-		font-size: 1.2rem;
-		font-weight: bold;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		color: rgba(255, 255, 255, 0.9);
+		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
 	}
 
-	p {
-		margin: 0;
-		font-size: 1.2rem;
+	.text {
+		font-size: 1.1rem;
 		line-height: 1.4;
+		flex-grow: 1;
+	}
+
+	/* Updated background colors for better contrast */
+	.success {
+		background-color: #2d6b4f;
+		border: 2px solid #459373;
+	}
+
+	.error {
+		background-color: #4a2d32;
+		border: 2px solid #644047;
+	}
+
+	.info {
+		background-color: #2d3d4a;
+		border: 2px solid #435662;
+	}
+
+	.warning {
+		background-color: #4a452d;
+		border: 2px solid #625c43;
+	}
+	@media (max-width: 1160px) {
+		.message-stack {
+			top: 15px;
+			right: 15px;
+			left: auto;
+		}
+
+		.message {
+			min-width: unset;
+			width: 90%;
+			max-width: 320px;
+			padding: 12px 16px;
+			border-radius: 6px;
+		}
+
+		.message-content {
+			gap: 10px;
+		}
+
+		.icon {
+			width: 24px;
+			height: 24px;
+		}
+
+		.text {
+			font-size: 1rem;
+			line-height: 1.35;
+			word-break: break-word;
+		}
+
+		.success,
+		.error,
+		.info,
+		.warning {
+			border-width: 1.5px;
+		}
 	}
 </style>
