@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
-	// import MessageStack from "./MessageStack.svelte";
 	import { addMessage } from "../lib/stores";
 
 	import { goto } from "$app/navigation";
 
-	// let messageStack: MessageStack;
 
 	let selectedOption = "steam";
 	let showCustomInput = false;
@@ -158,7 +156,6 @@
 		</div>
 	</div>
 </div>
-<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	:root {

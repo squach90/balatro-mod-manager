@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
 	import { FolderDot } from "lucide-svelte";
-	import MessageStack from "./MessageStack.svelte";
     import { addMessage } from "$lib/stores";
 
-	// let messageStack: MessageStack;
 	let selectedPath = "";
 	let placeholder = "Choose Balatro Path";
 	let isLoading = false;
@@ -106,8 +104,6 @@
 		{/if}
 	</button>
 </div>
-
-<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	.path-selector {

@@ -1,12 +1,10 @@
 <script lang="ts">
 	import PathSelector from "../PathSelector.svelte";
-	// import MessageStack from "../MessageStack.svelte";
 	import { Settings2, RefreshCw } from "lucide-svelte";
 	import { addMessage } from "$lib/stores";
 
 	import { invoke } from "@tauri-apps/api/core";
 
-	// let messageStack: MessageStack;
 	let isReindexing = false;
 	let isClearingCache = false;
 
@@ -79,8 +77,6 @@
 		</div>
 	</div>
 </div>
-
-<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	h2 {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { blur } from "svelte/transition";
-	// import { messageStore } from "$lib/stores";
     import MessageStack from "../components/MessageStack.svelte";
 
 	export let data;

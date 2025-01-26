@@ -34,8 +34,6 @@
 	};
 </script>
 
-<!-- <MessageStack bind:this={messageStack} /> -->
-
 <div class="launch-container">
 	<button class="launch-button" on:click={handleLaunch}> Launch </button>
 </div>
