@@ -16,10 +16,7 @@
 			await invoke("refresh_mods_folder");
 			addMessage("Successfully re-indexed mods!", "success");
 		} catch (error) {
-			addMessage(
-				"Failed to re-index mods: " + error,
-				"error",
-			);
+			addMessage("Failed to re-index mods: " + error, "error");
 		} finally {
 			isReindexing = false;
 		}
@@ -29,10 +26,7 @@
 		isClearingCache = true;
 		try {
 			await invoke("clear_cache");
-			addMessage(
-				"Successfully cleared all caches!",
-				"success",
-			);
+			addMessage("Successfully cleared all caches!", "success");
 		} catch (error) {
 			addMessage("Failed to clear cache: " + error, "error");
 		} finally {
@@ -59,6 +53,12 @@
 				Clear Cache
 			{/if}
 		</button>
+
+		<p class="description warning">
+			<span class="warning-icon">⚠️</span>
+			Frequent cache clearing may trigger API rate limits
+		</p>
+
 		<h3>Mods</h3>
 		<div class="mods-settings">
 			<button
@@ -127,6 +127,15 @@
 		border-radius: 50%;
 		border-top-color: transparent;
 		animation: spin 1s linear infinite;
+	}
+
+	.warning {
+		color: #ffd700; /* Gold/yellow for warning */
+		font-size: 1.1rem;
+		border-left: 3px solid #ffd700;
+		padding-left: 0.8rem;
+		margin-top: 0.8rem;
+		max-width: 600px !important;
 	}
 
 	@keyframes spin {
