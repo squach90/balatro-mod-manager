@@ -311,16 +311,3 @@ impl ModInstaller {
         Ok(())
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[tokio::test]
-//     async fn test_get_available_versions() -> Result<()> {
-//         let installer = SteamoddedInstaller::new();
-//         let versions = installer.get_available_versions().await?;
-//         assert!(!versions.is_empty());
-//         Ok(())
-//     }
-// }
