@@ -4,6 +4,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[94m'  # Light blue for links
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}Balatro Mod Manager Builder${NC}"
@@ -21,16 +22,25 @@ echo "Checking dependencies..."
 
 if ! command -v git &> /dev/null; then
     echo -e "${RED}Error: git not found. Please install git first.${NC}"
+    echo -e "${BLUE}https://git-scm.com/downloads${NC}"  # Light blue hyperlink
     exit 1
 fi
 
 if ! command -v cargo &> /dev/null; then
     echo -e "${RED}Error: cargo not found. Please install Rust/Cargo first.${NC}"
+    echo -e "${BLUE}https://www.rust-lang.org/tools/install${NC}"  # Light blue hyperlink
     exit 1
 fi
 
 if ! command -v deno &> /dev/null; then
     echo -e "${RED}Error: deno not found. Please install deno first.${NC}"
+    echo -e "${BLUE}https://docs.deno.com/runtime/getting_started/installation${NC}"  # Light blue hyperlink
+    exit 1
+fi
+
+if ! command -v cargo-tauri &> /dev/null; then
+    echo -e "${RED}Error: cargo-tauri not found. Please install tauri-cli first.${NC}"
+    echo -e "${BLUE}https://crates.io/crates/tauri-cli${NC}"
     exit 1
 fi
 
