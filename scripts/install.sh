@@ -6,6 +6,18 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[94m'  # Light blue for links
 NC='\033[0m' # No Color
+CYAN_RGB='\033[38;2;61;181;255m'
+
+echo -e "${CYAN_RGB}"
+cat << "EOF"
+    ____  __  _____  ___            ____           __        ____
+   / __ )/  |/  /  |/  /           /  _/___  _____/ /_____ _/ / /
+  / __  / /|_/ / /|_/ /  ______    / // __ \/ ___/ __/ __ `/ / /
+ / /_/ / /  / / /  / /  /_____/  _/ // / / (__  ) /_/ /_/ / / /
+/_____/_/  /_/_/  /_/           /___/_/ /_/____/\__/\__,_/_/_/
+
+EOF
+echo -e "${NC}"
 
 echo -e "${GREEN}Balatro Mod Manager Builder${NC}"
 echo "----------------------------------------"
@@ -43,6 +55,8 @@ if ! command -v cargo-tauri &> /dev/null; then
     echo -e "${BLUE}https://crates.io/crates/tauri-cli${NC}"
     exit 1
 fi
+
+
 
 # Create a temporary directory
 BUILD_DIR=$(mktemp -d)
