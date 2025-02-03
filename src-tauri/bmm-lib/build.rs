@@ -1,52 +1,57 @@
-// use std::process::Command;
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    if std::env::var("SKIP_BUILD_SCRIPT").unwrap_or("0".to_string()) == "1" {
+    if env::var("SKIP_BUILD_SCRIPT").unwrap_or_else(|_| "0".to_string()) == "1" {
         return;
     }
+
     #[cfg(target_os = "macos")]
     {
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        let lovely_mac_dir = PathBuf::from(&manifest_dir).join("../lovely-injector");
-        let lovely_bin_dir = dirs::config_dir()
-            .expect("Could not find config directory")
-            .join("Balatro")
-            .join("bins");
-        //
-        // // // Build lovely-mac first
-        // let status = Command::new("cargo")
-        //     .args(["build", "--release"])
-        //     .current_dir(lovely_mac_dir.join("crates/lovely-mac"))
-        //     .status()
-        //     .expect("Failed to build lovely-mac");
-        //
-        // if !status.success() {
-        //     panic!("Failed to build lovely-mac");
-        // }
-        //
-        // Get the correct dylib path
-        let dylib_path = lovely_mac_dir.join("target/release/liblovely.dylib");
+        // Get the manifest directory for the current build script.
+        // If it is running in a subcrate (e.g. "src-tauri/bmm-lib"), move one level up.
+        let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+        let top_level = if manifest_dir.ends_with("bmm-lib") {
+            // Assuming "src-tauri/bmm-lib", set top_level = "src-tauri"
+            manifest_dir
+                .parent()
+                .expect("expected parent directory")
+                .to_path_buf()
+        } else {
+            manifest_dir.clone()
+        };
 
-        if !dylib_path.exists() {
-            panic!("Dylib not found at expected path: {}", dylib_path.display());
+        // Destination directory for the dylib inside the Tauri project (src-tauri/bundled_dylibs)
+        let dest_dir = top_level.join("bundled_dylibs");
+        fs::create_dir_all(&dest_dir)
+            .expect("Failed to create bundled_dylibs directory in project root (src-tauri)");
+
+        // Path to the built dylib from lovely-mac (assumes lovely-mac is located at "../lovely-injector")
+        let lovely_mac_dir = top_level.join("lovely-injector");
+        let dylib_src = lovely_mac_dir.join("target/release/liblovely.dylib");
+        if !dylib_src.exists() {
+            panic!(
+                "Dylib not found at {}. Did you build lovely-mac?",
+                dylib_src.display()
+            );
         }
-        //
-        // // Generate the Rust code with the dylib path
-        // let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        // let code = format!(
-        //     "pub const LOVELY_DYLIB: &[u8] = include_bytes!({:?});",
-        //     dylib_path
-        // );
-        //
-        // std::fs::write(out_dir.join("lovely_dylib.rs"), code)
-        //     .expect("Failed to write generated code");
 
-        // move liblove.dylib to the correct location (config/Balatro/bins)
-        std::fs::copy(&dylib_path, lovely_bin_dir.join("liblovely.dylib"))
-            .expect("Failed to copy liblovely.dylib to bins directory");
+        // Copy the dylib into the destination directory ("src-tauri/bundled_dylibs")
+        let dylib_dest = dest_dir.join("liblovely.dylib");
+        fs::copy(&dylib_src, &dylib_dest)
+            .expect("Failed to copy liblovely.dylib to bundled_dylibs directory");
 
-        println!("cargo:rerun-if-changed={}", dylib_path.display());
+        println!(
+            "cargo:info=Copied dylib from {} to {}",
+            dylib_src.display(),
+            dylib_dest.display()
+        );
+
+        // (Adjust this if necessary to match your runtime linking strategy.)
+        // println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Resources/bundled_dylibs");
+
+        // Trigger rebuild when the source dylib changes.
+        println!("cargo:rerun-if-changed={}", dylib_src.display());
     }
 }
