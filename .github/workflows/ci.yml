@@ -40,12 +40,13 @@ jobs:
           sudo apt-get install -y \
             libglib2.0-dev \
             libgtk-3-dev \
-            libsoup-3.0-dev \  # Note the hyphen instead of 3.0
+            libsoup-3.0-dev \
             pkg-config
           
           # Verify installation
           find /usr -name 'libsoup-3.0.pc' 2>/dev/null
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
 
       - name: Cache cargo dependencies
         uses: actions/cache@v3
