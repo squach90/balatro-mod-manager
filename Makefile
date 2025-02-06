@@ -1,24 +1,35 @@
+# Define OS-specific variables
+ifeq ($(OS),Windows_NT)
+	CRATE_DIR = src-tauri/lovely-injector/crates/lovely-win
+	REMOVE_TARGET =
+	SET_SKIP_BUILD_SCRIPT = set SKIP_BUILD_SCRIPT=1
+else
+	CRATE_DIR = src-tauri/lovely-injector/crates/lovely-mac
+	REMOVE_TARGET = rm -f ../../target/release/liblovely.d*
+	SET_SKIP_BUILD_SCRIPT = SKIP_BUILD_SCRIPT=1
+	CLEAR_SCREEN = clear
+	MACOS_TARGET = MACOSX_DEPLOYMENT_TARGET=11.0
+endif
+
+# Debug target
 debug:
-ifeq ($(OS),Windows_NT)
-	cd src-tauri/lovely-injector/crates/lovely-win && cargo build --release && cd $(CURDIR) && cargo tauri dev
-else
-	clear
-	RUST_LOG=debug cd src-tauri/lovely-injector/crates/lovely-mac && rm -f ../../target/release/liblovely.d* && SKIP_BUILD_SCRIPT=1 cargo build --release && cd $(CURDIR) && cargo tauri dev
-endif
+	@$(CLEAR_SCREEN)
+	@echo "Building debug version in $(CRATE_DIR)..."
+	@$(REMOVE_TARGET)
+	@cd $(CRATE_DIR) && $(SET_SKIP_BUILD_SCRIPT) cargo build --release
+	@cargo tauri dev
 
+# Release target
 release:
-ifeq ($(OS),Windows_NT)
-	cd src-tauri/lovely-injector/crates/lovely-win && set SKIP_BUILD_SCRIPT=1 && cargo build --release && cd $(CURDIR) && cargo tauri build
-else
-	clear
-	cd src-tauri/lovely-injector/crates/lovely-mac && rm -f ../../target/release/liblovely.d* && SKIP_BUILD_SCRIPT=1 MACOSX_DEPLOYMENT_TARGET=11.0 cargo build --release && cd $(CURDIR) && cargo tauri build --verbose
-	# cd src-tauri/lovely-injector/crates/lovely-mac && rm -f ../../target/release/liblovely.d* && cd $(CURDIR) && cargo tauri build --verbose
-endif
+	@$(CLEAR_SCREEN)
+	@echo "Building release version in $(CRATE_DIR)..."
+	@$(REMOVE_TARGET)
+	@cd $(CRATE_DIR) && $(SET_SKIP_BUILD_SCRIPT) $(MACOS_TARGET) cargo build --release
+	@cargo tauri build --verbose
 
+# Clean target
 clean:
-	cd ./src-tauri && cargo clean
-ifeq ($(OS),Windows_NT)
-	cd ./src-tauri/lovely-injector/crates/lovely-win && cargo clean
-else
-	cd ./src-tauri/lovely-injector/crates/lovely-mac && cargo clean
-endif
+	@echo "Cleaning all build files..."
+	@cd ./src-tauri && cargo clean
+	@cd $(CRATE_DIR) && cargo clean
+

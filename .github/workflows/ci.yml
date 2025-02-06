@@ -41,12 +41,16 @@ jobs:
             libglib2.0-dev \
             libgtk-3-dev \
             libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
             pkg-config
           
           # Verify installation
           find /usr -name 'libsoup-3.0.pc' 2>/dev/null
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-
+           
+          # Verify installation
+          find /usr -name 'javascriptcoregtk-4.1.pc' 2>/dev/null || echo "javascriptcoregtk-4.1.pc not found!"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
       - name: Cache cargo dependencies
         uses: actions/cache@v3
