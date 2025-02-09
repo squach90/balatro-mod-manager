@@ -154,15 +154,6 @@ impl From<reqwest::Error> for AppError {
     }
 }
 
-// impl From<serde_json::Error> for AppError {
-//     fn from(err: serde_json::Error) -> Self {
-//         AppError::Serialization {
-//             format: "JSON",
-//             source: err.to_string(),
-//         }
-//     }
-// }
-
 impl From<tauri::Error> for AppError {
     fn from(err: tauri::Error) -> Self {
         AppError::WindowCreation(err.to_string())
