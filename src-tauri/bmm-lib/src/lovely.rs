@@ -1,22 +1,24 @@
-use std::path::PathBuf;
-use std::fs;
-use libloading::Library;
 use crate::errors::AppError;
+#[cfg(target_os = "macos")]
+use libloading::Library;
+#[cfg(target_os = "macos")]
+use std::fs;
+use std::path::PathBuf;
 
 pub fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
     #[cfg(target_os = "macos")]
     {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?;
-        
+
         let bins_dir = config_dir.join("Balatro").join("bins");
         fs::create_dir_all(&bins_dir).map_err(|e| AppError::DirCreate {
             path: bins_dir.clone(),
             source: e.to_string(),
         })?;
-        
+
         let lovely_path = bins_dir.join("liblovely.dylib");
-        
+
         if !lovely_path.exists() {
             return Err(AppError::MacOsLibrary {
                 lib_name: "liblovely.dylib".into(),
@@ -34,12 +36,11 @@ pub fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
 
         Ok(lovely_path)
     }
-    
+
     #[cfg(not(target_os = "macos"))]
     {
         Err(AppError::InvalidState(
-            "Lovely injection is only supported on macOS".into()
+            "Lovely injection is only supported on macOS".into(),
         ))
     }
 }
-

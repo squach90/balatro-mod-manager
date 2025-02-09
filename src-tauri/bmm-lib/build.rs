@@ -1,14 +1,17 @@
+#[cfg(target_os = "macos")]
 use std::env;
+#[cfg(target_os = "macos")]
 use std::fs;
+#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
 fn main() {
-    if env::var("SKIP_BUILD_SCRIPT").unwrap_or_else(|_| "0".to_string()) == "1" {
-        return;
-    }
-
     #[cfg(target_os = "macos")]
     {
+        if env::var("SKIP_BUILD_SCRIPT").unwrap_or_else(|_| "0".to_string()) == "1" {
+            return;
+        }
+
         // Get the manifest directory for the current build script.
         // If it is running in a subcrate (e.g. "src-tauri/bmm-lib"), move one level up.
         let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
