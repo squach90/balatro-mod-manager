@@ -6,6 +6,7 @@ use std::{
 };
 
 #[cfg(not(target_os = "macos"))]
+#[allow(unused_imports)]
 use std::slice;
 
 use crate::sys::{self, lua_identity_closure, LuaState};

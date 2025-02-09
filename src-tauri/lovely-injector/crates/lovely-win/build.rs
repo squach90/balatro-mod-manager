@@ -1,22 +1,23 @@
+#[cfg(target_os = "windows")]
 use std::env;
+#[cfg(target_os = "windows")]
 use std::fs;
+#[cfg(target_os = "windows")]
 use std::path::PathBuf;
 
 fn main() {
-    if env::var("SKIP_BUILD_SCRIPT").unwrap_or_else(|_| "0".to_string()) == "1" {
-        return;
-    }
     #[cfg(target_os = "windows")]
     {
+        if env::var("SKIP_BUILD_SCRIPT").unwrap_or_else(|_| "0".to_string()) == "1" {
+            return;
+        }
         // First, forward the DLL
         forward_dll::forward_dll("C:\\Windows\\System32\\version.dll")
             .expect("Failed to forward version.dll");
 
         // The DLL will be generated in the target directory
         let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        let target_dir = PathBuf::from(&manifest_dir)
-            .join("target")
-            .join("release");
+        let target_dir = PathBuf::from(&manifest_dir).join("target").join("release");
 
         // Set up the destination directory
         let bins_dir = dirs::config_dir()
@@ -25,8 +26,7 @@ fn main() {
             .join("bins");
 
         // Create all necessary directories
-        fs::create_dir_all(&bins_dir)
-            .expect("Failed to create Balatro bins directory");
+        fs::create_dir_all(&bins_dir).expect("Failed to create Balatro bins directory");
 
         // Source DLL path
         let dll_path = target_dir.join("version.dll");
@@ -38,11 +38,16 @@ fn main() {
         // Only try to copy if the DLL exists
         if dll_path.exists() {
             match fs::copy(&dll_path, bins_dir.join("version.dll")) {
-                Ok(_) => println!("cargo:warning=Successfully copied version.dll to bins directory"),
+                Ok(_) => {
+                    println!("cargo:warning=Successfully copied version.dll to bins directory")
+                }
                 Err(e) => println!("cargo:warning=Failed to copy version.dll: {}", e),
             }
         } else {
-            println!("cargo:warning=version.dll not found at: {}", dll_path.display());
+            println!(
+                "cargo:warning=version.dll not found at: {}",
+                dll_path.display()
+            );
             // Don't panic here as the DLL might not exist yet during the build process
         }
 

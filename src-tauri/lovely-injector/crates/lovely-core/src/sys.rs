@@ -4,8 +4,11 @@ use std::{
 
 use itertools::Itertools;
 #[cfg(not(target_os = "macos"))]
+#[allow(unused_imports)]
 use libc::FILE;
-use libloading::{Library, Symbol};
+#[allow(unused_imports)]
+use libloading::Library;
+use libloading::Symbol;
 use log::info;
 use once_cell::sync::Lazy;
 
