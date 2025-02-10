@@ -1,6 +1,14 @@
-# Balatro Mod Manager
+![Balatro Mod Manager](images/title.svg)
+The Balatro Mod Manager by _Skyline_.
 
-Balatro Mod Manager by Skyline.
+# Startup Screen
+![first cover](images/cover_1.png)
+
+# Home Screen
+![second cover](images/cover_2.png)
+
+
+![Installation](images/Installation.svg)
 
 ## Prerequisites
 
@@ -10,6 +18,12 @@ Balatro Mod Manager by Skyline.
 - [Make](https://www.gnu.org/software/make/) (for running make commands)
 
 ## Automatic Installation
+### For Windows
+open Powershell & run this command:
+```powershell
+iwr https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.ps1 -useb | iex
+```
+
 ### For macOS
 run this command:
 ```bash
@@ -18,10 +32,10 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
 
 ## Manual Installation
 
-1. Clone the repository:
+1. Clone the repository & install deno's dependencies:
     ```sh
     git clone https://github.com/skyline69/balatro-mod-manager.git
-    cd balatro-mod-manager
+    cd balatro-mod-manager && deno install
     ```
 
 2. Install dependencies for the Svelte frontend:
