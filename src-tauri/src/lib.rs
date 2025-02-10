@@ -4,7 +4,9 @@ use std::sync::Mutex;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
 
+#[cfg(not(target_os = "windows"))]
 use crate::lovely::ensure_lovely_exists;
+
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::cache;
 use bmm_lib::cache::Mod;
@@ -60,7 +62,7 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
                             std::process::exit(1);
                         }
                     }
-                    .as_secs(),
+                        .as_secs(),
                 )
             })
         })
@@ -166,11 +168,63 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
             .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
     }
 
-    #[cfg(not(target_os = "macos"))]
+    /*#[cfg(not(target_os = "macos"))]
     {
-        Command::new(&path)
+
+        let lovely_version_dll =  map_error(ensure_lovely_exists())?;
+        dbg!(&lovely_version_dll);
+        Command::new(path.join("Balatro.exe"))
             .spawn()
             .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+    }*/
+
+    #[cfg(target_os = "windows")]
+    {
+        // Paths for the executable and the version DLL.
+        let exe_path = path.join("Balatro.exe");
+        let dll_path = path.join("version.dll");
+
+        // At launch, if a version.dll already exists in the game directory, remove it.
+        if dll_path.exists() {
+           std::fs::remove_file(&dll_path)
+                .map_err(|e| format!("Failed to remove existing version.dll: {}", e))?;
+            log::debug!("Removed existing version.dll at {}", dll_path.display());
+        }
+
+        // Write the embedded version.dll (replace lovely::EMBEDDED_DLL with your DLL's data) to the game folder.
+        std::fs::write(&dll_path, lovely::EMBEDDED_DLL)
+            .map_err(|e| format!("Failed to write version.dll: {}", e))?;
+        log::debug!("Written version.dll to {}", dll_path.display());
+
+        // Launch the game normally.
+        let mut child = Command::new(&exe_path)
+            .current_dir(&path)
+            .arg("--disable-console")
+            .spawn()
+            .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+        log::debug!("Launched Balatro from {}", exe_path.display());
+
+        // Spawn a background thread that waits for the game process to exit.
+        // Once the game is closed, remove the version.dll file.
+        std::thread::spawn(move || {
+            match child.wait() {
+                Ok(status) => {
+                    log::debug!("Balatro exited with status: {:?}", status);
+                    if let Err(e) = std::fs::remove_file(&dll_path) {
+                        log::error!(
+                            "Failed to remove version.dll after game exit at {}: {}",
+                            dll_path.display(),
+                            e
+                        );
+                    } else {
+                        log::debug!("Removed version.dll after game exit");
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error waiting for Balatro process: {}", e);
+                }
+            }
+        });
     }
 
     Ok(())
@@ -347,10 +401,10 @@ async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: Strin
         "image_popup",
         WebviewUrl::App(format!("image-popup.html?image={}", image_url).into()),
     )
-    .title(title)
-    .inner_size(800.0, 600.0)
-    .center()
-    .build() {
+        .title(title)
+        .inner_size(800.0, 600.0)
+        .center()
+        .build() {
         Ok(popup) => popup,
         Err(e) => {
             log::error!("Failed to open image popup: {}", e);
@@ -393,11 +447,6 @@ pub fn run() {
                 path: app_dir.clone(),
                 source: e.to_string(),
             })?;
-
-            #[cfg(target_os = "macos")]
-            {
-                map_error(lovely::ensure_lovely_exists())?;
-            }
 
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
