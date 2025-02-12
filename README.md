@@ -80,3 +80,5 @@ To clean the build files, use the provided Makefile:
     ```sh
     make clean
     ```
+
+> Font by Daniel Linssen
