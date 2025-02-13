@@ -35,7 +35,6 @@
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
 
-
 	const loadingDots = writable(0);
 
 	let installedMods: InstalledMod[] = [];
@@ -212,9 +211,21 @@
 
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-			const installedPath = await invoke<string>("install_mod", {
+			let installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
+			// if (mod.title.toLowerCase() == "talisman") {
+			// 	installedPath = installedPath += "Talisman";
+			// }
+			//
+			const pathExists = await invoke("verify_path_exists", {
+				path: installedPath,
+			});
+			if (!pathExists) {
+				throw new Error(
+					"Installation failed - files not found at destination",
+				);
+			}
 
 			// Determine dependencies based on mod type
 			let modDependencies = dependencies;

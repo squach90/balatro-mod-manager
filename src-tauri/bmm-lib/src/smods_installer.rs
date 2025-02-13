@@ -270,7 +270,7 @@ impl ModInstaller {
                         std::io::copy(&mut file, &mut outfile)?;
                     }
                 }
-                Ok(installation_path.to_string_lossy().to_string())
+                Ok(installation_path.join("Talisman").to_string_lossy().to_string())
             }
         }
     }

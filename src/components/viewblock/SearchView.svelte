@@ -6,6 +6,7 @@
 		installationStatus,
 		modsStore,
 		loadingStates2 as loadingStates,
+        uninstallDialogStore,
 	} from "../../stores/modStore";
 	import { debounce } from "lodash";
 	import FlexSearch from "flexsearch";
@@ -13,6 +14,7 @@
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
 	import { createEventDispatcher } from "svelte";
+	import { tick } from "svelte";
 
 	let searchQuery = "";
 	let searchResults: Mod[] = [];
@@ -51,6 +53,10 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
+		const isCoreMod = ["steamodded", "talisman"].includes(
+			mod.title.toLowerCase(),
+		);
+
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
@@ -60,15 +66,35 @@
 				console.error("Mod not found in installed mods");
 				return;
 			}
-			await invoke("remove_installed_mod", {
-				name: mod.title,
-				path: installedMod.path,
-			});
 
-			// Force immediate UI update
-			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
+			if (isCoreMod) {
+				// Get fresh dependencies list
+				const dependents = await invoke<string[]>("get_dependents", {
+					modName: mod.title,
+				});
+
+				// Force UI update before showing dialog
+				await tick();
+
+				uninstallDialogStore.set({
+					show: true,
+					modName: mod.title,
+					modPath: installedMod.path,
+					dependents,
+				});
+			} else {
+				// Immediate uninstall for normal mods
+				await invoke("remove_installed_mod", {
+					name: mod.title,
+					path: installedMod.path,
+				});
+				installationStatus.update((s) => ({
+					...s,
+					[mod.title]: false,
+				}));
+			}
 		} catch (error) {
-			console.error("Failed to uninstall mod:", error);
+			console.error("Uninstall failed:", error);
 		}
 	};
 
@@ -76,7 +102,7 @@
 		const dependencies = [];
 		if (mod.requires_steamodded) dependencies.push("Steamodded");
 		if (mod.requires_talisman) dependencies.push("Talisman");
-		
+
 		if (mod.requires_steamodded || mod.requires_talisman) {
 			// Check if dependencies are installed before showing popup
 			const steamoddedInstalled = mod.requires_steamodded
