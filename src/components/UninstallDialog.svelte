@@ -22,23 +22,38 @@
 
 	async function handleUninstall() {
 		try {
+			let success = false;
+
 			if (action === "cascade") {
 				await invoke("cascade_uninstall", { rootMod: modName });
+				success = true;
 			} else if (action === "force") {
 				await invoke("force_remove_mod", {
 					name: modName,
 					path: modPath,
 				});
+				success = true;
+			} else if (action === null) {
+				await invoke("remove_installed_mod", {
+					name: modName,
+					path: modPath,
+				});
+				success = true;
 			}
 
-			dispatch("uninstalled", { success: true });
+			if (success) {
+				dispatch("uninstalled", {
+					modName,
+					success: true,
+					action: action || "single",
+				});
+			}
 		} catch (e) {
 			dispatch("error", e);
 		} finally {
 			uninstallDialogStore.update((s) => ({ ...s, show: false }));
 		}
 	}
-
 	function closeDialog() {
 		uninstallDialogStore.update((s) => ({ ...s, show: false }));
 	}
@@ -94,7 +109,9 @@
 							handleUninstall();
 						}}>Confirm</button
 					>
-					<button on:click={closeDialog} class="force-button">Cancel</button>
+					<button on:click={closeDialog} class="force-button"
+						>Cancel</button
+					>
 				</div>
 			{/if}
 		</div>
