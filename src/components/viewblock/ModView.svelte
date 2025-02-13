@@ -10,11 +10,12 @@
 		Github,
 	} from "lucide-svelte";
 	import { onMount } from "svelte";
+	import { open } from "@tauri-apps/plugin-shell";
 	import {
 		currentModView,
 		installationStatus,
 		loadingStates2 as loadingStates,
-        uninstallDialogStore,
+		uninstallDialogStore,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -335,6 +336,17 @@
 		}
 	};
 
+	async function handleMarkdownClick(event: MouseEvent) {
+		const anchor = (event.target as HTMLElement).closest("a");
+		if (anchor && anchor.href.startsWith("http")) {
+			event.preventDefault();
+			try {
+				await open(anchor.href);
+			} catch (error) {
+				console.error("Failed to open link:", error);
+			}
+		}
+	}
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
@@ -536,20 +548,30 @@
 					</div>
 
 					{#if mod.repo}
-						<a
-							href={mod.repo}
-							target="_blank"
-							rel="noopener noreferrer"
+						<button
+							on:click={() => open(mod.repo)}
 							class="repo-button"
 						>
 							<Github size={16} />
 							Repository
-						</a>
+						</button>
 					{/if}
 				</div>
 
 				<div class="right-column">
-					<div class="description">{@html renderedDescription}</div>
+					<div
+						class="description"
+						role="button"
+						tabindex="0"
+						on:click|self={handleMarkdownClick}
+						on:keydown|self={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								handleMarkdownClick(e);
+							}
+						}}
+					>
+						{@html renderedDescription}
+					</div>
 				</div>
 			</div>
 		</div>
@@ -907,6 +929,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		width: 100%;
+		height: 3rem;
 		padding: 0.75rem 1.5rem;
 		background: #2b3137;
 		color: #f4eee0;
@@ -930,5 +954,17 @@
 		background: rgba(133, 35, 27, 0.9);
 		color: #f4eee0;
 		padding: 0.75rem;
+	}
+
+	.description :global(a) {
+		color: #56a786;
+		text-decoration: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.description :global(a:hover) {
+		text-decoration: underline;
+		filter: brightness(1.2);
 	}
 </style>
