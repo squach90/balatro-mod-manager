@@ -5,7 +5,7 @@ export interface Mod {
 	description: string;
 	image: string;
 	lastUpdated: string;
-	categories: Category[] | Category;
+	categories: Category[];
 	colors: { color1: string; color2: string };
 	installed: boolean;
 	requires_steamodded: boolean;

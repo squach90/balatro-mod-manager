@@ -416,15 +416,10 @@
 							);
 
 							// Convert categories to enum values with validation
+
 							const categories = meta.categories
-								.map(
-									(cat) =>
-										Category[cat as keyof typeof Category],
-								)
-								.filter(
-									(c): c is Category =>
-										typeof c !== "undefined",
-								);
+								.map((cat) => categoryMap[cat])
+								.filter((c): c is Category => c !== undefined);
 
 							return {
 								title: meta.title,
@@ -489,6 +484,16 @@
 		{ color1: "#748C8A", color2: "#627775" },
 	];
 
+	const categoryMap: Record<string, Category> = {
+		Content: Category.Content,
+		Joker: Category.Joker,
+		"Quality of Life": Category.QualityOfLife,
+		Technical: Category.Technical,
+		Miscellaneous: Category.Miscellaneous,
+		"Resource Packs": Category.ResourcePacks,
+		API: Category.API,
+	};
+
 	function getRandomColorPair() {
 		return colorPairs[Math.floor(Math.random() * colorPairs.length)];
 	}
@@ -505,38 +510,21 @@
 	$: filteredMods = $modsStore.filter((mod) => {
 		switch ($currentCategory) {
 			case "Content":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.Content)
-					: mod.categories === Category.Content;
+				return mod.categories.includes(Category.Content);
 			case "Joker":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.Joker)
-					: mod.categories === Category.Joker;
+				return mod.categories.includes(Category.Joker);
 			case "Quality of Life":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.QualityOfLife)
-					: mod.categories === Category.QualityOfLife;
+				return mod.categories.includes(Category.QualityOfLife);
 			case "Technical":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.Technical)
-					: mod.categories === Category.Technical;
+				return mod.categories.includes(Category.Technical);
 			case "Resource Packs":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.ResourcePacks)
-					: mod.categories === Category.ResourcePacks;
+				return mod.categories.includes(Category.ResourcePacks);
 			case "API":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.API)
-					: mod.categories === Category.API;
+				return mod.categories.includes(Category.API);
 			case "Miscellaneous":
-				return Array.isArray(mod.categories)
-					? mod.categories.includes(Category.Miscellaneous)
-					: mod.categories === Category.Miscellaneous;
+				return mod.categories.includes(Category.Miscellaneous);
 			case "Installed Mods":
-				return $installationStatus[mod.title] === true;
-
-			case "All Mods":
-				return true;
+				return $installationStatus[mod.title];
 			default:
 				return true;
 		}
