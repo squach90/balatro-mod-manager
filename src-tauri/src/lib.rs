@@ -276,17 +276,14 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
                 .map_err(|e| format!("Failed to write version.dll: {}", e))?;
             log::debug!("Written version.dll to {}", dll_path.display());
         }
-
-        let mut child: std::process::Child;
-
         // Launch the game normally.
         if lovely_console_enabled {
-            child = Command::new(&exe_path)
+            Command::new(&exe_path)
                 .current_dir(&path)
                 .spawn()
                 .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
         } else {
-            child = Command::new(&exe_path)
+            Command::new(&exe_path)
                 .current_dir(&path)
                 .arg("--disable-console")
                 .spawn()
