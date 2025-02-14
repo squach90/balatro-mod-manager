@@ -69,7 +69,7 @@
 			</button>
 		</div>
 
-		<p id="versiontext">Current version: v0.1.0</p>
+		<p id="versiontext">Current version: v0.1.2</p>
 	</div>
 
 	<div class="profile-section">
