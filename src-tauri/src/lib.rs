@@ -294,26 +294,6 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         }
 
         log::debug!("Launched Balatro from {}", exe_path.display());
-
-        // Spawn a background thread that waits for the game process to exit.
-        // Once the game is closed, remove the version.dll file.
-        std::thread::spawn(move || match child.wait() {
-            Ok(status) => {
-                log::debug!("Balatro exited with status: {:?}", status);
-                if let Err(e) = std::fs::remove_file(&dll_path) {
-                    log::error!(
-                        "Failed to remove version.dll after game exit at {}: {}",
-                        dll_path.display(),
-                        e
-                    );
-                } else {
-                    log::debug!("Removed version.dll after game exit");
-                }
-            }
-            Err(e) => {
-                log::error!("Error waiting for Balatro process: {}", e);
-            }
-        });
     }
 
     Ok(())
