@@ -9,6 +9,8 @@ use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 pub const EMBEDDED_DLL: &[u8] = include_bytes!("../../resources/version.dll");
 
+
+#[cfg(target_os = "macos")]
 fn detect_architecture() -> Result<&'static str, AppError> {
     use libc::{c_void, size_t, sysctl};
 
