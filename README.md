@@ -1,5 +1,17 @@
 ![Balatro Mod Manager](images/title.svg)
+
 The Balatro Mod Manager by _Skyline_.
+
+## Star History
+
+<a href="https://star-history.com/#skyline69/balatro-mod-manager&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date" />
+ </picture>
+</a>
+
 
 # Startup Screen
 ![first cover](images/cover_1.png)
