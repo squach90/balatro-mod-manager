@@ -131,7 +131,7 @@
 		on:error={({ detail }) => showError(detail)}
 	/>
 
-	<div class="version-text">v0.1.2</div>
+	<div class="version-text">v0.1.3</div>
 </div>
 
 <style>
