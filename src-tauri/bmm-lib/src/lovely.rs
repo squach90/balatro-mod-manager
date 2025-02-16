@@ -1,13 +1,63 @@
 use crate::errors::AppError;
 use std::fs::{self, File};
-use std::path::PathBuf;
-#[cfg(target_os = "macos")]
-use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "macos")]
+use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 pub const EMBEDDED_DLL: &[u8] = include_bytes!("../../resources/version.dll");
+
+fn detect_architecture() -> Result<&'static str, AppError> {
+    use libc::{c_void, size_t, sysctl};
+
+    let mut size: size_t = 0;
+    let mut mib = [libc::CTL_HW, libc::HW_MACHINE];
+
+    // First call to get buffer size
+    unsafe {
+        if sysctl(
+            mib.as_mut_ptr(),
+            2,
+            std::ptr::null_mut(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Err(AppError::SystemDetection(
+                "Failed to get architecture buffer size".into(),
+            ));
+        }
+    }
+
+    let mut buf = vec![0u8; size];
+
+    // Second call to get actual value
+    unsafe {
+        if sysctl(
+            mib.as_mut_ptr(),
+            2,
+            buf.as_mut_ptr() as *mut c_void,
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Err(AppError::SystemDetection(
+                "Failed to retrieve architecture".into(),
+            ));
+        }
+    }
+
+    // Convert buffer to string and match architecture
+    match String::from_utf8_lossy(&buf).trim_end_matches('\0') {
+        "arm64" => Ok("aarch64"),
+        "x86_64" => Ok("x86_64"),
+        other => Err(AppError::UnsupportedArchitecture(other.into())),
+    }
+}
 
 pub async fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
     #[cfg(target_os = "macos")]
@@ -54,10 +104,17 @@ async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError>
         source: e.to_string(),
     })?;
 
+    let arch = detect_architecture()?;
+    let url = format!(
+        "https://github.com/ethangreen-dev/lovely-injector/releases/latest/download/\
+    lovely-{}-apple-darwin.tar.gz",
+        arch
+    );
+
     // Download latest release
     let client = reqwest::Client::new();
     let response = client
-        .get("https://github.com/ethangreen-dev/lovely-injector/releases/latest/download/lovely-aarch64-apple-darwin.tar.gz")
+        .get(url)
         .send()
         .await
         .map_err(|e| AppError::Network(e.to_string()))?;
@@ -104,4 +161,3 @@ async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError>
 
     Ok(())
 }
-

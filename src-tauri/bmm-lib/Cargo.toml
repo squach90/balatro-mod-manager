@@ -10,6 +10,7 @@ bytes = "1.10.0"
 dirs = "6.0.0"
 flate2 = { version = "1.0.35", features = ["zlib"] }
 infer = "0.16.0"
+libc = "0.2.169"
 libflate = "2.1.0"
 log = "0.4.25"
 reqwest = { version = "0.12.12", features = ["json"] }

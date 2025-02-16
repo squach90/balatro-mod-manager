@@ -69,6 +69,8 @@ pub enum AppError {
         lib_name: String,
         source: String,
     },
+    SystemDetection(String),
+    UnsupportedArchitecture(String),
 
     // Configuration
     InvalidConfig {
