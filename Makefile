@@ -28,6 +28,10 @@ release-windows:
 	@$(REMOVE_TARGET)
 	@cargo tauri build --target $(WINDOWS_TARGET) --verbose
 
+release-macos-production:
+	@$(REMOVE_TARGET)
+	@$(MACOS_TARGET) APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)" cargo tauri build --target $(MACOS_ARCH) --verbose
+
 # Alias default release to current platform
 release: 
 	@$(CLEAR_SCREEN)
