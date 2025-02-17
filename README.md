@@ -22,6 +22,9 @@ The Balatro Mod Manager by _Skyline_.
 
 ![Installation](images/Installation.svg)
 
+## Prebuilt Binaries
+You can checkout the prebuilt binaries [here.](https://github.com/skyline69/balatro-mod-manager/releases/latest)
+
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (for the backend)
