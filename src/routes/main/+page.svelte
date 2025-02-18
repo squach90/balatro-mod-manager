@@ -125,6 +125,7 @@
 	>
 		{#if currentSection === "mods"}
 			<Mods
+				mod={null}
 				{handleDependencyCheck}
 				on:request_uninstall={(e) => {
 					selectedMod = e.detail.mod;
