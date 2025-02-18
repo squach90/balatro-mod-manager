@@ -73,7 +73,7 @@
 		handleDependencyCheck(event.detail);
 	}
 
-	export let mod: Mod | undefined;
+	export let mod: Mod | null;
 
 	async function updateInstallStatus(mod: Mod | undefined) {
 		if (!mod) return;
@@ -692,7 +692,7 @@
 	{/if}
 </div>
 
-<ModView mod={$currentModView} on:checkDependencies={onDependencyCheck} />
+<ModView mod={$currentModView!} on:checkDependencies={onDependencyCheck} />
 
 <style>
 	.mods-container {

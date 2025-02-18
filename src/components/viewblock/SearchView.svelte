@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Clock, Download, Search, Trash2 } from "lucide-svelte";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
-	import { onDestroy, onMount } from "svelte";
+	import { onMount } from "svelte";
 	import {
 		installationStatus,
 		modsStore,

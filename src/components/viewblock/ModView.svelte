@@ -336,15 +336,14 @@
 		}
 	};
 
-	async function handleMarkdownClick(event: MouseEvent) {
+	function handleMarkdownClick(event: MouseEvent | KeyboardEvent) {
 		const anchor = (event.target as HTMLElement).closest("a");
 		if (anchor && anchor.href.startsWith("http")) {
 			event.preventDefault();
-			try {
-				await open(anchor.href);
-			} catch (error) {
-				console.error("Failed to open link:", error);
-			}
+			// Open the link using your Tauri API
+			open(anchor.href).catch((error) =>
+				console.error("Failed to open link:", error),
+			);
 		}
 	}
 	const isModInstalled = async (mod: Mod) => {
