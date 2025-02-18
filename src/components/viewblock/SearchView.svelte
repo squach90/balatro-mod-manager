@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Clock, Download, Search, Trash2 } from "lucide-svelte";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
-	import { onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import {
 		installationStatus,
 		modsStore,
 		loadingStates2 as loadingStates,
-        uninstallDialogStore,
+		uninstallDialogStore,
 	} from "../../stores/modStore";
 	import { debounce } from "lodash";
 	import FlexSearch from "flexsearch";
@@ -216,6 +216,8 @@
 	function handleInput() {
 		handleSearch();
 	}
+
+
 </script>
 
 <div class="search-container">

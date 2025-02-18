@@ -7,6 +7,7 @@
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
+	import { currentModView } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
 	import {
 		installationStatus,
@@ -31,6 +32,8 @@
 
 	// Add these for the RequiresPopup
 	let showRequiresPopup = false;
+
+	let contentElement: HTMLDivElement;
 
 	let showUninstallDialog = false;
 	let selectedMod = { name: "", path: "" };
@@ -64,6 +67,23 @@
 	onMount(() => {
 		handleRefresh();
 	});
+
+	$: {
+		if ($currentModView) {
+			// Scroll both window and content container to top
+			window.scrollTo({ top: 0, behavior: "instant" });
+			if (contentElement) {
+				contentElement.scrollTop = 0;
+			}
+			// Lock scrolling at multiple levels
+			document.body.style.overflow = "hidden";
+			document.documentElement.style.overflow = "hidden";
+		} else {
+			// Restore scrolling
+			document.body.style.overflow = "auto";
+			document.documentElement.style.overflow = "auto";
+		}
+	}
 </script>
 
 {#if $backgroundEnabled}
@@ -98,7 +118,11 @@
 		</nav>
 	</header>
 
-	<div class="content">
+	<div
+		class="content"
+		class:modal-open={!!$currentModView}
+		bind:this={contentElement}
+	>
 		{#if currentSection === "mods"}
 			<Mods
 				{handleDependencyCheck}
@@ -226,6 +250,20 @@
 		&::-webkit-scrollbar-corner {
 			background-color: transparent;
 		}
+	}
+
+	.content.modal-open {
+		overflow: hidden !important;
+		scrollbar-gutter: stable;
+	}
+
+	/* Add scrollbar width variable for consistency */
+	:root {
+		--scrollbar-width: 10px;
+	}
+
+	.content.modal-open {
+		padding-right: var(--scrollbar-width);
 	}
 
 	.version-text {
