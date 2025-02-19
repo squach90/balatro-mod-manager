@@ -61,7 +61,7 @@
 	let installedMods: InstalledMod[] = [];
 	let steamoddedVersions: string[] = [];
 	let talismanVersions: string[] = [];
-	let selectedVersion: string = "";
+	let selectedVersion: string = "newest";
 	let loadingVersions = false;
 	let versionLoadStarted = false;
 	let prevModTitle = "";
@@ -83,6 +83,7 @@
 				Date.now() - cached[1] * 1000 < VERSION_CACHE_DURATION
 			) {
 				steamoddedVersions = cached[0];
+				selectedVersion = "newest"; // Force "newest" as default
 				if (steamoddedVersions.length > 0) {
 					selectedVersion = steamoddedVersions[0];
 				}
@@ -98,9 +99,7 @@
 			const versions: string[] = await invoke("get_steamodded_versions");
 			steamoddedVersions = versions;
 
-			if (versions.length > 0) {
-				selectedVersion = versions[0];
-			}
+			selectedVersion = "newest";
 
 			// Update cache
 			cachedVersions.update((c) => ({ ...c, steamodded: versions }));
@@ -530,7 +529,7 @@
 									bind:value={selectedVersion}
 									disabled={$loadingStates[mod.title]}
 								>
-									<option value="newest"
+									<option value="newest" selected
 										>latest (could be unstable)</option
 									>
 									{#each steamoddedVersions as version}
