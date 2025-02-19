@@ -97,6 +97,7 @@
 		try {
 			const versions: string[] = await invoke("get_steamodded_versions");
 			steamoddedVersions = versions;
+
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
