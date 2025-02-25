@@ -3,10 +3,11 @@ mod github_repo;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+
 // use tauri::WebviewUrl;
 // use tauri::WebviewWindowBuilder;
-
-use std::collections::HashMap;
+// use std::collections::HashMap;
+//
 use std::collections::HashSet;
 use std::fs::File;
 use std::panic;
@@ -110,11 +111,11 @@ async fn get_mod_thumbnail(modPath: String) -> Result<Option<String>, String> {
     Ok(Some(format!("data:image/jpeg;base64,{}", base64)))
 }
 
-#[allow(non_snake_case)]
-#[tauri::command]
-async fn get_mod_timestamps(repoPath: String) -> Result<HashMap<String, i64>, String> {
-    github_repo::get_mod_timestamps(&repoPath).await
-}
+// #[allow(non_snake_case)]
+// #[tauri::command]
+// async fn get_mod_timestamps(repoPath: String) -> Result<HashMap<String, i64>, String> {
+//     github_repo::get_mod_timestamps(&repoPath).await
+// }
 
 #[tauri::command]
 async fn pull_repo(path: &str) -> Result<(), String> {
@@ -864,7 +865,7 @@ pub fn run() {
             list_directories,
             read_json_file,
             read_text_file,
-            get_mod_timestamps,
+            // get_mod_timestamps,
             get_mod_thumbnail,
         ])
         .run(tauri::generate_context!());

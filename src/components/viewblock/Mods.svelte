@@ -348,12 +348,12 @@
 				path: `${repoPath}/mods`,
 			});
 
-			const timestamps = await invoke<Record<string, number>>(
-				"get_mod_timestamps",
-				{
-					repoPath: repoPath,
-				},
-			);
+			// const timestamps = await invoke<Record<string, number>>(
+			// 	"get_mod_timestamps",
+			// 	{
+			// 		repoPath: repoPath,
+			// 	},
+			// );
 
 			const mods = (
 				await Promise.all(
@@ -373,8 +373,8 @@
 									modPath: dirName,
 								});
 
-							const lastUpdated =
-								timestamps[dirName] || Date.now();
+							// const lastUpdated =
+							// 	timestamps[dirName] || Date.now();
 
 							// Log category mapping for debugging
 
@@ -389,7 +389,7 @@
 								title: meta.title,
 								description,
 								image: imageData || "images/cover.jpg",
-								lastUpdated: lastUpdated.toString(),
+								// lastUpdated: lastUpdated.toString(),
 								colors: getRandomColorPair(),
 								categories: mappedCategories,
 								requires_steamodded:
