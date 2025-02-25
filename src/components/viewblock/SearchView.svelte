@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Clock, Download, Search, Trash2 } from "lucide-svelte";
+	import { Download, Search, Trash2 } from "lucide-svelte";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { onMount } from "svelte";
 	import {
@@ -13,7 +13,6 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
-	import { tick } from "svelte";
 
 	let searchQuery = $state("");
 	let searchResults = $state<Mod[]>([]);
@@ -60,22 +59,21 @@
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
-				(m) => m.name === mod.title,
+				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
+
 			if (!installedMod) {
 				console.error("Mod not found in installed mods");
 				return;
 			}
 
 			if (isCoreMod) {
-				// Get fresh dependencies list
+				// Get dependents
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
 
-				// Force UI update before showing dialog
-				await tick();
-
+				// Always show dialog for core mods, even if no dependents
 				uninstallDialogStore.set({
 					show: true,
 					modName: mod.title,
@@ -99,32 +97,42 @@
 	};
 
 	const installMod = async (mod: Mod) => {
-		const dependencies = [];
-		if (mod.requires_steamodded) dependencies.push("Steamodded");
-		if (mod.requires_talisman) dependencies.push("Talisman");
-
+		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
-			// Check if dependencies are installed before showing popup
+
+			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Steamodded",
 					})
 				: true;
+
+			// Check Talisman if required
 			const talismanInstalled = mod.requires_talisman
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Talisman",
 					})
 				: true;
 
-			// Only show popup if any required dependency is missing
-			if (!steamoddedInstalled || !talismanInstalled) {
+			// If any dependency is missing, show the RequiresPopup
+			if (
+				(mod.requires_steamodded && !steamoddedInstalled) ||
+				(mod.requires_talisman && !talismanInstalled)
+			) {
+
+				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
 					talisman: mod.requires_talisman && !talismanInstalled,
 				});
-				return;
+				return; // Stop installation
 			}
 		}
+
+		// Create dependencies list for the database
+		const dependencies = [];
+		if (mod.requires_steamodded) dependencies.push("Steamodded");
+		if (mod.requires_talisman) dependencies.push("Talisman");
 
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
@@ -135,7 +143,7 @@
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				dependencies: dependencies,
+				dependencies,
 			});
 
 			await getAllInstalledMods();
@@ -199,10 +207,8 @@
 		try {
 			const searchTerm = searchQuery.toLowerCase();
 			const results = searchIndex.search(searchTerm);
-			// console.log("Search results:", results); // Debug
 
 			searchResults = results.map((idx: number) => mods[idx]);
-			// console.log("Mapped results:", searchResults); // Debug
 		} catch (error) {
 			console.error("Search failed:", error);
 			searchResults = [];
@@ -214,6 +220,20 @@
 	function handleInput() {
 		handleSearch();
 	}
+
+	/* Later, for CSS
+	.tag {
+		display: flex;
+		align-items: center;
+		position: relative;
+		gap: 0.2rem;
+		padding: 0.15rem 0.3rem;
+		background: rgba(0, 0, 0, 0.7);
+		border-radius: 4px;
+		font-size: 0.9rem;
+		color: #f4eee0;
+	}
+*/
 </script>
 
 <div class="search-container">
@@ -255,10 +275,10 @@
 							draggable="false"
 						/>
 						<div class="tags">
-							<span class="tag updated">
-								<Clock size={13} />
-								{mod.lastUpdated}
-							</span>
+							<!-- <span class="tag updated"> -->
+							<!-- 	<Clock size={13} /> -->
+							<!-- 	{mod.lastUpdated} -->
+							<!-- </span> -->
 						</div>
 					</div>
 					<div class="mod-info">
@@ -421,18 +441,6 @@
 		right: 0.35rem;
 		display: flex;
 		gap: 0.5rem;
-	}
-
-	.tag {
-		display: flex;
-		align-items: center;
-		position: relative;
-		gap: 0.2rem;
-		padding: 0.15rem 0.3rem;
-		background: rgba(0, 0, 0, 0.7);
-		border-radius: 4px;
-		font-size: 0.9rem;
-		color: #f4eee0;
 	}
 
 	.mod-info {
