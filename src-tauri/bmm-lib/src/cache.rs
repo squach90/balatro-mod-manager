@@ -28,8 +28,8 @@ pub struct Mod {
     pub title: String,
     pub description: String,
     pub image: String,
-    #[serde(rename = "lastUpdated")]
-    pub last_updated: String,
+    // #[serde(rename = "lastUpdated")]
+    // pub last_updated: String,
     #[serde(rename = "categories")]
     pub categories: Vec<Category>,
     #[serde(rename = "colors")]
@@ -319,7 +319,7 @@ mod tests {
                 title: "Test Mod".into(),
                 description: "Test Description".into(),
                 image: "test.png".into(),
-                last_updated: "2024-01-01".into(),
+                // last_updated: "2024-01-01".into(),
                 categories: vec![Category::Content],
                 colors: ColorPair {
                     color1: "#fff".into(),

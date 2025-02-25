@@ -117,7 +117,7 @@ impl Database {
                 title: row.get(0)?,
                 description: row.get(1)?,
                 image: row.get(2)?,
-                last_updated: row.get(3)?,
+                // last_updated: row.get(3)?,
                 categories: serde_json::from_str(&categories)?,
                 colors: serde_json::from_str(&colors)?,
                 installed: row.get::<_, String>(6)?.parse().expect("Invalid boolean"),
@@ -141,7 +141,7 @@ impl Database {
             let colors = serde_json::to_string(&m.colors)?;
             tx.execute(
                 "INSERT INTO mod_cache (
-                    title, description, image, last_updated, categories, 
+                    title, description, image, categories, 
                     colors, installed, requires_steamodded, requires_talisman,
                     publisher, repo, download_url
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
@@ -149,7 +149,7 @@ impl Database {
                     m.title,
                     m.description,
                     m.image,
-                    m.last_updated,
+                    // m.last_updated,
                     serde_json::to_string(&m.categories)?,
                     colors,
                     m.installed.to_string(),
