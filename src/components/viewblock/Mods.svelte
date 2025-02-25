@@ -510,7 +510,8 @@
 		switch ($currentCategory) {
 			case "Content":
 				return (
-					mod.categories.length === 0 ||
+					mod.categories.includes(Category.Content) ||
+					mod.categories.some((cat) => cat === 0) || // Assuming Content is enum value 0
 					mod.title.toLowerCase().includes("content") ||
 					(typeof mod.description === "string" &&
 						mod.description.toLowerCase().includes("new content"))
