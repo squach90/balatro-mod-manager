@@ -1,34 +1,38 @@
-# Define OS-specific variables
-CLEAR_SCREEN := if os() == "windows" { "cls" } else { "clear" }
-MACOS_TARGET_ENV := if os() != "windows" { "MACOSX_DEPLOYMENT_TARGET=11.0" } else { "" }
-TARGET := if os() == "windows" { "x86_64-pc-windows-msvc" } else { "universal-apple-darwin" }
+# Define OS-specific variables that work everywhere
+macos_target_env := if os() != "windows" { "MACOSX_DEPLOYMENT_TARGET=11.0" } else { "" }
+target := if os() == "windows" { "x86_64-pc-windows-msvc" } else { "universal-apple-darwin" }
+
+# Clear screen function that works on all platforms
+clear:
+    #!/usr/bin/env sh
+    if [ "{{os()}}" = "windows" ]; then
+        cmd.exe /c cls
+    else
+        clear
+    fi
 
 # Debug target
-debug:
-    {{CLEAR_SCREEN}}
-    @echo ""
+debug: clear
+    @echo
     cargo tauri dev
 
 # Platform-specific release targets
-release-macos:
-    {{CLEAR_SCREEN}}
-    @echo ""
-    {{MACOS_TARGET_ENV}} cargo tauri build --target universal-apple-darwin --verbose
+release-macos: clear
+    @echo
+    {{macos_target_env}} cargo tauri build --target universal-apple-darwin --verbose
 
-release-windows:
-    {{CLEAR_SCREEN}}
-    @echo ""
+release-windows: clear
+    @echo
     cargo tauri build --target x86_64-pc-windows-msvc --verbose
 
 release-macos-production:
-    @echo ""
-    {{MACOS_TARGET_ENV}} APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)" cargo tauri build --target universal-apple-darwin --verbose
+    @echo
+    {{macos_target_env}} APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)" cargo tauri build --target universal-apple-darwin --verbose
 
 # Default release target
-release:
-    {{CLEAR_SCREEN}}
-    @echo ""
-    {{MACOS_TARGET_ENV}} cargo tauri build --target {{TARGET}} --verbose
+release: clear
+    @echo
+    {{macos_target_env}} cargo tauri build --target {{target}} --verbose
 
 # Clean target
 clean:
