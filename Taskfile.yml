@@ -1,0 +1,74 @@
+version: '3'
+
+vars:
+  OS: '{{if eq .OS "windows"}}windows{{else}}unix{{end}}'
+  clear_screen:
+    sh: '[ "{{.OS}}" = "windows" ] && echo "cls" || echo "clear"'
+  remove_target:
+    sh: '[ "{{.OS}}" = "windows" ] && echo "echo." || echo "true"'
+  rust_target_windows: 'x86_64-pc-windows-msvc'
+  rust_target_macos: 'universal-apple-darwin'
+  macos_deployment: 'MACOSX_DEPLOYMENT_TARGET=11.0'
+
+tasks:
+  debug:
+    desc: Start development server
+    silent: true
+    cmds:
+      - '{{.clear_screen}}'
+      - '{{.remove_target}}'
+      - cargo tauri dev
+
+  release:
+    desc: Universal release build (platform-appropriate)
+    silent: true
+    cmds:
+      - '{{.clear_screen}}'
+      - '{{.remove_target}}'
+      - >
+        {{if eq .OS "windows" -}}
+        cargo tauri build --target {{.rust_target_windows}} --verbose
+        {{- else -}}
+        {{.macos_deployment}} cargo tauri build --target {{.rust_target_macos}} --verbose
+        {{- end}}
+
+  release-macos:
+    desc: Universal macOS build bundle
+    silent: true
+    cmds:
+      - '{{.clear_screen}}'
+      - '{{.remove_target}}'
+      - '{{.macos_deployment}} cargo tauri build --target {{.rust_target_macos}} --verbose'
+
+  release-windows:
+    desc: Windows production build
+    silent: true
+    cmds:
+      - '{{.clear_screen}}'
+      - '{{.remove_target}}'
+      - cargo tauri build --target {{.rust_target_windows}} --verbose
+
+  release-macos-production:
+    desc: Notarized macOS application bundle
+    silent: true
+    cmds:
+      - '{{.remove_target}}'
+      - >
+        {{.macos_deployment}} APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)"
+        cargo tauri build --target {{.rust_target_macos}} --verbose
+
+  clean:
+    desc: Purge build artifacts
+    cmds:
+      - echo "Nuclear cleaning protocol engaged..."
+      - cd ./src-tauri && cargo clean
+
+  # Bonus: iOS simulator build target 
+  release-ios-simulator:
+    desc: Universal iOS Simulator Bundle
+    platform: darwin
+    cmds:
+      - 'export SDKROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)'
+      - 'export CARGO_BUILD_TARGET=aarch64-apple-ios-sim'
+      - 'cargo build --target aarch64-apple-ios-sim --release'
+
