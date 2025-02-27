@@ -2,20 +2,17 @@ version: '3'
 
 vars:
   OS_TYPE: '{{if eq .OS "windows"}}windows{{else}}unix{{end}}'
-  CLEAR_CMD: '{{if eq .OS "windows"}}cls{{else}}clear{{end}}'
   NO_OUTPUT: '{{if eq .OS "windows"}}> nul{{else}}> /dev/null{{end}}'
 
 tasks:
   debug:
     desc: Start development server
     cmds:
-      - cmd: '{{.CLEAR_CMD}}'
       - cmd: cargo tauri dev
 
   release:
     desc: Platform-appropriate release build
     cmds:
-      - cmd: '{{.CLEAR_CMD}}'
       - cmd: |
           {{if eq .OS "windows" -}}
           cargo tauri build --target x86_64-pc-windows-msvc --verbose
@@ -27,13 +24,11 @@ tasks:
     desc: Universal macOS build (requires Darwin)
     platform: darwin
     cmds:
-      - cmd: '{{.CLEAR_CMD}}'
       - cmd: MACOSX_DEPLOYMENT_TARGET=11.0 cargo tauri build --target universal-apple-darwin --verbose
 
   release-windows:
     desc: Windows production build
     cmds:
-      - cmd: '{{.CLEAR_CMD}}'
       - cmd: cargo tauri build --target x86_64-pc-windows-msvc --verbose
 
   release-macos-production:
