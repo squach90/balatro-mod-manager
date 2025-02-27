@@ -1,6 +1,6 @@
 # Define OS-specific variables with PowerShell equivalents for Windows
 CLEAR_SCREEN := if os() == "windows" { "powershell -c Clear-Host" } else { "clear" }
-REMOVE_TARGET := if os() == "windows" { "powershell -c \"echo\"" } else { "true" }
+REMOVE_TARGET := if os() == "windows" { "powershell -c Write-Output ''" } else { "true" }
 MACOS_TARGET_ENV := if os() != "windows" { "MACOSX_DEPLOYMENT_TARGET=11.0" } else { "" }
 TARGET := if os() == "windows" { "x86_64-pc-windows-msvc" } else { "universal-apple-darwin" }
 
@@ -25,7 +25,7 @@ release-macos-production:
     {{REMOVE_TARGET}}
     {{MACOS_TARGET_ENV}} APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)" cargo tauri build --target universal-apple-darwin --verbose
 
-# Default release target - fixed to use variables instead of conditional logic
+# Default release target
 release:
     {{CLEAR_SCREEN}}
     {{REMOVE_TARGET}}
