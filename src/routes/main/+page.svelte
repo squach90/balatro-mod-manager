@@ -143,7 +143,7 @@
 
 	<div
 		class="content"
-		class:modal-open={!!$currentModView}
+		class:modal-open={!!$currentModView && currentSection == "mods"}
 		bind:this={contentElement}
 	>
 		{#if currentSection === "mods"}
