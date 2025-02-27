@@ -1,6 +1,6 @@
 # Define OS-specific variables with PowerShell equivalents for Windows
 CLEAR_SCREEN := if os() == "windows" { "powershell -c Clear-Host" } else { "clear" }
-REMOVE_TARGET := if os() == "windows" { "powershell -c Write-Output ''" } else { "true" }
+REMOVE_TARGET := if os() == "windows" { "echo." } else { "true" }
 MACOS_TARGET_ENV := if os() != "windows" { "MACOSX_DEPLOYMENT_TARGET=11.0" } else { "" }
 TARGET := if os() == "windows" { "x86_64-pc-windows-msvc" } else { "universal-apple-darwin" }
 
