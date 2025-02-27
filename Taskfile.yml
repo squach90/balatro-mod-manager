@@ -4,13 +4,14 @@ vars:
   OS_TYPE: '{{if eq .OS "windows"}}windows{{else}}unix{{end}}'
   NO_OUTPUT: '{{if eq .OS "windows"}}> nul{{else}}> /dev/null{{end}}'
 
-default: debug
-
 tasks:
   debug:
     desc: Start development server
     cmds:
       - cmd: cargo tauri dev
+
+  default:
+    - task: debug
 
   release:
     desc: Platform-appropriate release build
