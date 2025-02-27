@@ -4,6 +4,8 @@ vars:
   OS_TYPE: '{{if eq .OS "windows"}}windows{{else}}unix{{end}}'
   NO_OUTPUT: '{{if eq .OS "windows"}}> nul{{else}}> /dev/null{{end}}'
 
+default: debug
+
 tasks:
   debug:
     desc: Start development server
