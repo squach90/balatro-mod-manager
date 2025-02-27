@@ -2,14 +2,12 @@
 macos_target_env := if os() != "windows" { "MACOSX_DEPLOYMENT_TARGET=11.0" } else { "" }
 target := if os() == "windows" { "x86_64-pc-windows-msvc" } else { "universal-apple-darwin" }
 
+# Set shell to PowerShell on Windows
+set windows-shell := ["powershell.exe", "-c"]
+
 # Clear screen function that works on all platforms
 clear:
-    #!/usr/bin/env sh
-    if [ "{{os()}}" = "windows" ]; then
-        cmd.exe /c cls
-    else
-        clear
-    fi
+    @if ("{{os()}}" == "windows") { cls } else { clear }
 
 # Debug target
 debug: clear
