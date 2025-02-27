@@ -2,6 +2,7 @@ mod github_repo;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 use tauri::Manager;
 
 // use tauri::WebviewUrl;
@@ -37,6 +38,12 @@ fn map_error<T>(result: Result<T, AppError>) -> Result<T, String> {
 struct AppState {
     db: Mutex<Database>,
     discord_rpc: Mutex<DiscordRpcManager>,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct Payload {
+    args: Vec<String>,
+    cwd: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -829,6 +836,10 @@ pub fn run() {
     }));
 
     let result = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            app.emit("single-instance", Payload { args: argv, cwd })
+                .unwrap();
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
