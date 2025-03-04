@@ -976,6 +976,7 @@ pub fn run() {
             get_discord_rpc_status,
             set_discord_rpc_status,
             get_latest_steamodded_release,
+            set_discord_rpc_status
         ])
         .run(tauri::generate_context!());
 
