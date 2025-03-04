@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { fade } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
-	import { Download, Trash2, User, ArrowLeft, Github, X } from "lucide-svelte";
+	import {
+		Download,
+		Trash2,
+		User,
+		ArrowLeft,
+		Github,
+		X,
+	} from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { open } from "@tauri-apps/plugin-shell";
 	import {
@@ -9,6 +16,7 @@
 		installationStatus,
 		loadingStates2 as loadingStates,
 		uninstallDialogStore,
+		currentCategory, // Add this import
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -50,14 +58,14 @@
 	let modsArray: Mod[] = [];
 	modsStore.subscribe((m) => (modsArray = m));
 
-	let skipHistoryUpdate = false
-	let description: HTMLDivElement
+	let skipHistoryUpdate = false;
+	let description: HTMLDivElement;
 	// Links gets pushed down the array as another gets added. The oldest link is the last one in the array.
 	let history: internalModLinkData[] = $state([]);
 
 	const linkCache = new Map<string, internalModLinkData>();
 
-	let modView: HTMLDivElement
+	let modView: HTMLDivElement;
 
 	interface internalModLinkData {
 		isMod: boolean;
@@ -439,30 +447,28 @@
 	 * @returns success
 	 */
 	function setModViewByTitle(title: string): boolean {
-		const targetMod = modsArray.find(
-			(m) => m.title === title,
-		);
+		const targetMod = modsArray.find((m) => m.title === title);
 
 		if (targetMod) {
 			currentModView.set(targetMod);
-			skipHistoryUpdate = true
+			skipHistoryUpdate = true;
 
-			modView.scrollTo(0,0)
+			modView.scrollTo(0, 0);
 
-			return true
+			return true;
 		}
 
-		return false
+		return false;
 	}
 
 	$effect(() => {
 		if (skipHistoryUpdate) {
 			skipHistoryUpdate = false;
-			return
+			return;
 		}
 
-		history = [{isMod: true, modName: mod.title}]
-	});	
+		history = [{ isMod: true, modName: mod.title }];
+	});
 
 	async function processInternalModLinks() {
 		if (!description) return;
@@ -494,9 +500,9 @@
 						e.preventDefault();
 						e.stopPropagation();
 
-						history.unshift(result)
+						history.unshift(result);
 
-						console.log("hist:", history)
+						console.log("hist:", history);
 
 						setModViewByTitle(result.modName);
 
@@ -510,6 +516,7 @@
 	const isModInstalled = async (mod: Mod) => {
 		if (!mod) return false;
 
+		await getAllInstalledMods(); // Ensure we have fresh data
 		const status = installedMods.some((m) => m.name === mod.title);
 
 		// Update the store outside of the reactive context
@@ -547,15 +554,15 @@
 	function handleBack() {
 		if (history.length <= 1) {
 			currentModView.set(null);
-			return
+			return;
 		}
 
-		history.shift()
+		history.shift();
 
-		const modName = history[0].modName
-		setModViewByTitle(modName)
+		const modName = history[0].modName;
+		setModViewByTitle(modName);
 	}
-	
+
 	function handleClose() {
 		currentModView.set(null);
 	}
@@ -632,6 +639,20 @@
 	onDestroy(async () => {
 		window.removeEventListener("auxclick", handleAuxClick);
 		cachedVersions.set({ steamodded: [], talisman: [] });
+
+		// Ensure installation status is updated before component unmounts
+		if ($currentCategory === "Installed Mods") {
+			await getAllInstalledMods();
+			for (const mod of modsArray) {
+				const isInstalled = installedMods.some(
+					(m) => m.name === mod.title,
+				);
+				installationStatus.update((s) => ({
+					...s,
+					[mod.title]: isInstalled,
+				}));
+			}
+		}
 	});
 </script>
 
@@ -654,10 +675,14 @@
 				<button class="back-button" onclick={handleBack}>
 					<ArrowLeft size={20} /> <span>Back</span>
 				</button>
-	
+
 				{#if history.length > 1}
-					<button transition:fade={{duration: 300, easing: cubicOut}} onclick={handleClose} class='close-button'>
-						<X size={20}/>
+					<button
+						transition:fade={{ duration: 300, easing: cubicOut }}
+						onclick={handleClose}
+						class="close-button"
+					>
+						<X size={20} />
 					</button>
 				{/if}
 			</div>
@@ -1008,8 +1033,8 @@
 
 	.header-container {
 		position: absolute;
-		top:0;
-		left:0;
+		top: 0;
+		left: 0;
 		height: 100%;
 		width: 100%;
 
@@ -1069,7 +1094,7 @@
 	}
 
 	.close-button:hover {
-		scale: 1.10;
+		scale: 1.1;
 		background: rgba(244, 238, 224, 0.2);
 	}
 
@@ -1219,7 +1244,7 @@
 			max-width: 100%;
 			box-sizing: border-box;
 		}
-		
+
 		.right-column {
 			display: flex;
 			flex-direction: column;
