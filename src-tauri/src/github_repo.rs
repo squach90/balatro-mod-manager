@@ -7,7 +7,7 @@ use std::path::PathBuf;
 //
 
 // const CURRENT_BRANCH: &str = "main";
-const CURRENT_BRANCH: &str = "98-implement-version-parameter";
+const CURRENT_BRANCH: &str = "main";
 
 // Helper function to extract repo owner and name from URL
 pub fn parse_github_url(url: &str) -> Option<(String, String)> {
