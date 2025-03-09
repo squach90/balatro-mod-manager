@@ -10,7 +10,7 @@
     "npm:@tauri-apps/plugin-dialog@^2.2.0": "2.2.0",
     "npm:@tauri-apps/plugin-fs@^2.2.0": "2.2.0",
     "npm:@tauri-apps/plugin-shell@^2.2.0": "2.2.0",
-    "npm:@types/flexsearch@~0.7.6": "0.7.6",
+    "npm:@types/flexsearch@~0.7.42": "0.7.42",
     "npm:@types/lodash@4.17.16": "4.17.16",
     "npm:axios@^1.8.2": "1.8.2",
     "npm:flexsearch@~0.7.43": "0.7.43",
@@ -319,8 +319,11 @@
     "@types/estree@1.0.6": {
       "integrity": "sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw=="
     },
-    "@types/flexsearch@0.7.6": {
-      "integrity": "sha512-H5IXcRn96/gaDmo+rDl2aJuIJsob8dgOXDqf8K0t8rWZd1AFNaaspmRsElESiU+EWE33qfbFPgI0OC/B1g9FCA=="
+    "@types/flexsearch@0.7.42": {
+      "integrity": "sha512-FdKaw3dPgcCvqU9w8SGgqx8PrxFF2EKySRhEj1nc45HNe/2cBLff3pF52C67hzeUbNhq49t7XRIIibBd41vcIg==",
+      "dependencies": [
+        "flexsearch"
+      ]
     },
     "@types/lodash@4.17.16": {
       "integrity": "sha512-HX7Em5NYQAXKW+1T+FiuG27NGwzJfCX3s1GjOa7ujxZa52kjJLOr4FUxT+giF6Tgxv1e+/czV/iTtBw27WTU9g=="
@@ -713,7 +716,7 @@
         "npm:@tauri-apps/plugin-dialog@^2.2.0",
         "npm:@tauri-apps/plugin-fs@^2.2.0",
         "npm:@tauri-apps/plugin-shell@^2.2.0",
-        "npm:@types/flexsearch@~0.7.6",
+        "npm:@types/flexsearch@~0.7.42",
         "npm:@types/lodash@4.17.16",
         "npm:axios@^1.8.2",
         "npm:flexsearch@~0.7.43",
