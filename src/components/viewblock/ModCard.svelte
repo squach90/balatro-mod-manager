@@ -1,12 +1,16 @@
 <script lang="ts">
 	import type { Mod } from "../../stores/modStore";
-	import { Download, Trash2 } from "lucide-svelte";
+	import { Download, Trash2, RefreshCw } from "lucide-svelte";
 	import {
 		installationStatus,
 		loadingStates2 as loadingStates,
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
+	import { writable } from "svelte/store";
+
+	// Store to track which mods have updates available
+	const updateAvailable = writable<Record<string, boolean>>({});
 
 	interface Props {
 		mod: Mod;
@@ -17,8 +21,38 @@
 
 	let { mod, oninstallclick, onuninstallclick, onmodclick }: Props = $props();
 
+	// Check if an update is available when component mounts
+	$effect(() => {
+		checkForUpdate(mod.title);
+	});
+
+	async function checkForUpdate(modName: string) {
+		try {
+			const hasUpdate = await invoke<boolean>("mod_update_available", {
+				modName,
+			});
+
+			updateAvailable.update((updates) => ({
+				...updates,
+				[modName]: hasUpdate,
+			}));
+		} catch (error) {
+			console.error("Failed to check for updates:", error);
+		}
+	}
+
 	function installMod(e: Event) {
 		e.stopPropagation();
+		if (mod.title.toLowerCase() === "steamodded") {
+			fetchAndInstallLatestSteamodded();
+		} else if (oninstallclick) {
+			oninstallclick(mod);
+		}
+	}
+
+	function updateMod(e: Event) {
+		e.stopPropagation();
+		// Reuse the install logic but for updating
 		if (mod.title.toLowerCase() === "steamodded") {
 			fetchAndInstallLatestSteamodded();
 		} else if (oninstallclick) {
@@ -67,29 +101,22 @@
 				name: mod.title,
 				path: installedPath,
 				dependencies: mod.requires_steamodded ? ["Steamodded"] : [],
+				currentVersion: mod.version || "",
 			});
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+
+			// After installing/updating, reset update status
+			updateAvailable.update((updates) => ({
+				...updates,
+				[mod.title]: false,
+			}));
 		} catch (error) {
 			console.error("Failed to install mod:", error);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	}
-
-	/* Later, for CSS
-		.tag {
-			display: flex;
-			align-items: center;
-			position: relative;
-			gap: 0.2rem;
-			padding: 0.15rem 0.3rem;
-			background: rgba(0, 0, 0, 0.7);
-			border-radius: 4px;
-			font-size: 0.9rem;
-			color: #f4eee0;
-		}
-	*/
 </script>
 
 <div
@@ -118,20 +145,37 @@
 	</div>
 
 	<div class="button-container">
-		<button
-			class="download-button"
-			class:installed={$installationStatus[mod.title]}
-			disabled={$installationStatus[mod.title] ||
-				$loadingStates[mod.title]}
-			onclick={installMod}
-		>
-			{#if $loadingStates[mod.title]}
-				<div class="spinner"></div>
-			{:else}
-				<Download size={18} />
-				{$installationStatus[mod.title] ? "Installed" : "Download"}
-			{/if}
-		</button>
+		{#if $installationStatus[mod.title] && $updateAvailable[mod.title]}
+			<!-- Update button (when installed and update available) -->
+			<button
+				class="update-button"
+				onclick={updateMod}
+				disabled={$loadingStates[mod.title]}
+			>
+				{#if $loadingStates[mod.title]}
+					<div class="spinner"></div>
+				{:else}
+					<RefreshCw size={18} />
+					Update Mod
+				{/if}
+			</button>
+		{:else}
+			<!-- Regular download/installed button -->
+			<button
+				class="download-button"
+				class:installed={$installationStatus[mod.title]}
+				disabled={$installationStatus[mod.title] ||
+					$loadingStates[mod.title]}
+				onclick={installMod}
+			>
+				{#if $loadingStates[mod.title]}
+					<div class="spinner"></div>
+				{:else}
+					<Download size={18} />
+					{$installationStatus[mod.title] ? "Installed" : "Download"}
+				{/if}
+			</button>
+		{/if}
 
 		{#if $installationStatus[mod.title]}
 			<button
@@ -245,22 +289,44 @@
 		width: calc(100% - 2rem);
 	}
 
-	.download-button {
+	.download-button,
+	.update-button {
 		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 0.75rem;
-		background: #56a786;
-		color: #f4eee0;
 		border: none;
-		outline: #459373 solid 2px;
 		border-radius: 4px;
 		font-family: "M6X11", sans-serif;
 		font-size: 1rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		/* Add these properties to prevent resizing */
+		min-height: 42px; /* Set explicit height */
+		position: relative; /* For absolute positioning of spinner */
+	}
+
+	.download-button {
+		background: #56a786;
+		color: #f4eee0;
+		outline: #459373 solid 2px;
+	}
+
+	.update-button {
+		background: #3498db;
+		color: #f4eee0;
+		outline: #2980b9 solid 2px;
+	}
+
+	.update-button:hover {
+		background: #5dade2; /* Lighter blue on hover */
+		transform: translateY(-2px);
+	}
+
+	.update-button:active {
+		transform: translateY(1px);
 	}
 
 	.download-button:hover:not(.installed) {
@@ -292,7 +358,17 @@
 		transition: all 0.2s ease;
 	}
 
-	.download-button:disabled {
+	.delete-button:hover {
+		background: #d4524a;
+		transform: translateY(-2px);
+	}
+
+	.delete-button:active {
+		transform: translateY(1px);
+	}
+
+	.download-button:disabled,
+	.update-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
 	}
@@ -300,6 +376,27 @@
 	@media (max-width: 1160px) {
 		.mod-card {
 			width: 100%;
+		}
+	}
+
+	.spinner {
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top: 2px solid #ffffff;
+		border-radius: 50%;
+		width: 16px;
+		height: 16px;
+		animation: spin 1s linear infinite;
+		/* Center the spinner while maintaining button size */
+		margin: 0 auto;
+		display: inline-block;
+	}
+
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
 		}
 	}
 </style>
