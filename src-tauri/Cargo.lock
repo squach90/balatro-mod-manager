@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "balatro-mod-manager"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "assert_fs",
  "base64 0.22.1",
