@@ -20,6 +20,19 @@ export interface Mod {
 	installed: boolean;
 }
 
+export interface LocalMod {
+	name: string;
+	id: string;
+	author: string[];
+	description: string;
+	prefix: string;
+	version?: string;
+	path: string;
+	dependencies: string[];
+	conflicts: string[];
+	is_tracked: boolean;
+}
+
 export enum SortOption {
 	NameAsc = "name_asc",
 	NameDesc = "name_desc",

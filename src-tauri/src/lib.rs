@@ -27,6 +27,7 @@ use bmm_lib::discord_rpc::DiscordRpcManager;
 use bmm_lib::errors::AppError;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
+use bmm_lib::local_mod_detection;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
 
@@ -328,42 +329,8 @@ async fn set_lovely_console_status(
 }
 
 #[tauri::command]
-async fn check_untracked_mods(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
-
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    let installed_mods = db.get_installed_mods()?;
-
-    let entries = match std::fs::read_dir(&mod_dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => {
-            return Err(AppError::FileRead {
-                path: mod_dir,
-                source: e.to_string(),
-            }
-            .to_string())
-        }
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(name) if !name.contains("lovely") => name,
-            _ => continue,
-        };
-
-        if !installed_mods.iter().any(|m| m.path.contains(name)) {
-            return Ok(true);
-        }
-    }
-
+async fn check_untracked_mods() -> Result<bool, String> {
+    // Always return false since we're not removing untracked files
     Ok(false)
 }
 
@@ -640,51 +607,15 @@ async fn force_remove_mod(
     map_error(db.remove_installed_mod(&name))
 }
 
+// Update the reindex_mods function to only clean database entries
 #[tauri::command]
 async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
-
     let db = state
         .db
         .lock()
         .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {}", e)))?;
 
-    // Phase 1: Filesystem cleanup
-    let mut files_removed = 0;
-    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
-
-    match std::fs::read_dir(&mod_dir) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let name = match path.file_name().and_then(|n| n.to_str()) {
-                    Some(n) if !n.contains("lovely") => n,
-                    _ => continue,
-                };
-
-                if !installed_mods.iter().any(|m| m.path.contains(name)) {
-                    match entry.file_type() {
-                        Ok(ft) => {
-                            if ft.is_dir() {
-                                std::fs::remove_dir_all(&path).ok();
-                            } else if ft.is_file() {
-                                std::fs::remove_file(&path).ok();
-                            }
-                            files_removed += 1;
-                        }
-                        Err(_) => continue,
-                    }
-                }
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.to_string()),
-    }
-
-    // Phase 2: Database cleanup
+    // Database cleanup only - don't touch the filesystem
     let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
     let mut to_remove = Vec::new();
 
@@ -700,7 +631,46 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
             .map_err(|e| e.to_string())?;
     }
 
-    Ok((files_removed, cleaned_entries))
+    // Return 0 for files_removed since we don't remove any files
+    Ok((0, cleaned_entries))
+}
+
+#[tauri::command]
+async fn get_untracked_mods(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    local_mod_detection::get_untracked_mods(&db)
+}
+
+#[tauri::command]
+async fn register_detected_mod(
+    state: tauri::State<'_, AppState>,
+    detected_mod: local_mod_detection::DetectedMod,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    local_mod_detection::register_detected_mod(&db, &detected_mod)
+}
+
+#[tauri::command]
+async fn get_detected_local_mods(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    local_mod_detection::get_all_detected_mods(&db)
+}
+
+#[tauri::command]
+async fn register_local_mod(
+    state: tauri::State<'_, AppState>,
+    mod_name: String,
+    mod_path: String,
+    dependencies: Vec<String>,
+    version: Option<String>,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.add_installed_mod(&mod_name, &mod_path, &dependencies, version)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1036,6 +1006,10 @@ pub fn run() {
             get_latest_steamodded_release,
             set_discord_rpc_status,
             mod_update_available,
+            get_untracked_mods,
+            register_detected_mod,
+            get_detected_local_mods,
+            register_local_mod
         ])
         .run(tauri::generate_context!());
 

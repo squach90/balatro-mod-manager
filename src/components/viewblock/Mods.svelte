@@ -25,7 +25,7 @@
 		currentCategory,
 		uninstallDialogStore,
 	} from "../../stores/modStore";
-	import type { Mod } from "../../stores/modStore";
+	import type { LocalMod, Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
 	import {
 		modsStore,
@@ -41,6 +41,7 @@
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
 	import ModCard from "./ModCard.svelte";
+	import LocalModCard from "./LocalModCard.svelte";
 
 	const loadingDots = writable(0);
 
@@ -63,6 +64,38 @@
 	interface DependencyCheck {
 		steamodded: boolean;
 		talisman: boolean;
+	}
+
+	let localMods: LocalMod[] = [];
+	let isLoadingLocalMods = false;
+
+	async function getLocalMods() {
+		if ($currentCategory === "Installed Mods") {
+			isLoadingLocalMods = true;
+			try {
+				localMods = await invoke("get_detected_local_mods");
+			} catch (error) {
+				console.error("Failed to load local mods:", error);
+				addMessage(`Failed to load local mods: ${error}`, "error");
+				localMods = [];
+			} finally {
+				isLoadingLocalMods = false;
+			}
+		}
+	}
+
+	function handleModRegistered(mod: LocalMod) {
+		// Update the mod to show it's now tracked
+		localMods = localMods.map((m) =>
+			m.id === mod.id ? { ...m, is_tracked: true } : m,
+		);
+
+		// Refresh installed mods
+		refreshInstalledMods();
+	}
+
+	$: if ($currentCategory === "Installed Mods") {
+		getLocalMods();
 	}
 
 	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
@@ -777,6 +810,26 @@
 					</div>
 				</div>
 				<div class="mods-scroll-container default-scrollbar">
+					{#if $currentCategory === "Installed Mods" && localMods.length > 0}
+						<div class="section-header">
+							<h3>Local Mods</h3>
+							<p>These mods were installed manually</p>
+						</div>
+
+						<div class="mods-grid local-mods-grid">
+							{#each localMods.filter((mod) => !mod.is_tracked) as mod}
+								<LocalModCard
+									{mod}
+									onRegister={handleModRegistered}
+								/>
+							{/each}
+						</div>
+
+						<div class="section-header">
+							<h3>Installed Mods</h3>
+							<p>These mods are managed by Balatro Mod Manager</p>
+						</div>
+					{/if}
 					<div class="mods-grid">
 						{#each paginatedMods as mod}
 							<ModCard
