@@ -211,7 +211,8 @@
 </script>
 
 <div class="mod-card" style="--bg-color: {bgColor}; --bg-color-2: {bgColor2};">
-	<div class="blur-bg"></div>
+	<!-- Dark overlay to improve readability -->
+	<div class="overlay"></div>
 
 	{#if mod.catalog_match}
 		<div class="catalog-badge">
@@ -319,17 +320,17 @@
 		);
 	}
 
-	.blur-bg {
+	/* Dark overlay for better text readability */
+	.overlay {
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		bottom: 0;
-		backdrop-filter: blur(5px);
-		-webkit-backdrop-filter: blur(5px);
-		background-color: rgba(0, 0, 0, 0.2);
+		background-color: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(1px);
+		-webkit-backdrop-filter: blur(1px);
 		z-index: 1;
-		pointer-events: none;
 	}
 
 	.catalog-badge {
@@ -351,8 +352,7 @@
 
 	.mod-card:hover {
 		animation: stripe-slide-up 1.5s linear infinite;
-		transform: translateY(-4px);
-		box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+		scale: 1.05;
 	}
 
 	@keyframes stripe-slide-up {
@@ -408,7 +408,6 @@
 	}
 
 	/* Button container styling */
-
 	.button-container {
 		display: flex;
 		gap: 0.5rem;
@@ -418,6 +417,7 @@
 		width: calc(100% - 2rem);
 		z-index: 2;
 	}
+
 	/* Button styles */
 	.delete-button {
 		flex: 1;
@@ -473,7 +473,7 @@
 
 	.install-button:not(:disabled):active {
 		transform: translateY(1px);
-		background: #63b897; /* Keep consistent with hover color scheme */
+		background: #63b897;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
@@ -492,21 +492,21 @@
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
-		background-color: #4caf50; /* Green color */
+		background-color: #4caf50;
 		color: white;
 		border: none;
 		outline: #3d8b40 solid 2px;
-		flex-shrink: 0; /* Prevent button from shrinking */
+		flex-shrink: 0;
 	}
 
 	.folder-button:hover {
-		background-color: #45a049; /* Darker green on hover */
-		transform: translateY(-1px);
+		background-color: #45a049;
+		transform: translateY(-2px);
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 	}
 
 	.folder-button:active {
-		transform: translateY(0);
+		transform: translateY(1px);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
@@ -520,39 +520,33 @@
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
-		background-color: #c14139; /* Red color */
+		background-color: #c14139;
 		color: white;
 		border: none;
 		outline: #a13029 solid 2px;
-		flex-shrink: 0; /* Prevent button from shrinking */
+		flex-shrink: 0;
 	}
 
 	.trash-button:hover {
-		background-color: #d4524a; /* Darker red on hover */
-		transform: translateY(-1px);
+		background-color: #d4524a;
+		transform: translateY(-2px);
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 	}
 
 	.trash-button:active {
-		transform: translateY(0);
+		transform: translateY(1px);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.install-button:hover:not(:disabled) {
+		background: #63b897;
 		transform: translateY(-2px);
 		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
 	}
 
-	/* Added specific active state that overrides hover */
-	.install-button:not(:disabled):active {
-		transform: translateY(1px);
-		background: #4d9678;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-	}
-
 	.smaller-text {
-		font-size: 0.85rem; /* Smaller font size */
-		font-weight: 500; /* Slightly bolder to maintain readability */
+		font-size: 0.85rem;
+		font-weight: 500;
 	}
 
 	/* Spinner for loading state */
