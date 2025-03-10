@@ -30,6 +30,87 @@ pub struct CatalogMatch {
     pub version: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ThunderstoreManifest {
+    name: String,
+    #[serde(rename = "version_number")]
+    version_number: Option<String>,
+    #[serde(rename = "website_url")]
+    website_url: Option<String>,
+    description: Option<String>,
+    dependencies: Option<Vec<String>>,
+}
+
+// Add this function to parse Thunderstore manifest files
+fn parse_thunderstore_manifest(
+    manifest_path: &Path,
+    mod_path: &Path,
+) -> Result<Option<DetectedMod>, String> {
+    let file = match File::open(manifest_path) {
+        Ok(file) => file,
+        Err(e) => {
+            log::error!(
+                "Failed to open manifest file {}: {}",
+                manifest_path.display(),
+                e
+            );
+            return Ok(None);
+        }
+    };
+
+    let manifest: ThunderstoreManifest = match serde_json::from_reader(file) {
+        Ok(json) => json,
+        Err(e) => {
+            log::error!(
+                "Failed to parse manifest file {}: {}",
+                manifest_path.display(),
+                e
+            );
+            return Ok(None);
+        }
+    };
+
+    // Special handling for Steamodded manifest
+    if manifest.name.to_lowercase() == "steamodded" {
+        return Ok(Some(DetectedMod {
+            name: "Steamodded".to_string(),
+            id: "Steamodded".to_string(),
+            author: vec!["Steamodded Team".to_string()],
+            description: manifest
+                .description
+                .unwrap_or_else(|| "A Balatro Modding Framework".to_string()),
+            prefix: "smod".to_string(),
+            version: manifest.version_number,
+            path: mod_path.to_string_lossy().to_string(),
+            dependencies: manifest.dependencies.unwrap_or_default(),
+            conflicts: Vec::new(),
+            catalog_match: None,
+            is_duplicate: false,
+        }));
+    }
+
+    // For other manifests, create a generic mod entry
+    Ok(Some(DetectedMod {
+        name: manifest.name.clone(),
+        id: manifest.name.replace(" ", ""),
+        author: vec!["Unknown".to_string()], // Thunderstore manifest doesn't specify authors directly
+        description: manifest
+            .description
+            .unwrap_or_else(|| format!("Mod found in {}", mod_path.display())),
+        prefix: if manifest.name.len() >= 4 {
+            manifest.name[0..4].to_lowercase()
+        } else {
+            manifest.name.to_lowercase()
+        },
+        version: manifest.version_number,
+        path: mod_path.to_string_lossy().to_string(),
+        dependencies: manifest.dependencies.unwrap_or_default(),
+        conflicts: Vec::new(),
+        catalog_match: None,
+        is_duplicate: false,
+    }))
+}
+
 pub fn detect_manual_mods(
     db: &Database,
     cached_catalog_mods: &[cache::Mod],
@@ -115,8 +196,42 @@ fn find_catalog_match(
     local_mod: &DetectedMod,
     catalog_mods: &[cache::Mod],
 ) -> Option<CatalogMatch> {
-    // 1. Try exact ID match (most specific)
+    // Special case for Steamodded
     let local_id_lower = local_mod.id.to_lowercase();
+    let local_name_lower = local_mod.name.to_lowercase();
+
+    // Get directory name for additional checking
+    let dir_name_lower = Path::new(&local_mod.path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    // Enhanced Steamodded detection
+    if local_id_lower == "steamodded" || 
+       local_name_lower == "steamodded" ||
+       local_id_lower.contains("steamodded") || 
+       local_name_lower.contains("steamodded") ||
+       local_id_lower == "smods" || 
+       local_name_lower == "smods" ||
+       dir_name_lower.starts_with("smods") ||  // Match anything starting with "smods"
+       dir_name_lower.contains("steamodded")
+    {
+        // Find Steamodded in the catalog
+        for catalog_mod in catalog_mods {
+            if catalog_mod.title.to_lowercase() == "steamodded" {
+                return Some(CatalogMatch {
+                    title: catalog_mod.title.clone(),
+                    catalog_id: catalog_mod.title.clone(),
+                    download_url: catalog_mod.download_url.clone(),
+                    version: catalog_mod.version.clone(),
+                });
+            }
+        }
+    }
+
+    // Rest of the function remains the same...
+    // 1. Try exact ID match (most specific)
     for catalog_mod in catalog_mods {
         let catalog_id_lower = catalog_mod.title.replace(" ", "").to_lowercase();
         if catalog_id_lower == local_id_lower {
@@ -125,7 +240,6 @@ fn find_catalog_match(
     }
 
     // 2. Try exact name match
-    let local_name_lower = local_mod.name.to_lowercase();
     for catalog_mod in catalog_mods {
         let catalog_name_lower = catalog_mod.title.to_lowercase();
         if catalog_name_lower == local_name_lower {
@@ -133,7 +247,7 @@ fn find_catalog_match(
         }
     }
 
-    // 3. Try directory name match
+    // 3. Try directory name match (already handled above for Steamodded)
     if let Some(dir_name) = Path::new(&local_mod.path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -423,6 +537,65 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("Invalid directory name: {}", mod_path.display()))?;
 
+    // Check for Thunderstore manifest.json first
+    let manifest_path = mod_path.join("manifest.json");
+    if manifest_path.exists() {
+        if let Some(detected_mod) = parse_thunderstore_manifest(&manifest_path, mod_path)? {
+            // If this is Steamodded, return it immediately
+            if detected_mod.name.to_lowercase() == "steamodded" {
+                return Ok(Some(detected_mod));
+            }
+
+            // For other mods, we'll store it and continue checking other formats
+            // in case there's a more detailed mod definition
+            let thunderstore_mod = detected_mod;
+
+            // Check for other JSON files that might have more information
+            let json_files = scan_for_json_files(mod_path)?;
+            for json_path in &json_files {
+                // Skip the manifest we already processed
+                if json_path == &manifest_path {
+                    continue;
+                }
+
+                if let Some(detected_mod) = parse_mod_json(json_path, mod_path)? {
+                    return Ok(Some(detected_mod));
+                }
+            }
+
+            // If we didn't find a better mod definition, use the Thunderstore one
+            return Ok(Some(thunderstore_mod));
+        }
+    }
+
+    // Special handling for Steamodded with various folder names
+    let dir_name_lower = dir_name.to_lowercase();
+    if dir_name_lower == "steamodded" || 
+       dir_name_lower == "smods" || 
+       dir_name_lower == "smods_main" ||
+       dir_name_lower.starts_with("smods-") ||  // Catch version-specific folders
+       dir_name_lower.contains("steamodded")
+    {
+        // Check for any JSON/Lua files that might confirm this is Steamodded
+        if is_likely_steamodded(mod_path)? {
+            // Set up a basic Steamodded detected mod
+            return Ok(Some(DetectedMod {
+                name: "Steamodded".to_string(),
+                id: "Steamodded".to_string(),
+                author: vec!["Steamodded Team".to_string()],
+                description: "Balatro Mod Loader".to_string(),
+                prefix: "smod".to_string(),
+                version: None, // Version will be filled from catalog match if available
+                path: mod_path.to_string_lossy().to_string(),
+                dependencies: Vec::new(),
+                conflicts: Vec::new(),
+                catalog_match: None,
+                is_duplicate: false,
+            }));
+        }
+    }
+
+    // Continue with regular detection...
     // Scan for all JSON files and check if any of them are valid mod configs
     let json_files = scan_for_json_files(mod_path)?;
     for json_path in json_files {
@@ -495,6 +668,41 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
 
     // No mod configuration found
     Ok(None)
+}
+
+// Helper function to check if a directory is likely to be Steamodded
+fn is_likely_steamodded(path: &Path) -> Result<bool, String> {
+    // Look for typical Steamodded files
+    let steamodded_indicators = [
+        "api.lua",
+        "smods.lua",
+        "loader.lua",
+        "init.lua",
+        "manifest.json",
+    ];
+
+    for indicator in &steamodded_indicators {
+        if path.join(indicator).exists() {
+            return Ok(true);
+        }
+    }
+
+    // Check subdirectories for "localization" folder which is common in Steamodded
+    if path.join("localization").exists() && path.join("localization").is_dir() {
+        return Ok(true);
+    }
+
+    // Look for common Steamodded directories
+    if path.join("data").exists()
+        && path.join("data").is_dir()
+        && path.join("lib").exists()
+        && path.join("lib").is_dir()
+    {
+        return Ok(true);
+    }
+
+    // Not enough evidence
+    Ok(false)
 }
 
 /// JSON schema for mod configuration

@@ -570,7 +570,7 @@
 
 						history.unshift(result);
 
-						console.log("hist:", history);
+						// console.log("hist:", history);
 
 						setModViewByTitle(result.modName);
 
