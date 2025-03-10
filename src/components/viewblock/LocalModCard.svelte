@@ -6,7 +6,8 @@
 	export let mod: any;
 	export let onUninstall: (mod: any) => void;
 
-	async function uninstallMod() {
+	async function uninstallMod(e: Event) {
+		e.stopPropagation(); // Prevent card click if we have one
 		try {
 			await invoke("delete_manual_mod", {
 				path: mod.path,
@@ -78,8 +79,8 @@
 		</div>
 	</div>
 
-	<div class="actions">
-		<button class="uninstall-button" on:click={uninstallMod}>
+	<div class="button-container">
+		<button class="delete-button" title="Remove Mod" onclick={uninstallMod}>
 			<Trash2 size={18} />
 			Remove
 		</button>
@@ -133,6 +134,12 @@
 		box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 	}
 
+	.mod-card:hover .blur-bg {
+		backdrop-filter: blur(3px);
+		-webkit-backdrop-filter: blur(3px);
+		background-color: rgba(0, 0, 0, 0.1);
+	}
+
 	@keyframes stripe-slide-up {
 		0% {
 			background-position: 0 0;
@@ -178,44 +185,42 @@
 		margin-top: 0.3rem;
 	}
 
-	.actions {
+	/* Match the ModCard button styling */
+	.button-container {
 		display: flex;
-		padding: 1rem;
-		background: rgba(0, 0, 0, 0.3);
-		border-top: 1px solid rgba(244, 238, 224, 0.3);
-		justify-content: center;
-		position: relative;
+		gap: 0.5rem;
+		position: absolute;
+		bottom: 1rem;
+		left: 1rem;
+		width: calc(100% - 2rem);
 		z-index: 2;
 	}
 
-	.uninstall-button {
+	.delete-button {
+		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
+		padding: 0.75rem;
 		background: #c14139;
 		color: #f4eee0;
 		border: none;
 		outline: #a13029 solid 2px;
 		border-radius: 4px;
-		padding: 0.75rem 1.5rem;
-		font-family: "M6X11", sans-serif;
-		font-size: 1.1rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
-		min-width: 140px;
-		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
 	}
 
-	.uninstall-button:hover {
+	.delete-button:hover {
 		background: #d4524a;
 		transform: translateY(-2px);
-		box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
 	}
 
-	.uninstall-button:active {
+	.delete-button:active {
 		transform: translateY(1px);
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 	}
 
 	@media (max-width: 1160px) {
