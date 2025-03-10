@@ -388,6 +388,7 @@
 		-webkit-line-clamp: 3;
 		line-clamp: 3;
 		-webkit-box-orient: vertical;
+		padding: 0 0.1rem;
 	}
 
 	.mod-meta {
