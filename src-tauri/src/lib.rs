@@ -646,28 +646,6 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
 }
 
 #[tauri::command]
-async fn get_untracked_mods(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    local_mod_detection::get_untracked_mods(&db)
-}
-
-#[tauri::command]
-async fn get_manual_mods(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-
-    // Get cached catalog mods using the cache module
-    let cached_mods = match cache::load_cache() {
-        Ok(Some((mods, _))) => mods,
-        _ => Vec::new(), // Empty vector if no cache
-    };
-
-    local_mod_detection::detect_manual_mods(&db, &cached_mods)
-}
-#[tauri::command]
 async fn delete_manual_mod(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
 
@@ -739,18 +717,6 @@ async fn get_detected_local_mods(
     local_mod_detection::detect_manual_mods(&db, &cached_mods)
 }
 
-#[tauri::command]
-async fn register_local_mod(
-    state: tauri::State<'_, AppState>,
-    mod_name: String,
-    mod_path: String,
-    dependencies: Vec<String>,
-    version: Option<String>,
-) -> Result<(), String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.add_installed_mod(&mod_name, &mod_path, &dependencies, version)
-        .map_err(|e| e.to_string())
-}
 
 #[tauri::command]
 async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
@@ -1262,10 +1228,7 @@ pub fn run() {
             get_latest_steamodded_release,
             set_discord_rpc_status,
             mod_update_available,
-            get_untracked_mods,
             get_detected_local_mods,
-            register_local_mod,
-            get_manual_mods,
             delete_manual_mod,
             backup_local_mod,
             restore_from_backup,
