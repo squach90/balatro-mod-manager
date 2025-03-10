@@ -42,6 +42,11 @@
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
 	import ModCard from "./ModCard.svelte";
 	import LocalModCard from "./LocalModCard.svelte";
+	import {
+		checkModInCache,
+		fetchCachedMods,
+		forceRefreshCache,
+	} from "../../stores/modCache";
 
 	const loadingDots = writable(0);
 
@@ -92,18 +97,16 @@
 		}
 	}
 
-	function handleModRegistered(mod: LocalMod) {
-		// Update the mod to show it's now tracked
-		localMods = localMods.map((m) =>
-			m.id === mod.id ? { ...m, is_tracked: true } : m,
-		);
-
-		// Refresh installed mods
-		refreshInstalledMods();
-	}
-
 	$: if ($currentCategory === "Installed Mods") {
 		getLocalMods();
+	}
+
+	async function checkIfModIsInstalled(mod: Mod) {
+		if (!mod?.title) return false;
+		// Use checkModInCache (from modCache.ts) which takes a string title
+		const status = await checkModInCache(mod.title);
+		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+		return status;
 	}
 
 	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
@@ -117,7 +120,7 @@
 
 	async function updateInstallStatus(mod: Mod | undefined) {
 		if (!mod) return;
-		const status: boolean = await isModInstalled(mod);
+		const status: boolean = await checkIfModIsInstalled(mod);
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
 	}
 
@@ -149,7 +152,7 @@
 			try {
 				await Promise.all(
 					$modsStore.map(async (mod) => {
-						const status = await isModInstalled(mod);
+						const status = await checkIfModIsInstalled(mod);
 						installationStatus.update((s) => ({
 							...s,
 							[mod.title]: status,
@@ -170,17 +173,7 @@
 
 	const getAllInstalledMods = async () => {
 		try {
-			const installed: InstalledMod[] = await invoke(
-				"get_installed_mods_from_db",
-			);
-			// fill the installed mods Array
-			installedMods = installed.map((mod) => {
-				return {
-					name: mod.name,
-					path: mod.path,
-					// collection_hash: mod.collection_hash,
-				};
-			});
+			installedMods = await fetchCachedMods();
 		} catch (error) {
 			console.error("Failed to get installed mods:", error);
 		}
@@ -296,14 +289,6 @@
 		}
 	};
 
-	const isModInstalled = async (mod: Mod) => {
-		if (!mod?.title) return false;
-		await getAllInstalledMods();
-		const status = installedMods.some((m) => m.name === mod.title);
-		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
-		return status;
-	};
-
 	interface ModMeta {
 		title: string;
 		"requires-steamodded": boolean;
@@ -341,68 +326,6 @@
 		}
 	}
 
-	let manualMods: any[] = [];
-	let isLoadingManualMods = false;
-
-	async function getManualMods() {
-		if ($currentCategory === "Installed Mods") {
-			isLoadingManualMods = true;
-			try {
-				manualMods = await invoke("get_manual_mods");
-			} catch (error) {
-				console.error("Failed to load manual mods:", error);
-				addMessage(`Failed to load manual mods: ${error}`, "error");
-				manualMods = [];
-			} finally {
-				isLoadingManualMods = false;
-			}
-		}
-	}
-
-	//
-	// async function getLastUpdated(repoUrl: string): Promise<string> {
-	// 	try {
-	// 		const [owner, repo] = repoUrl
-	// 			.replace("https://github.com/", "")
-	// 			.split("/");
-	//
-	// 		if (!owner || !repo) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const response = await fetch(
-	// 			`https://api.github.com/repos/${owner}/${repo}/commits/main`,
-	// 		);
-	//
-	// 		if (!response.ok) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const data = await response.json();
-	// 		if (!data?.commit?.committer?.date) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const commitDate = new Date(data.commit.committer.date);
-	// 		const currentDate = new Date();
-	// 		const diffTime = Math.abs(
-	// 			currentDate.getTime() - commitDate.getTime(),
-	// 		);
-	// 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-	//
-	// 		if (diffDays === 0) return "Today";
-	// 		if (diffDays === 1) return "Yesterday";
-	// 		if (diffDays < 7) return `${diffDays} days ago`;
-	// 		if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-	// 		if (diffDays < 365)
-	// 			return `${Math.floor(diffDays / 30)} months ago`;
-	// 		return `${Math.floor(diffDays / 365)} years ago`;
-	// 	} catch (error) {
-	// 		console.error("Failed to fetch last commit date:", error);
-	// 		return "Unknown";
-	// 	}
-	// }
-
 	async function fetchModDirectories(): Promise<Mod[]> {
 		try {
 			isLoading = true;
@@ -412,13 +335,6 @@
 			const modDirs = await invoke<string[]>("list_directories", {
 				path: `${repoPath}/mods`,
 			});
-
-			// const timestamps = await invoke<Record<string, number>>(
-			// 	"get_mod_timestamps",
-			// 	{
-			// 		repoPath: repoPath,
-			// 	},
-			// );
 
 			const mods = (
 				await Promise.all(
@@ -710,7 +626,8 @@
 
 	async function refreshInstalledMods() {
 		try {
-			await getAllInstalledMods();
+			await forceRefreshCache(); // Force refresh the cache
+			installedMods = await fetchCachedMods();
 
 			// Update installation status for all mods in the store
 			for (const mod of $modsStore) {
@@ -730,31 +647,6 @@
 	$: if ($currentModView === null && $currentCategory === "Installed Mods") {
 		refreshInstalledMods();
 	}
-
-	// For CSS later
-	// .tags {
-	// 	position: absolute;
-	// 	top: 7.2rem; /* Adjusted top position */
-	// 	right: 0.35rem; /* Adjusted right position */
-	// 	display: flex;
-	// 	gap: 0.5rem;
-	// }
-	// .tag :global(svg) {
-	// 	position: relative;
-	// 	top: -1px; /* Adds subtle upward adjustment to the icons */
-	// }
-	//
-	// .tag {
-	// 	display: flex;
-	// 	align-items: center;
-	// 	position: relative;
-	// 	gap: 0.2rem;
-	// 	padding: 0.15rem 0.3rem;
-	// 	background: rgba(0, 0, 0, 0.7);
-	// 	border-radius: 4px;
-	// 	font-size: 0.9rem;
-	// 	color: #f4eee0;
-	// }
 </script>
 
 <div class="container default-scrollbar">

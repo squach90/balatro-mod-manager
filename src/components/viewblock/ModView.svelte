@@ -26,6 +26,11 @@
 	import { modsStore } from "../../stores/modStore";
 	import { untrack } from "svelte";
 	import { writable } from "svelte/store";
+	import {
+		checkModInCache,
+		fetchCachedMods,
+		forceRefreshCache,
+	} from "../../stores/modCache";
 
 	// Store to track which mods have updates available
 	const updateAvailable = writable<Record<string, boolean>>({});
@@ -273,20 +278,6 @@
 		}
 	}
 
-	const getAllInstalledMods = async () => {
-		try {
-			const installed: InstalledMod[] = await invoke(
-				"get_installed_mods_from_db",
-			);
-			installedMods = installed.map((m) => ({
-				name: m.name,
-				path: m.path,
-			}));
-		} catch (e) {
-			console.error("Failed to get installed mods:", e);
-		}
-	};
-
 	const uninstallMod = async (mod: Mod) => {
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
@@ -472,6 +463,7 @@
 			);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+			await forceRefreshCache();
 		}
 	};
 
@@ -581,11 +573,18 @@
 		}
 	}
 
+	const getAllInstalledMods = async () => {
+		try {
+			installedMods = await fetchCachedMods();
+		} catch (error) {
+			console.error("Failed to get installed mods:", error);
+		}
+	};
+
 	const isModInstalled = async (mod: Mod) => {
 		if (!mod) return false;
 
-		await getAllInstalledMods(); // Ensure we have fresh data
-		const status = installedMods.some((m) => m.name === mod.title);
+		const status = await checkModInCache(mod.title);
 
 		// Update the store outside of the reactive context
 		setTimeout(() => {
