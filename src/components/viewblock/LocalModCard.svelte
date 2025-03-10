@@ -260,9 +260,16 @@
 				{#if isInstalling}
 					<div class="spinner"></div>
 				{:else}
-					<ArrowDownToLine size={18} />
-					Get Official Version
+					<ArrowDownToLine size={16} />
+					<span class="smaller-text">Get Official Version</span>
 				{/if}
+			</button>
+			<button
+				class="trash-button"
+				title="Remove Mod"
+				on:click={uninstallMod}
+			>
+				<Trash2 size={18} />
 			</button>
 		{:else}
 			<button
@@ -348,12 +355,6 @@
 		box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 	}
 
-	.mod-card:hover .blur-bg {
-		backdrop-filter: blur(3px);
-		-webkit-backdrop-filter: blur(3px);
-		background-color: rgba(0, 0, 0, 0.1);
-	}
-
 	@keyframes stripe-slide-up {
 		0% {
 			background-position: 0 0;
@@ -417,8 +418,7 @@
 		z-index: 2;
 	}
 	/* Button styles */
-	.delete-button,
-	.install-button {
+	.delete-button {
 		flex: 1;
 		display: flex;
 		align-items: center;
@@ -436,14 +436,28 @@
 		position: relative;
 	}
 
+	.install-button {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		padding: 0.75rem 0.5rem;
+		color: #f4eee0;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+		min-height: 42px;
+		position: relative;
+		background: #56a786;
+		outline: #459373 solid 2px;
+	}
+
 	.delete-button {
 		background: #c14139;
 		outline: #a13029 solid 2px;
-	}
-
-	.install-button {
-		background: #56a786;
-		outline: #459373 solid 2px;
 	}
 
 	.delete-button:hover {
@@ -451,14 +465,15 @@
 		transform: translateY(-2px);
 	}
 
-	.install-button:hover:not(:disabled) {
-		background: #63b897;
-		transform: translateY(-2px);
-	}
-
 	.delete-button:active,
 	.install-button:active {
 		transform: translateY(1px);
+	}
+
+	.install-button:not(:disabled):active {
+		transform: translateY(1px);
+		background: #63b897; /* Keep consistent with hover color scheme */
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.install-button:disabled {
@@ -492,6 +507,51 @@
 	.folder-button:active {
 		transform: translateY(0);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.trash-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 42px;
+		height: 42px;
+		padding: 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background-color: #c14139; /* Red color */
+		color: white;
+		border: none;
+		outline: #a13029 solid 2px;
+		flex-shrink: 0; /* Prevent button from shrinking */
+	}
+
+	.trash-button:hover {
+		background-color: #d4524a; /* Darker red on hover */
+		transform: translateY(-1px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.trash-button:active {
+		transform: translateY(0);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.install-button:hover:not(:disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+	}
+
+	/* Added specific active state that overrides hover */
+	.install-button:not(:disabled):active {
+		transform: translateY(1px);
+		background: #4d9678;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.smaller-text {
+		font-size: 0.85rem; /* Smaller font size */
+		font-weight: 500; /* Slightly bolder to maintain readability */
 	}
 
 	/* Spinner for loading state */

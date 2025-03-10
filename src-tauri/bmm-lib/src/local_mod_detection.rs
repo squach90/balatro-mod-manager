@@ -92,59 +92,161 @@ pub fn detect_manual_mods(
     Ok(manual_mods)
 }
 
-/// Try to match a local mod with a catalog entry
+fn scan_for_json_files(dir_path: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut json_files = Vec::new();
+
+    // Read directory entries
+    let entries = fs::read_dir(dir_path)
+        .map_err(|e| format!("Failed to read directory {}: {}", dir_path.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("json") {
+            json_files.push(path);
+        }
+    }
+
+    Ok(json_files)
+}
+
 fn find_catalog_match(
     local_mod: &DetectedMod,
     catalog_mods: &[cache::Mod],
 ) -> Option<CatalogMatch> {
-    // Try several matching strategies in order of specificity
-
-    // 1. Try to match by ID (most specific)
+    // 1. Try exact ID match (most specific)
     let local_id_lower = local_mod.id.to_lowercase();
     for catalog_mod in catalog_mods {
         let catalog_id_lower = catalog_mod.title.replace(" ", "").to_lowercase();
         if catalog_id_lower == local_id_lower {
-            return Some(CatalogMatch {
-                title: catalog_mod.title.clone(),
-                catalog_id: catalog_mod.title.clone(), // Using title as the ID
-                download_url: catalog_mod.download_url.clone(),
-                version: catalog_mod.version.clone(),
-            });
+            return Some(create_match(catalog_mod));
         }
     }
 
-    // 2. Try to match by normalized name
+    // 2. Try exact name match
     let local_name_lower = local_mod.name.to_lowercase();
     for catalog_mod in catalog_mods {
         let catalog_name_lower = catalog_mod.title.to_lowercase();
         if catalog_name_lower == local_name_lower {
-            return Some(CatalogMatch {
-                title: catalog_mod.title.clone(),
-                catalog_id: catalog_mod.title.clone(),
-                download_url: catalog_mod.download_url.clone(),
-                version: catalog_mod.version.clone(),
-            });
+            return Some(create_match(catalog_mod));
         }
     }
 
-    // 3. Try fuzzy matching (name contains or similarity)
+    // 3. Try directory name match
+    if let Some(dir_name) = Path::new(&local_mod.path)
+        .file_name()
+        .and_then(|n| n.to_str())
+    {
+        let dir_name_lower = dir_name.to_lowercase();
+        for catalog_mod in catalog_mods {
+            let catalog_name_lower = catalog_mod.title.to_lowercase();
+            if catalog_name_lower == dir_name_lower {
+                return Some(create_match(catalog_mod));
+            }
+        }
+    }
+
+    // 4. Try substring matching in either direction
     for catalog_mod in catalog_mods {
         let catalog_name_lower = catalog_mod.title.to_lowercase();
 
-        // Check if local name is a subset of catalog name or vice versa
         if local_name_lower.contains(&catalog_name_lower)
             || catalog_name_lower.contains(&local_name_lower)
         {
-            return Some(CatalogMatch {
-                title: catalog_mod.title.clone(),
-                catalog_id: catalog_mod.title.clone(),
-                download_url: catalog_mod.download_url.clone(),
-                version: catalog_mod.version.clone(),
-            });
+            return Some(create_match(catalog_mod));
+        }
+    }
+
+    // 5. Try similarity matching (edit distance)
+    for catalog_mod in catalog_mods {
+        let catalog_name_lower = catalog_mod.title.to_lowercase();
+
+        // Calculate similarity ratio
+        if is_similar(&local_name_lower, &catalog_name_lower)
+            || is_similar(&local_id_lower, &catalog_name_lower.replace(" ", ""))
+        {
+            return Some(create_match(catalog_mod));
         }
     }
 
     None
+}
+
+// Helper function to create a catalog match object
+fn create_match(catalog_mod: &cache::Mod) -> CatalogMatch {
+    CatalogMatch {
+        title: catalog_mod.title.clone(),
+        catalog_id: catalog_mod.title.clone(),
+        download_url: catalog_mod.download_url.clone(),
+        version: catalog_mod.version.clone(),
+    }
+}
+
+// Helper function to determine if two strings are similar enough
+fn is_similar(a: &str, b: &str) -> bool {
+    // If strings are very different in length, they're probably not similar
+    let len_diff = (a.len() as isize - b.len() as isize).abs();
+    if len_diff > 3 {
+        return false;
+    }
+
+    // For short strings, allow fewer differences
+    let max_distance = if a.len() < 5 || b.len() < 5 { 1 } else { 2 };
+
+    // Simple implementation of edit distance calculation
+    calculate_edit_distance(a, b) <= max_distance
+}
+
+// Calculate Levenshtein distance between two strings
+fn calculate_edit_distance(s1: &str, s2: &str) -> usize {
+    let s1_chars: Vec<char> = s1.chars().collect();
+    let s2_chars: Vec<char> = s2.chars().collect();
+
+    let m = s1_chars.len();
+    let n = s2_chars.len();
+
+    // Handle edge cases
+    if m == 0 {
+        return n;
+    }
+    if n == 0 {
+        return m;
+    }
+
+    // Create a matrix of size (m+1) x (n+1)
+    let mut matrix = vec![vec![0; n + 1]; m + 1];
+
+    // Initialize first column
+    for (i, row) in matrix.iter_mut().enumerate().take(m + 1) {
+        row[0] = i;
+    }
+
+    // Initialize first row
+    for j in 0..=n {
+        matrix[0][j] = j;
+    }
+
+    // Fill in the rest of the matrix
+    for i in 1..=m {
+        for j in 1..=n {
+            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+
+            matrix[i][j] = std::cmp::min(
+                std::cmp::min(
+                    matrix[i - 1][j] + 1, // deletion
+                    matrix[i][j - 1] + 1, // insertion
+                ),
+                matrix[i - 1][j - 1] + cost, // substitution
+            );
+        }
+    }
+
+    matrix[m][n]
 }
 
 fn is_path_managed(path: &str, managed_paths: &HashSet<String>) -> bool {
@@ -321,19 +423,10 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("Invalid directory name: {}", mod_path.display()))?;
 
-    // First check for JSON configuration with the same name as the directory
-    let json_path = mod_path.join(format!("{}.json", dir_name));
-
-    if json_path.exists() {
+    // Scan for all JSON files and check if any of them are valid mod configs
+    let json_files = scan_for_json_files(mod_path)?;
+    for json_path in json_files {
         if let Some(detected_mod) = parse_mod_json(&json_path, mod_path)? {
-            return Ok(Some(detected_mod));
-        }
-    }
-
-    // Check for smods.json
-    let smods_json_path = mod_path.join("smods.json");
-    if smods_json_path.exists() {
-        if let Some(detected_mod) = parse_mod_json(&smods_json_path, mod_path)? {
             return Ok(Some(detected_mod));
         }
     }
