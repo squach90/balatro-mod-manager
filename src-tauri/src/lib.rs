@@ -305,6 +305,14 @@ async fn clear_cache() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_directory(path: String) -> Result<(), String> {
+    match open::that(path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Failed to open directory: {}", e)),
+    }
+}
+
+#[tauri::command]
 async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
     map_error(cache::load_cache())
 }
@@ -1261,7 +1269,8 @@ pub fn run() {
             delete_manual_mod,
             backup_local_mod,
             restore_from_backup,
-            remove_backup
+            remove_backup,
+            open_directory
         ])
         .run(tauri::generate_context!());
 

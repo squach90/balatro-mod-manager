@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { Trash2, ArrowDownToLine, CornerDownRight } from "lucide-svelte";
+	import {
+		Trash2,
+		ArrowDownToLine,
+		CornerDownRight,
+		Folder,
+	} from "lucide-svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
 	import { modsStore } from "../../stores/modStore";
@@ -9,6 +14,26 @@
 
 	// Local state for loading
 	let isInstalling = false;
+
+	// Function to open the mod's directory
+	async function openModDirectory(e: Event) {
+		e.stopPropagation();
+
+		try {
+			// Check if path exists first
+			const pathExists = await invoke("path_exists", { path: mod.path });
+
+			if (!pathExists) {
+				addMessage(`Directory not found: ${mod.path}`, "error");
+				return;
+			}
+
+			// Use the custom command to open the directory
+			await invoke("open_directory", { path: mod.path });
+		} catch (error) {
+			addMessage(`Failed to open directory: ${error}`, "error");
+		}
+	}
 
 	async function installOfficialVersion(e: Event) {
 		e.stopPropagation();
@@ -220,6 +245,13 @@
 	<div class="button-container">
 		{#if mod.catalog_match}
 			<button
+				class="folder-button"
+				title="Open mod directory"
+				on:click={openModDirectory}
+			>
+				<Folder size={18} />
+			</button>
+			<button
 				class="install-button"
 				title="Install official version"
 				on:click={installOfficialVersion}
@@ -233,6 +265,13 @@
 				{/if}
 			</button>
 		{:else}
+			<button
+				class="folder-button"
+				title="Open mod directory"
+				on:click={openModDirectory}
+			>
+				<Folder size={18} />
+			</button>
 			<button
 				class="delete-button"
 				title="Remove Mod"
@@ -367,6 +406,7 @@
 	}
 
 	/* Button container styling */
+
 	.button-container {
 		display: flex;
 		gap: 0.5rem;
@@ -376,7 +416,6 @@
 		width: calc(100% - 2rem);
 		z-index: 2;
 	}
-
 	/* Button styles */
 	.delete-button,
 	.install-button {
@@ -425,6 +464,34 @@
 	.install-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
+	}
+
+	.folder-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 42px;
+		height: 42px;
+		padding: 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background-color: #4caf50; /* Green color */
+		color: white;
+		border: none;
+		outline: #3d8b40 solid 2px;
+		flex-shrink: 0; /* Prevent button from shrinking */
+	}
+
+	.folder-button:hover {
+		background-color: #45a049; /* Darker green on hover */
+		transform: translateY(-1px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.folder-button:active {
+		transform: translateY(0);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	/* Spinner for loading state */
