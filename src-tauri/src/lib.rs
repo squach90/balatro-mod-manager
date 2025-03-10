@@ -644,12 +644,48 @@ async fn get_untracked_mods(
 }
 
 #[tauri::command]
-async fn register_detected_mod(
+async fn get_manual_mods(
     state: tauri::State<'_, AppState>,
-    detected_mod: local_mod_detection::DetectedMod,
-) -> Result<(), String> {
+) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    local_mod_detection::register_detected_mod(&db, &detected_mod)
+    local_mod_detection::detect_manual_mods(&db)
+}
+
+#[tauri::command]
+async fn delete_manual_mod(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+
+    // Verify that this path exists and is within the Mods directory
+    if !path.exists() {
+        return Err("Path does not exist".to_string());
+    }
+
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
+
+    let mods_dir = config_dir.join("Balatro").join("Mods");
+
+    // Security check: Make sure the path is within the Mods directory
+    let normalized_path = path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+
+    let normalized_mods_dir = mods_dir
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize mods directory: {}", e))?;
+
+    if !normalized_path.starts_with(normalized_mods_dir) {
+        return Err("Path is outside of the mods directory".to_string());
+    }
+
+    // Delete the directory or file
+    if path.is_dir() {
+        std::fs::remove_dir_all(&path).map_err(|e| format!("Failed to remove directory: {}", e))?;
+    } else {
+        std::fs::remove_file(&path).map_err(|e| format!("Failed to remove file: {}", e))?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -657,7 +693,7 @@ async fn get_detected_local_mods(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    local_mod_detection::get_all_detected_mods(&db)
+    local_mod_detection::detect_manual_mods(&db)
 }
 
 #[tauri::command]
@@ -1007,9 +1043,10 @@ pub fn run() {
             set_discord_rpc_status,
             mod_update_available,
             get_untracked_mods,
-            register_detected_mod,
             get_detected_local_mods,
-            register_local_mod
+            register_local_mod,
+            get_manual_mods,
+            delete_manual_mod,
         ])
         .run(tauri::generate_context!());
 

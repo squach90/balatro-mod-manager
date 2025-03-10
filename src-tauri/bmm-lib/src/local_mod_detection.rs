@@ -1,9 +1,10 @@
-use crate::database::{Database, InstalledMod};
+use crate::database::Database;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DetectedMod {
@@ -19,7 +20,7 @@ pub struct DetectedMod {
     pub is_tracked: bool,
 }
 
-pub fn detect_local_mods() -> Result<Vec<DetectedMod>, String> {
+pub fn detect_manual_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
 
@@ -29,18 +30,62 @@ pub fn detect_local_mods() -> Result<Vec<DetectedMod>, String> {
         return Ok(Vec::new());
     }
 
-    let mut detected_mods = Vec::new();
+    // Get tracked mods from the database
+    let managed_mods = db
+        .get_installed_mods()
+        .map_err(|e| format!("Failed to get installed mods: {}", e))?;
+
+    // Create a set of normalized managed mod paths for quick lookup
+    let managed_paths: HashSet<String> = managed_mods
+        .iter()
+        .map(|m| normalize_path(&PathBuf::from(&m.path)))
+        .collect();
+
+    let mut manual_mods = Vec::new();
     let mut bundled_dependencies = HashSet::new();
 
-    // Step 1: First scan to find bundled dependencies in the Mods subdirectory of any mod
+    // Find bundled dependencies in mod packages
     find_bundled_dependencies(&mod_dir, &mut bundled_dependencies)?;
 
-    // Step 2: Do the actual mod detection, ignoring bundled dependencies
-    detect_mods_recursive(&mod_dir, &mut detected_mods, &bundled_dependencies)?;
+    // Detect mods from filesystem
+    let mut all_detected_mods = Vec::new();
+    detect_mods_recursive(&mod_dir, &mut all_detected_mods, &bundled_dependencies)?;
 
-    Ok(detected_mods)
+    // Filter out mods that are already managed by the mod manager
+    for mod_info in all_detected_mods {
+        let mod_path = normalize_path(&PathBuf::from(&mod_info.path));
+
+        // If this mod is not managed, add it to manual mods
+        if !is_path_managed(&mod_path, &managed_paths) {
+            manual_mods.push(mod_info);
+        }
+    }
+
+    Ok(manual_mods)
 }
 
+fn is_path_managed(path: &str, managed_paths: &HashSet<String>) -> bool {
+    // Direct path match
+    if managed_paths.contains(path) {
+        return true;
+    }
+
+    // Check if this path is a subdirectory of a managed path
+    for managed_path in managed_paths {
+        if path.starts_with(managed_path) {
+            return true;
+        }
+    }
+
+    // Check if a managed path is a subdirectory of this path
+    for managed_path in managed_paths {
+        if managed_path.starts_with(path) {
+            return true;
+        }
+    }
+
+    false
+}
 fn find_bundled_dependencies(dir: &Path, bundled_deps: &mut HashSet<String>) -> Result<(), String> {
     let entries = fs::read_dir(dir)
         .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
@@ -507,76 +552,14 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
 
 /// Get all detected mods and mark which ones are tracked in the database
 pub fn get_all_detected_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
-    let detected_mods = detect_local_mods()?;
-    let installed_mods = db
-        .get_installed_mods()
-        .map_err(|e| format!("Failed to get installed mods: {}", e))?;
-
-    // Mark each mod with its tracking status
-    let result = detected_mods
-        .into_iter()
-        .map(|mut mod_info| {
-            mod_info.is_tracked = is_mod_tracked(&mod_info, &installed_mods);
-            mod_info
-        })
-        .collect();
-
-    Ok(result)
+    // Changed from detect_local_mods to detect_manual_mods
+    let detected_mods = detect_manual_mods(db)?;
+    Ok(detected_mods)
 }
 
 /// Checks which detected mods are not already tracked in the database
 pub fn get_untracked_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
-    let all_mods = get_all_detected_mods(db)?;
-
-    // Filter out mods that are already tracked in the database
-    Ok(all_mods
-        .into_iter()
-        .filter(|mod_info| !mod_info.is_tracked)
-        .collect())
-}
-
-/// Helper function to check if a mod is tracked in the database
-fn is_mod_tracked(detected_mod: &DetectedMod, installed_mods: &[InstalledMod]) -> bool {
-    let detected_id = detected_mod.id.to_lowercase();
-    let detected_name = detected_mod.name.to_lowercase();
-
-    for installed_mod in installed_mods {
-        // Check for name match (case-insensitive)
-        if installed_mod.name.to_lowercase() == detected_name {
-            return true;
-        }
-
-        // Check for ID match in path (case-insensitive)
-        if installed_mod.path.to_lowercase().contains(&detected_id) {
-            return true;
-        }
-
-        // Check for exact path match
-        #[cfg(target_os = "windows")]
-        {
-            if installed_mod.path.to_lowercase() == detected_mod.path.to_lowercase() {
-                return true;
-            }
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            if installed_mod.path == detected_mod.path {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-/// Register a detected mod in the database
-pub fn register_detected_mod(db: &Database, detected_mod: &DetectedMod) -> Result<(), String> {
-    db.add_installed_mod(
-        &detected_mod.name,
-        &detected_mod.path,
-        &detected_mod.dependencies,
-        detected_mod.version.clone(),
-    )
-    .map_err(|e| format!("Failed to add detected mod to database: {}", e))
+    // Changed from detect_local_mods to detect_manual_mods
+    let detected_mods = detect_manual_mods(db)?;
+    Ok(detected_mods)
 }

@@ -337,6 +337,24 @@
 		}
 	}
 
+	let manualMods: any[] = [];
+	let isLoadingManualMods = false;
+
+	async function getManualMods() {
+		if ($currentCategory === "Installed Mods") {
+			isLoadingManualMods = true;
+			try {
+				manualMods = await invoke("get_manual_mods");
+			} catch (error) {
+				console.error("Failed to load manual mods:", error);
+				addMessage(`Failed to load manual mods: ${error}`, "error");
+				manualMods = [];
+			} finally {
+				isLoadingManualMods = false;
+	}
+		}
+	}
+
 	//
 	// async function getLastUpdated(repoUrl: string): Promise<string> {
 	// 	try {
@@ -828,7 +846,6 @@
 							{#each localMods as mod}
 								<LocalModCard
 									{mod}
-									onRegister={handleModRegistered}
 									onUninstall={handleModUninstalled}
 								/>
 							{/each}
