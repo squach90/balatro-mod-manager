@@ -4,7 +4,7 @@
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
-	import { showWarningPopup, backgroundEnabled } from "../../stores/modStore";
+	import { backgroundEnabled } from "../../stores/modStore";
 
 	let isReindexing = false;
 	let isClearingCache = false;
@@ -19,70 +19,22 @@
 	export async function performReindexMods() {
 		isReindexing = true;
 		try {
-			const hasUntracked = await invoke<boolean>("check_untracked_mods");
-
-			if (hasUntracked) {
-				showWarningPopup.set({
-					visible: true,
-					message:
-						"Untracked mod files detected. Reindexing will permanently delete these files.",
-					onConfirm: async () => {
-						try {
-							const result =
-								await invoke<[number, number]>("reindex_mods");
-							lastReindexStats = {
-								removedFiles: result[0],
-								cleanedEntries: result[1],
-							};
-							addMessage(
-								`Reindex complete: Removed ${result[0]} files, ` +
-									`cleaned ${result[1]} entries`,
-								"success",
-							);
-						} catch (error) {
-							addMessage(`Reindex failed: ${error}`, "error");
-						} finally {
-							isReindexing = false;
-							// Explicitly hide popup after operation
-							showWarningPopup.update((p) => ({
-								...p,
-								visible: false,
-							}));
-						}
-					},
-					onCancel: () => {
-						addMessage("Reindex cancelled", "warning");
-						isReindexing = false;
-						// Hide popup on cancel
-						showWarningPopup.update((p) => ({
-							...p,
-							visible: false,
-						}));
-					},
-				});
-			} else {
-				try {
-					const result =
-						await invoke<[number, number]>("reindex_mods");
-					lastReindexStats = {
-						removedFiles: result[0],
-						cleanedEntries: result[1],
-					};
-					addMessage(
-						`Reindex complete: No untracked files found`,
-						"success",
-					);
-				} catch (error) {
-					addMessage("Reindex failed: " + error, "error");
-				} finally {
-					isReindexing = false;
-				}
-			}
+			const result = await invoke<[number, number]>("reindex_mods");
+			lastReindexStats = {
+				removedFiles: result[0], // Will always be 0
+				cleanedEntries: result[1],
+			};
+			addMessage(
+				`Reindex complete: Cleaned ${result[1]} database entries`,
+				"success",
+			);
 		} catch (error) {
-			addMessage("Reindex check failed: " + error, "error");
+			addMessage("Reindex failed: " + error, "error");
+		} finally {
 			isReindexing = false;
 		}
 	}
+
 	async function clearCache() {
 		isClearingCache = true;
 		try {
@@ -186,14 +138,14 @@
 					Clear Cache
 				{/if}
 			</button>
-	
+
 			<p class="description warning">
 				<span class="warning-icon">⚠️</span>
 				Frequent cache clearing may trigger API rate limits
 			</p>
-	
+
 			<h3>Mods</h3>
-	
+
 			<div class="mods-settings">
 				<button
 					class="reindex-button"
@@ -209,21 +161,21 @@
 						Validate Mod Database
 					{/if}
 				</button>
-	
+
 				{#if lastReindexStats.removedFiles + lastReindexStats.cleanedEntries > 0}
 					<div class="reindex-stats">
 						<strong>Last cleanup:</strong>
-						<span>Files removed: {lastReindexStats.removedFiles}</span>
+						<span
+							>Files removed: {lastReindexStats.removedFiles}</span
+						>
 						<span
 							>Database entries cleaned: {lastReindexStats.cleanedEntries}</span
 						>
 					</div>
 				{/if}
-	
 				<p class="description-small">
-					Performs full consistency check between installed mods and
-					database. Will remove:
-					<br />• Untracked files/directories in Mods folder
+					Performs consistency check on the mod database. Will only
+					remove:
 					<br />• Database entries for missing mod installations
 				</p>
 			</div>
@@ -244,7 +196,7 @@
 				Enable or disable the animated background. Disabling may improve
 				performance on low-end devices.
 			</p>
-	
+
 			<div class="console-settings">
 				<span class="label-text">Enable Discord Rich Presence</span>
 				<div class="switch-container">
@@ -258,10 +210,10 @@
 				</div>
 			</div>
 			<p class="description-small">
-				Show your Balatro activity in Discord. Displays your current status
-				and mod manager usage.
+				Show your Balatro activity in Discord. Displays your current
+				status and mod manager usage.
 			</p>
-	
+
 			<h3>Developer Options</h3>
 			<div class="console-settings">
 				<span class="label-text">Enable Lovely Console</span>

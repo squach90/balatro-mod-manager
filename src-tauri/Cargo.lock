@@ -384,6 +384,7 @@ dependencies = [
  "fix-path-env",
  "log",
  "mockito",
+ "open",
  "predicates",
  "pretty_env_logger",
  "reqwest",

@@ -2,6 +2,7 @@ mod github_repo;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -12,6 +13,7 @@ use tauri::Manager;
 use std::collections::HashSet;
 use std::fs::File;
 use std::panic;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
@@ -27,6 +29,7 @@ use bmm_lib::discord_rpc::DiscordRpcManager;
 use bmm_lib::errors::AppError;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
+use bmm_lib::local_mod_detection;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
 
@@ -302,6 +305,14 @@ async fn clear_cache() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_directory(path: String) -> Result<(), String> {
+    match open::that(path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Failed to open directory: {}", e)),
+    }
+}
+
+#[tauri::command]
 async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
     map_error(cache::load_cache())
 }
@@ -328,42 +339,8 @@ async fn set_lovely_console_status(
 }
 
 #[tauri::command]
-async fn check_untracked_mods(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
-
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    let installed_mods = db.get_installed_mods()?;
-
-    let entries = match std::fs::read_dir(&mod_dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => {
-            return Err(AppError::FileRead {
-                path: mod_dir,
-                source: e.to_string(),
-            }
-            .to_string())
-        }
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(name) if !name.contains("lovely") => name,
-            _ => continue,
-        };
-
-        if !installed_mods.iter().any(|m| m.path.contains(name)) {
-            return Ok(true);
-        }
-    }
-
+async fn check_untracked_mods() -> Result<bool, String> {
+    // Always return false since we're not removing untracked files
     Ok(false)
 }
 
@@ -640,51 +617,15 @@ async fn force_remove_mod(
     map_error(db.remove_installed_mod(&name))
 }
 
+// Update the reindex_mods function to only clean database entries
 #[tauri::command]
 async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
-
     let db = state
         .db
         .lock()
         .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {}", e)))?;
 
-    // Phase 1: Filesystem cleanup
-    let mut files_removed = 0;
-    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
-
-    match std::fs::read_dir(&mod_dir) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let name = match path.file_name().and_then(|n| n.to_str()) {
-                    Some(n) if !n.contains("lovely") => n,
-                    _ => continue,
-                };
-
-                if !installed_mods.iter().any(|m| m.path.contains(name)) {
-                    match entry.file_type() {
-                        Ok(ft) => {
-                            if ft.is_dir() {
-                                std::fs::remove_dir_all(&path).ok();
-                            } else if ft.is_file() {
-                                std::fs::remove_file(&path).ok();
-                            }
-                            files_removed += 1;
-                        }
-                        Err(_) => continue,
-                    }
-                }
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.to_string()),
-    }
-
-    // Phase 2: Database cleanup
+    // Database cleanup only - don't touch the filesystem
     let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
     let mut to_remove = Vec::new();
 
@@ -700,8 +641,82 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
             .map_err(|e| e.to_string())?;
     }
 
-    Ok((files_removed, cleaned_entries))
+    // Return 0 for files_removed since we don't remove any files
+    Ok((0, cleaned_entries))
 }
+
+#[tauri::command]
+async fn delete_manual_mod(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+
+    // Verify that this path exists
+    if !path.exists() {
+        return Err(format!(
+            "Invalid path '{}': Path doesn't exist",
+            path.display()
+        ));
+    }
+
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
+
+    let mods_dir = config_dir.join("Balatro").join("Mods");
+
+    // Security check: Make sure the path is within the Mods directory
+    let canonicalized_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            return Err(format!(
+                "Failed to canonicalize path {}: {}",
+                path.display(),
+                e
+            ))
+        }
+    };
+
+    let canonicalized_mods_dir = match mods_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to canonicalize mods directory: {}", e)),
+    };
+
+    if !canonicalized_path.starts_with(&canonicalized_mods_dir) {
+        return Err(format!(
+            "Path is outside of the mods directory: {}",
+            path.display()
+        ));
+    }
+
+    // Log what we're about to delete
+    log::info!("Deleting manual mod at path: {}", path.display());
+
+    // Delete the directory or file
+    if path.is_dir() {
+        match std::fs::remove_dir_all(&path) {
+            Ok(_) => log::info!("Successfully removed directory: {}", path.display()),
+            Err(e) => return Err(format!("Failed to remove directory: {}", e)),
+        }
+    } else {
+        match std::fs::remove_file(&path) {
+            Ok(_) => log::info!("Successfully removed file: {}", path.display()),
+            Err(e) => return Err(format!("Failed to remove file: {}", e)),
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_detected_local_mods(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+    local_mod_detection::detect_manual_mods(&db, &cached_mods)
+}
+
 
 #[tauri::command]
 async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
@@ -888,6 +903,183 @@ async fn install_talisman_version(version: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn backup_local_mod(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if !path.exists() {
+        return Err(format!("Path doesn't exist: {}", path.display()));
+    }
+
+    let backup_dir = get_backup_dir()?;
+
+    // Create a unique backup ID
+    let backup_id = format!(
+        "backup_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| format!("Failed to get timestamp: {}", e))?
+            .as_millis()
+    );
+
+    let backup_path = backup_dir.join(backup_id);
+
+    // Create the backup directory
+    std::fs::create_dir_all(&backup_path)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+
+    // Copy the mod to the backup
+    if path.is_dir() {
+        copy_dir_all(&path, &backup_path.join(path.file_name().unwrap()))
+            .map_err(|e| format!("Failed to copy mod to backup: {}", e))?;
+    } else {
+        std::fs::copy(&path, backup_path.join(path.file_name().unwrap()))
+            .map_err(|e| format!("Failed to copy mod file to backup: {}", e))?;
+    }
+
+    // Store the original path in a metadata file for restoration
+    let metadata = json!({
+        "original_path": path.to_string_lossy().to_string(),
+        "backup_time": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    });
+
+    std::fs::write(
+        backup_path.join("metadata.json"),
+        serde_json::to_string_pretty(&metadata)
+            .map_err(|e| format!("Failed to serialize metadata: {}", e))?,
+    )
+    .map_err(|e| format!("Failed to write metadata: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn restore_from_backup(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let backup_dir = get_backup_dir()?;
+
+    // Find the latest backup for this path
+    let mut latest_backup = None;
+    let mut latest_time = 0;
+
+    for entry in std::fs::read_dir(&backup_dir)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let metadata_path = entry.path().join("metadata.json");
+
+        if metadata_path.exists() {
+            let metadata: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(&metadata_path)
+                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+            )
+            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+
+            if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
+                if original_path == path.to_string_lossy() {
+                    if let Some(backup_time) = metadata.get("backup_time").and_then(|v| v.as_u64())
+                    {
+                        if backup_time > latest_time {
+                            latest_time = backup_time;
+                            latest_backup = Some(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let backup_path = latest_backup.ok_or_else(|| "No backup found for this path".to_string())?;
+
+    // Ensure the parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    // Restore the mod from backup
+    for entry in std::fs::read_dir(&backup_path)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let file_name = entry.file_name();
+
+        // Skip metadata file
+        if file_name == "metadata.json" {
+            continue;
+        }
+
+        let dest_path = path.parent().unwrap().join(&file_name);
+
+        if entry.path().is_dir() {
+            copy_dir_all(&entry.path(), &dest_path)
+                .map_err(|e| format!("Failed to restore directory from backup: {}", e))?;
+        } else {
+            std::fs::copy(entry.path(), &dest_path)
+                .map_err(|e| format!("Failed to restore file from backup: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn remove_backup(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let backup_dir = get_backup_dir()?;
+
+    // Find all backups for this path
+    for entry in std::fs::read_dir(&backup_dir)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let metadata_path = entry.path().join("metadata.json");
+
+        if metadata_path.exists() {
+            let metadata: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(&metadata_path)
+                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+            )
+            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+
+            if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
+                if original_path == path.to_string_lossy() {
+                    // Remove this backup
+                    std::fs::remove_dir_all(entry.path())
+                        .map_err(|e| format!("Failed to remove backup: {}", e))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn get_backup_dir() -> Result<PathBuf, String> {
+    let temp_dir = std::env::temp_dir().join("balatro_mod_manager_backups");
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+    Ok(temp_dir)
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let path = entry.path();
+
+        if ty.is_dir() {
+            copy_dir_all(&path, &dst.join(path.file_name().unwrap()))?;
+        } else {
+            std::fs::copy(&path, dst.join(path.file_name().unwrap()))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_background_state(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     map_error(db.get_background_enabled())
@@ -1036,6 +1228,12 @@ pub fn run() {
             get_latest_steamodded_release,
             set_discord_rpc_status,
             mod_update_available,
+            get_detected_local_mods,
+            delete_manual_mod,
+            backup_local_mod,
+            restore_from_backup,
+            remove_backup,
+            open_directory
         ])
         .run(tauri::generate_context!());
 

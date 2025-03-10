@@ -25,7 +25,7 @@
 		currentCategory,
 		uninstallDialogStore,
 	} from "../../stores/modStore";
-	import type { Mod } from "../../stores/modStore";
+	import type { LocalMod, Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
 	import {
 		modsStore,
@@ -41,6 +41,12 @@
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
 	import ModCard from "./ModCard.svelte";
+	import LocalModCard from "./LocalModCard.svelte";
+	import {
+		checkModInCache,
+		fetchCachedMods,
+		forceRefreshCache,
+	} from "../../stores/modCache";
 
 	const loadingDots = writable(0);
 
@@ -58,11 +64,49 @@
 		};
 	});
 
+	async function handleModUninstalled() {
+		// Refresh the local mods list
+		getLocalMods();
+
+		// Also refresh installed mods for consistency
+		refreshInstalledMods();
+	}
+
 	// let mods: Mod[] = [];
 	let isLoading = true;
 	interface DependencyCheck {
 		steamodded: boolean;
 		talisman: boolean;
+	}
+
+	let localMods: LocalMod[] = [];
+	let isLoadingLocalMods = false;
+
+	async function getLocalMods() {
+		if ($currentCategory === "Installed Mods") {
+			isLoadingLocalMods = true;
+			try {
+				localMods = await invoke("get_detected_local_mods");
+			} catch (error) {
+				console.error("Failed to load local mods:", error);
+				addMessage(`Failed to load local mods: ${error}`, "error");
+				localMods = [];
+			} finally {
+				isLoadingLocalMods = false;
+			}
+		}
+	}
+
+	$: if ($currentCategory === "Installed Mods") {
+		getLocalMods();
+	}
+
+	async function checkIfModIsInstalled(mod: Mod) {
+		if (!mod?.title) return false;
+		// Use checkModInCache (from modCache.ts) which takes a string title
+		const status = await checkModInCache(mod.title);
+		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+		return status;
 	}
 
 	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
@@ -76,7 +120,7 @@
 
 	async function updateInstallStatus(mod: Mod | undefined) {
 		if (!mod) return;
-		const status: boolean = await isModInstalled(mod);
+		const status: boolean = await checkIfModIsInstalled(mod);
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
 	}
 
@@ -108,7 +152,7 @@
 			try {
 				await Promise.all(
 					$modsStore.map(async (mod) => {
-						const status = await isModInstalled(mod);
+						const status = await checkIfModIsInstalled(mod);
 						installationStatus.update((s) => ({
 							...s,
 							[mod.title]: status,
@@ -118,6 +162,10 @@
 			} catch (error) {
 				console.error("Install status check failed:", error);
 			}
+
+			if ($currentCategory === "Installed Mods") {
+				await getLocalMods();
+			}
 		};
 
 		initialize();
@@ -125,17 +173,7 @@
 
 	const getAllInstalledMods = async () => {
 		try {
-			const installed: InstalledMod[] = await invoke(
-				"get_installed_mods_from_db",
-			);
-			// fill the installed mods Array
-			installedMods = installed.map((mod) => {
-				return {
-					name: mod.name,
-					path: mod.path,
-					// collection_hash: mod.collection_hash,
-				};
-			});
+			installedMods = await fetchCachedMods();
 		} catch (error) {
 			console.error("Failed to get installed mods:", error);
 		}
@@ -251,14 +289,6 @@
 		}
 	};
 
-	const isModInstalled = async (mod: Mod) => {
-		if (!mod?.title) return false;
-		await getAllInstalledMods();
-		const status = installedMods.some((m) => m.name === mod.title);
-		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
-		return status;
-	};
-
 	interface ModMeta {
 		title: string;
 		"requires-steamodded": boolean;
@@ -296,50 +326,6 @@
 		}
 	}
 
-	//
-	// async function getLastUpdated(repoUrl: string): Promise<string> {
-	// 	try {
-	// 		const [owner, repo] = repoUrl
-	// 			.replace("https://github.com/", "")
-	// 			.split("/");
-	//
-	// 		if (!owner || !repo) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const response = await fetch(
-	// 			`https://api.github.com/repos/${owner}/${repo}/commits/main`,
-	// 		);
-	//
-	// 		if (!response.ok) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const data = await response.json();
-	// 		if (!data?.commit?.committer?.date) {
-	// 			return "Unknown";
-	// 		}
-	//
-	// 		const commitDate = new Date(data.commit.committer.date);
-	// 		const currentDate = new Date();
-	// 		const diffTime = Math.abs(
-	// 			currentDate.getTime() - commitDate.getTime(),
-	// 		);
-	// 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-	//
-	// 		if (diffDays === 0) return "Today";
-	// 		if (diffDays === 1) return "Yesterday";
-	// 		if (diffDays < 7) return `${diffDays} days ago`;
-	// 		if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-	// 		if (diffDays < 365)
-	// 			return `${Math.floor(diffDays / 30)} months ago`;
-	// 		return `${Math.floor(diffDays / 365)} years ago`;
-	// 	} catch (error) {
-	// 		console.error("Failed to fetch last commit date:", error);
-	// 		return "Unknown";
-	// 	}
-	// }
-
 	async function fetchModDirectories(): Promise<Mod[]> {
 		try {
 			isLoading = true;
@@ -349,13 +335,6 @@
 			const modDirs = await invoke<string[]>("list_directories", {
 				path: `${repoPath}/mods`,
 			});
-
-			// const timestamps = await invoke<Record<string, number>>(
-			// 	"get_mod_timestamps",
-			// 	{
-			// 		repoPath: repoPath,
-			// 	},
-			// );
 
 			const mods = (
 				await Promise.all(
@@ -647,7 +626,8 @@
 
 	async function refreshInstalledMods() {
 		try {
-			await getAllInstalledMods();
+			await forceRefreshCache(); // Force refresh the cache
+			installedMods = await fetchCachedMods();
 
 			// Update installation status for all mods in the store
 			for (const mod of $modsStore) {
@@ -667,31 +647,6 @@
 	$: if ($currentModView === null && $currentCategory === "Installed Mods") {
 		refreshInstalledMods();
 	}
-
-	// For CSS later
-	// .tags {
-	// 	position: absolute;
-	// 	top: 7.2rem; /* Adjusted top position */
-	// 	right: 0.35rem; /* Adjusted right position */
-	// 	display: flex;
-	// 	gap: 0.5rem;
-	// }
-	// .tag :global(svg) {
-	// 	position: relative;
-	// 	top: -1px; /* Adds subtle upward adjustment to the icons */
-	// }
-	//
-	// .tag {
-	// 	display: flex;
-	// 	align-items: center;
-	// 	position: relative;
-	// 	gap: 0.2rem;
-	// 	padding: 0.15rem 0.3rem;
-	// 	background: rgba(0, 0, 0, 0.7);
-	// 	border-radius: 4px;
-	// 	font-size: 0.9rem;
-	// 	color: #f4eee0;
-	// }
 </script>
 
 <div class="container default-scrollbar">
@@ -776,8 +731,49 @@
 						</div>
 					</div>
 				</div>
+
 				<div class="mods-scroll-container default-scrollbar">
-					<div class="mods-grid">
+					{#if $currentCategory === "Installed Mods"}
+						{#if isLoadingLocalMods}
+							<div class="section-header">
+								<h3>Local Mods</h3>
+								<p>
+									Loading local mods{".".repeat($loadingDots)}
+								</p>
+							</div>
+						{:else if localMods.length > 0}
+							<div class="section-header">
+								<h3>Local Mods</h3>
+								<p>
+									These mods were installed manually (outside
+									the mod manager)
+								</p>
+							</div>
+
+							<div class="mods-grid local-mods-grid">
+								{#each localMods as mod}
+									<LocalModCard
+										{mod}
+										onUninstall={handleModUninstalled}
+									/>
+								{/each}
+							</div>
+
+							<div class="section-header">
+								<h3>Mod Manager Catalog</h3>
+								<p>
+									These mods are available from the online
+									catalog
+								</p>
+							</div>
+						{/if}
+					{/if}
+
+					<div
+						class="mods-grid"
+						class:has-local-mods={$currentCategory ===
+							"Installed Mods" && localMods.length > 0}
+					>
 						{#each paginatedMods as mod}
 							<ModCard
 								{mod}
@@ -801,6 +797,28 @@
 </div>
 
 <style>
+	.section-header {
+		background: #c14139;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		padding: 1rem 2rem;
+		margin: 0 2rem 1rem 2rem;
+		margin-top: 2rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.section-header h3 {
+		margin: 0;
+		font-size: 1.8rem;
+		color: #f4eee0;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	.section-header p {
+		margin: 0.5rem 0 0 0;
+		font-size: 1.1rem;
+		color: #f4eee0;
+	}
 	.mods-container {
 		display: flex;
 		gap: 1rem;
@@ -934,12 +952,21 @@
 	}
 
 	.mods-grid {
-		padding: 2rem;
-		padding-top: 5rem;
+		padding: 1rem 2rem 2rem 2rem;
 		flex: 1;
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
+	}
+
+	.local-mods-grid {
+		padding-top: 0.5rem;
+		padding-bottom: 1rem;
+	}
+
+	/* Catalog section gets proper top padding */
+	.local-mods-grid + .section-header + .mods-grid {
+		padding-top: 1rem;
 	}
 
 	.sort-controls {
