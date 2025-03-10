@@ -2,21 +2,14 @@
 	import { Trash2, ArrowDownToLine, CornerDownRight } from "lucide-svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
-	import {
-		modsStore,
-		loadingStates2 as loadingStates,
-	} from "../../stores/modStore";
+	import { modsStore } from "../../stores/modStore";
 
 	export let mod: any;
 	export let onUninstall: (mod: any) => void;
 
-	
-
 	// Local state for loading
 	let isInstalling = false;
 
-
-	// FIXME: This installs the mod and removes it after it's installed.
 	async function installOfficialVersion(e: Event) {
 		e.stopPropagation();
 		if (!mod.catalog_match) return;
@@ -57,7 +50,7 @@
 
 			try {
 				// Install the mod
-				const installedPath = await invoke("install_mod", {
+				const installedPath: string = await invoke("install_mod", {
 					url: catalogMod.downloadURL,
 					folderName:
 						fullCatalogMod?.folderName ||
@@ -82,12 +75,28 @@
 					currentVersion: catalogMod.version,
 				});
 
-				// Now that installation was successful, remove the local version
-				// We should verify it still exists first
+				// Now check if we should delete the local mod
 				const localPathExists = await invoke("path_exists", {
 					path: localModPath,
 				});
-				if (localPathExists) {
+
+				// Normalize paths for comparison (especially important for Windows)
+				const normalizedLocal = localModPath
+					.toLowerCase()
+					.replace(/\\/g, "/");
+				const normalizedInstalled = installedPath
+					.toLowerCase()
+					.replace(/\\/g, "/");
+
+				// Only delete the local mod if:
+				// 1. It exists
+				// 2. It's not the same as the installed path
+				// 3. It's not a parent directory of the installed path
+				if (
+					localPathExists &&
+					normalizedLocal !== normalizedInstalled &&
+					!normalizedInstalled.startsWith(normalizedLocal + "/")
+				) {
 					await invoke("delete_manual_mod", {
 						path: localModPath,
 					});
@@ -445,4 +454,3 @@
 		}
 	}
 </style>
-
