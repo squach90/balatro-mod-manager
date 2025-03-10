@@ -159,6 +159,10 @@
 			} catch (error) {
 				console.error("Install status check failed:", error);
 			}
+
+			if ($currentCategory === "Installed Mods") {
+				await getLocalMods();
+			}
 		};
 
 		initialize();
@@ -837,30 +841,40 @@
 				</div>
 
 				<div class="mods-scroll-container default-scrollbar">
-					{#if $currentCategory === "Installed Mods" && localMods.length > 0}
-						<div class="section-header">
-							<h3>Local Mods</h3>
-							<p>
-								These mods were installed manually (outside the
-								mod manager)
-							</p>
-						</div>
+					{#if $currentCategory === "Installed Mods"}
+						{#if isLoadingLocalMods}
+							<div class="section-header">
+								<h3>Local Mods</h3>
+								<p>
+									Loading local mods{".".repeat($loadingDots)}
+								</p>
+							</div>
+						{:else if localMods.length > 0}
+							<div class="section-header">
+								<h3>Local Mods</h3>
+								<p>
+									These mods were installed manually (outside
+									the mod manager)
+								</p>
+							</div>
 
-						<div class="mods-grid local-mods-grid">
-							{#each localMods as mod}
-								<LocalModCard
-									{mod}
-									onUninstall={handleModUninstalled}
-								/>
-							{/each}
-						</div>
+							<div class="mods-grid local-mods-grid">
+								{#each localMods as mod}
+									<LocalModCard
+										{mod}
+										onUninstall={handleModUninstalled}
+									/>
+								{/each}
+							</div>
 
-						<div class="section-header">
-							<h3>Mod Manager Catalog</h3>
-							<p>
-								These mods are available from the online catalog
-							</p>
-						</div>
+							<div class="section-header">
+								<h3>Mod Manager Catalog</h3>
+								<p>
+									These mods are available from the online
+									catalog
+								</p>
+							</div>
+						{/if}
 					{/if}
 
 					<div
