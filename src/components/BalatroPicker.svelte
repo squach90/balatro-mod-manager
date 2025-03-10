@@ -286,11 +286,6 @@
 		min-height: 250px;
 	}
 
-	.input-container {
-		width: 100%;
-		margin: 1rem 0; /* Change from 1rem to 1rem 0 to prevent horizontal overflow */
-		box-sizing: border-box; /* Include padding in width calculation */
-	}
 
 	h2 {
 		margin: 0;
@@ -360,9 +355,11 @@
 		font-size: 1.4rem;
 	}
 
+	/* To this */
 	.input-container {
 		width: 100%;
-		margin: 1rem;
+		margin: 1rem 0; /* Changed from 1rem to 1rem 0 to prevent horizontal overflow */
+		box-sizing: border-box; /* Include padding in width calculation */
 	}
 
 	input[type="text"] {
