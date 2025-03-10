@@ -1,3 +1,4 @@
+use crate::cache;
 use crate::database::Database;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -17,10 +18,22 @@ pub struct DetectedMod {
     pub path: String,
     pub dependencies: Vec<String>,
     pub conflicts: Vec<String>,
-    pub is_tracked: bool,
+    pub catalog_match: Option<CatalogMatch>,
+    pub is_duplicate: bool,
 }
 
-pub fn detect_manual_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CatalogMatch {
+    pub title: String,
+    pub catalog_id: String,
+    pub download_url: String, // Changed from downloadURL to match field names
+    pub version: Option<String>,
+}
+
+pub fn detect_manual_mods(
+    db: &Database,
+    cached_catalog_mods: &[cache::Mod],
+) -> Result<Vec<DetectedMod>, String> {
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
 
@@ -30,7 +43,7 @@ pub fn detect_manual_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
         return Ok(Vec::new());
     }
 
-    // Get tracked mods from the database
+    // Get tracked mods from the database for duplicate detection
     let managed_mods = db
         .get_installed_mods()
         .map_err(|e| format!("Failed to get installed mods: {}", e))?;
@@ -40,6 +53,10 @@ pub fn detect_manual_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
         .iter()
         .map(|m| normalize_path(&PathBuf::from(&m.path)))
         .collect();
+
+    // Create a set of managed mod names (lowercase) for duplicate detection
+    let managed_names: HashSet<String> =
+        managed_mods.iter().map(|m| m.name.to_lowercase()).collect();
 
     let mut manual_mods = Vec::new();
     let mut bundled_dependencies = HashSet::new();
@@ -51,17 +68,83 @@ pub fn detect_manual_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
     let mut all_detected_mods = Vec::new();
     detect_mods_recursive(&mod_dir, &mut all_detected_mods, &bundled_dependencies)?;
 
-    // Filter out mods that are already managed by the mod manager
-    for mod_info in all_detected_mods {
+    // Process detected mods to find catalog matches and handle duplicates
+    for mut mod_info in all_detected_mods {
         let mod_path = normalize_path(&PathBuf::from(&mod_info.path));
 
-        // If this mod is not managed, add it to manual mods
+        // If this mod is not managed by path, consider it a manual mod
         if !is_path_managed(&mod_path, &managed_paths) {
+            // Check for name duplication with managed mods
+            let mod_name_lower = mod_info.name.to_lowercase();
+            if managed_names.contains(&mod_name_lower) {
+                mod_info.is_duplicate = true;
+                // Append a suffix to the name
+                mod_info.name = format!("{} (Manual)", mod_info.name);
+            }
+
+            // Try to find a match in the catalog
+            mod_info.catalog_match = find_catalog_match(&mod_info, cached_catalog_mods);
+
             manual_mods.push(mod_info);
         }
     }
 
     Ok(manual_mods)
+}
+
+/// Try to match a local mod with a catalog entry
+fn find_catalog_match(
+    local_mod: &DetectedMod,
+    catalog_mods: &[cache::Mod],
+) -> Option<CatalogMatch> {
+    // Try several matching strategies in order of specificity
+
+    // 1. Try to match by ID (most specific)
+    let local_id_lower = local_mod.id.to_lowercase();
+    for catalog_mod in catalog_mods {
+        let catalog_id_lower = catalog_mod.title.replace(" ", "").to_lowercase();
+        if catalog_id_lower == local_id_lower {
+            return Some(CatalogMatch {
+                title: catalog_mod.title.clone(),
+                catalog_id: catalog_mod.title.clone(), // Using title as the ID
+                download_url: catalog_mod.download_url.clone(),
+                version: catalog_mod.version.clone(),
+            });
+        }
+    }
+
+    // 2. Try to match by normalized name
+    let local_name_lower = local_mod.name.to_lowercase();
+    for catalog_mod in catalog_mods {
+        let catalog_name_lower = catalog_mod.title.to_lowercase();
+        if catalog_name_lower == local_name_lower {
+            return Some(CatalogMatch {
+                title: catalog_mod.title.clone(),
+                catalog_id: catalog_mod.title.clone(),
+                download_url: catalog_mod.download_url.clone(),
+                version: catalog_mod.version.clone(),
+            });
+        }
+    }
+
+    // 3. Try fuzzy matching (name contains or similarity)
+    for catalog_mod in catalog_mods {
+        let catalog_name_lower = catalog_mod.title.to_lowercase();
+
+        // Check if local name is a subset of catalog name or vice versa
+        if local_name_lower.contains(&catalog_name_lower)
+            || catalog_name_lower.contains(&local_name_lower)
+        {
+            return Some(CatalogMatch {
+                title: catalog_mod.title.clone(),
+                catalog_id: catalog_mod.title.clone(),
+                download_url: catalog_mod.download_url.clone(),
+                version: catalog_mod.version.clone(),
+            });
+        }
+    }
+
+    None
 }
 
 fn is_path_managed(path: &str, managed_paths: &HashSet<String>) -> bool {
@@ -297,7 +380,8 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
                 path: mod_path.to_string_lossy().to_string(),
                 dependencies: Vec::new(),
                 conflicts: Vec::new(),
-                is_tracked: false,
+                catalog_match: None,
+                is_duplicate: false,
             }));
         }
     }
@@ -392,7 +476,8 @@ fn parse_mod_json(json_path: &Path, mod_path: &Path) -> Result<Option<DetectedMo
         path: mod_path.to_string_lossy().to_string(),
         dependencies: mod_json.dependencies,
         conflicts: mod_json.conflicts,
-        is_tracked: false,
+        catalog_match: None,
+        is_duplicate: false,
     }))
 }
 
@@ -438,7 +523,8 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 path: mod_path.to_string_lossy().to_string(),
                 dependencies: Vec::new(),
                 conflicts: Vec::new(),
-                is_tracked: false,
+                catalog_match: None,
+                is_duplicate: false,
             }));
         }
         return Ok(None);
@@ -546,20 +632,29 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         path: mod_path.to_string_lossy().to_string(),
         dependencies,
         conflicts,
-        is_tracked: false,
+        catalog_match: None,
+        is_duplicate: false,
     }))
 }
 
 /// Get all detected mods and mark which ones are tracked in the database
 pub fn get_all_detected_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
-    // Changed from detect_local_mods to detect_manual_mods
-    let detected_mods = detect_manual_mods(db)?;
-    Ok(detected_mods)
+    // Load cached catalog mods if available
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+
+    detect_manual_mods(db, &cached_mods)
 }
 
 /// Checks which detected mods are not already tracked in the database
 pub fn get_untracked_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
-    // Changed from detect_local_mods to detect_manual_mods
-    let detected_mods = detect_manual_mods(db)?;
-    Ok(detected_mods)
+    // Load cached catalog mods if available
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+
+    detect_manual_mods(db, &cached_mods)
 }

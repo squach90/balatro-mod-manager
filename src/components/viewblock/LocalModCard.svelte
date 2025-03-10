@@ -1,10 +1,119 @@
 <script lang="ts">
-	import { Trash2 } from "lucide-svelte";
+	import { Trash2, ArrowDownToLine, CornerDownRight } from "lucide-svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
+	import {
+		modsStore,
+		loadingStates2 as loadingStates,
+	} from "../../stores/modStore";
 
 	export let mod: any;
 	export let onUninstall: (mod: any) => void;
+
+	
+
+	// Local state for loading
+	let isInstalling = false;
+
+
+	// FIXME: This installs the mod and removes it after it's installed.
+	async function installOfficialVersion(e: Event) {
+		e.stopPropagation();
+		if (!mod.catalog_match) return;
+
+		try {
+			isInstalling = true;
+
+			// Create a simplified version of the catalog mod for installation
+			const catalogMod = {
+				title: mod.catalog_match.title,
+				downloadURL: mod.catalog_match.download_url,
+				version: mod.catalog_match.version || "",
+				requires_steamodded: false,
+				requires_talisman: false,
+			};
+
+			// Find the full catalog mod if available
+			const fullCatalogMod = $modsStore.find(
+				(m) =>
+					m.title.toLowerCase() ===
+					mod.catalog_match.title.toLowerCase(),
+			);
+
+			// Use the dependency info from the full catalog mod if found
+			const dependencies = [];
+			if (fullCatalogMod) {
+				if (fullCatalogMod.requires_steamodded)
+					dependencies.push("Steamodded");
+				if (fullCatalogMod.requires_talisman)
+					dependencies.push("Talisman");
+			}
+
+			// Save the local mod path for later removal
+			const localModPath = mod.path;
+
+			// Create a temporary copy of the local mod in case installation fails
+			await invoke("backup_local_mod", { path: localModPath });
+
+			try {
+				// Install the mod
+				const installedPath = await invoke("install_mod", {
+					url: catalogMod.downloadURL,
+					folderName:
+						fullCatalogMod?.folderName ||
+						catalogMod.title.replace(/\s+/g, ""),
+				});
+
+				// Verify the installed path exists before proceeding
+				const pathExists = await invoke("path_exists", {
+					path: installedPath,
+				});
+				if (!pathExists) {
+					throw new Error(
+						`Failed to verify installed path: ${installedPath}`,
+					);
+				}
+
+				// Add to database
+				await invoke("add_installed_mod", {
+					name: catalogMod.title,
+					path: installedPath,
+					dependencies,
+					currentVersion: catalogMod.version,
+				});
+
+				// Now that installation was successful, remove the local version
+				// We should verify it still exists first
+				const localPathExists = await invoke("path_exists", {
+					path: localModPath,
+				});
+				if (localPathExists) {
+					await invoke("delete_manual_mod", {
+						path: localModPath,
+					});
+				}
+
+				addMessage(
+					`Installed official version of ${mod.catalog_match.title}`,
+					"success",
+				);
+
+				// Clean up the backup
+				await invoke("remove_backup", { path: localModPath });
+
+				// Refresh the view
+				onUninstall(mod);
+			} catch (error) {
+				// If installation failed, restore from backup
+				await invoke("restore_from_backup", { path: localModPath });
+				throw error;
+			}
+		} catch (error) {
+			addMessage(`Failed to install official version: ${error}`, "error");
+		} finally {
+			isInstalling = false;
+		}
+	}
 
 	async function uninstallMod(e: Event) {
 		e.stopPropagation(); // Prevent card click if we have one
@@ -59,10 +168,24 @@
 				.slice(1)
 		);
 	}
+
+	// Check for version differences if we have a catalog match
+	let hasNewerVersion = false;
+	if (mod.catalog_match && mod.catalog_match.version && mod.version) {
+		hasNewerVersion = mod.catalog_match.version !== mod.version;
+	}
 </script>
 
 <div class="mod-card" style="--bg-color: {bgColor}; --bg-color-2: {bgColor2};">
 	<div class="blur-bg"></div>
+
+	{#if mod.catalog_match}
+		<div class="catalog-badge">
+			<CornerDownRight size={14} />
+			<span>In Catalog</span>
+		</div>
+	{/if}
+
 	<div class="mod-content">
 		<h3>{mod.name}</h3>
 		<p class="description">{mod.description}</p>
@@ -76,14 +199,40 @@
 					<span>Version: {mod.version}</span>
 				</div>
 			{/if}
+
+			{#if mod.catalog_match && hasNewerVersion}
+				<div class="catalog-version">
+					<span>Catalog version: {mod.catalog_match.version}</span>
+				</div>
+			{/if}
 		</div>
 	</div>
 
 	<div class="button-container">
-		<button class="delete-button" title="Remove Mod" onclick={uninstallMod}>
-			<Trash2 size={18} />
-			Remove
-		</button>
+		{#if mod.catalog_match}
+			<button
+				class="install-button"
+				title="Install official version"
+				on:click={installOfficialVersion}
+				disabled={isInstalling}
+			>
+				{#if isInstalling}
+					<div class="spinner"></div>
+				{:else}
+					<ArrowDownToLine size={18} />
+					Get Official Version
+				{/if}
+			</button>
+		{:else}
+			<button
+				class="delete-button"
+				title="Remove Mod"
+				on:click={uninstallMod}
+			>
+				<Trash2 size={18} />
+				Remove
+			</button>
+		{/if}
 	</div>
 </div>
 
@@ -126,6 +275,23 @@
 		background-color: rgba(0, 0, 0, 0.2);
 		z-index: 1;
 		pointer-events: none;
+	}
+
+	.catalog-badge {
+		position: absolute;
+		top: 1rem;
+		right: 1rem;
+		background: #56a786;
+		color: #f4eee0;
+		padding: 0.3rem 0.5rem;
+		border-radius: 4px;
+		font-size: 0.9rem;
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		z-index: 3;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+		border: 1px solid rgba(244, 238, 224, 0.3);
 	}
 
 	.mod-card:hover {
@@ -181,11 +347,17 @@
 		margin-bottom: 1rem;
 	}
 
-	.version {
+	.version,
+	.catalog-version {
 		margin-top: 0.3rem;
 	}
 
-	/* Match the ModCard button styling */
+	.catalog-version {
+		color: #56a786;
+		font-weight: bold;
+	}
+
+	/* Button container styling */
 	.button-container {
 		display: flex;
 		gap: 0.5rem;
@@ -196,22 +368,34 @@
 		z-index: 2;
 	}
 
-	.delete-button {
+	/* Button styles */
+	.delete-button,
+	.install-button {
 		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 0.75rem;
-		background: #c14139;
 		color: #f4eee0;
 		border: none;
-		outline: #a13029 solid 2px;
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
 		font-size: 1.1rem;
+		min-height: 42px;
+		position: relative;
+	}
+
+	.delete-button {
+		background: #c14139;
+		outline: #a13029 solid 2px;
+	}
+
+	.install-button {
+		background: #56a786;
+		outline: #459373 solid 2px;
 	}
 
 	.delete-button:hover {
@@ -219,8 +403,40 @@
 		transform: translateY(-2px);
 	}
 
-	.delete-button:active {
+	.install-button:hover:not(:disabled) {
+		background: #63b897;
+		transform: translateY(-2px);
+	}
+
+	.delete-button:active,
+	.install-button:active {
 		transform: translateY(1px);
+	}
+
+	.install-button:disabled {
+		opacity: 0.8;
+		cursor: not-allowed;
+	}
+
+	/* Spinner for loading state */
+	.spinner {
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top: 2px solid #ffffff;
+		border-radius: 50%;
+		width: 16px;
+		height: 16px;
+		animation: spin 1s linear infinite;
+		margin: 0 auto;
+		display: inline-block;
+	}
+
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 
 	@media (max-width: 1160px) {

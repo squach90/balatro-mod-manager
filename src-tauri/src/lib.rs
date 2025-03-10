@@ -2,6 +2,7 @@ mod github_repo;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -12,6 +13,7 @@ use tauri::Manager;
 use std::collections::HashSet;
 use std::fs::File;
 use std::panic;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
@@ -648,16 +650,25 @@ async fn get_manual_mods(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    local_mod_detection::detect_manual_mods(&db)
-}
 
+    // Get cached catalog mods using the cache module
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+
+    local_mod_detection::detect_manual_mods(&db, &cached_mods)
+}
 #[tauri::command]
 async fn delete_manual_mod(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
 
-    // Verify that this path exists and is within the Mods directory
+    // Verify that this path exists
     if !path.exists() {
-        return Err("Path does not exist".to_string());
+        return Err(format!(
+            "Invalid path '{}': Path doesn't exist",
+            path.display()
+        ));
     }
 
     let config_dir =
@@ -666,23 +677,43 @@ async fn delete_manual_mod(path: String) -> Result<(), String> {
     let mods_dir = config_dir.join("Balatro").join("Mods");
 
     // Security check: Make sure the path is within the Mods directory
-    let normalized_path = path
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+    let canonicalized_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            return Err(format!(
+                "Failed to canonicalize path {}: {}",
+                path.display(),
+                e
+            ))
+        }
+    };
 
-    let normalized_mods_dir = mods_dir
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize mods directory: {}", e))?;
+    let canonicalized_mods_dir = match mods_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to canonicalize mods directory: {}", e)),
+    };
 
-    if !normalized_path.starts_with(normalized_mods_dir) {
-        return Err("Path is outside of the mods directory".to_string());
+    if !canonicalized_path.starts_with(&canonicalized_mods_dir) {
+        return Err(format!(
+            "Path is outside of the mods directory: {}",
+            path.display()
+        ));
     }
+
+    // Log what we're about to delete
+    log::info!("Deleting manual mod at path: {}", path.display());
 
     // Delete the directory or file
     if path.is_dir() {
-        std::fs::remove_dir_all(&path).map_err(|e| format!("Failed to remove directory: {}", e))?;
+        match std::fs::remove_dir_all(&path) {
+            Ok(_) => log::info!("Successfully removed directory: {}", path.display()),
+            Err(e) => return Err(format!("Failed to remove directory: {}", e)),
+        }
     } else {
-        std::fs::remove_file(&path).map_err(|e| format!("Failed to remove file: {}", e))?;
+        match std::fs::remove_file(&path) {
+            Ok(_) => log::info!("Successfully removed file: {}", path.display()),
+            Err(e) => return Err(format!("Failed to remove file: {}", e)),
+        }
     }
 
     Ok(())
@@ -693,7 +724,11 @@ async fn get_detected_local_mods(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<local_mod_detection::DetectedMod>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    local_mod_detection::detect_manual_mods(&db)
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+    local_mod_detection::detect_manual_mods(&db, &cached_mods)
 }
 
 #[tauri::command]
@@ -894,6 +929,183 @@ async fn install_talisman_version(version: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn backup_local_mod(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if !path.exists() {
+        return Err(format!("Path doesn't exist: {}", path.display()));
+    }
+
+    let backup_dir = get_backup_dir()?;
+
+    // Create a unique backup ID
+    let backup_id = format!(
+        "backup_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| format!("Failed to get timestamp: {}", e))?
+            .as_millis()
+    );
+
+    let backup_path = backup_dir.join(backup_id);
+
+    // Create the backup directory
+    std::fs::create_dir_all(&backup_path)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+
+    // Copy the mod to the backup
+    if path.is_dir() {
+        copy_dir_all(&path, &backup_path.join(path.file_name().unwrap()))
+            .map_err(|e| format!("Failed to copy mod to backup: {}", e))?;
+    } else {
+        std::fs::copy(&path, backup_path.join(path.file_name().unwrap()))
+            .map_err(|e| format!("Failed to copy mod file to backup: {}", e))?;
+    }
+
+    // Store the original path in a metadata file for restoration
+    let metadata = json!({
+        "original_path": path.to_string_lossy().to_string(),
+        "backup_time": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    });
+
+    std::fs::write(
+        backup_path.join("metadata.json"),
+        serde_json::to_string_pretty(&metadata)
+            .map_err(|e| format!("Failed to serialize metadata: {}", e))?,
+    )
+    .map_err(|e| format!("Failed to write metadata: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn restore_from_backup(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let backup_dir = get_backup_dir()?;
+
+    // Find the latest backup for this path
+    let mut latest_backup = None;
+    let mut latest_time = 0;
+
+    for entry in std::fs::read_dir(&backup_dir)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let metadata_path = entry.path().join("metadata.json");
+
+        if metadata_path.exists() {
+            let metadata: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(&metadata_path)
+                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+            )
+            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+
+            if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
+                if original_path == path.to_string_lossy() {
+                    if let Some(backup_time) = metadata.get("backup_time").and_then(|v| v.as_u64())
+                    {
+                        if backup_time > latest_time {
+                            latest_time = backup_time;
+                            latest_backup = Some(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let backup_path = latest_backup.ok_or_else(|| "No backup found for this path".to_string())?;
+
+    // Ensure the parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    // Restore the mod from backup
+    for entry in std::fs::read_dir(&backup_path)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let file_name = entry.file_name();
+
+        // Skip metadata file
+        if file_name == "metadata.json" {
+            continue;
+        }
+
+        let dest_path = path.parent().unwrap().join(&file_name);
+
+        if entry.path().is_dir() {
+            copy_dir_all(&entry.path(), &dest_path)
+                .map_err(|e| format!("Failed to restore directory from backup: {}", e))?;
+        } else {
+            std::fs::copy(entry.path(), &dest_path)
+                .map_err(|e| format!("Failed to restore file from backup: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn remove_backup(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let backup_dir = get_backup_dir()?;
+
+    // Find all backups for this path
+    for entry in std::fs::read_dir(&backup_dir)
+        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let metadata_path = entry.path().join("metadata.json");
+
+        if metadata_path.exists() {
+            let metadata: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(&metadata_path)
+                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+            )
+            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+
+            if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
+                if original_path == path.to_string_lossy() {
+                    // Remove this backup
+                    std::fs::remove_dir_all(entry.path())
+                        .map_err(|e| format!("Failed to remove backup: {}", e))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn get_backup_dir() -> Result<PathBuf, String> {
+    let temp_dir = std::env::temp_dir().join("balatro_mod_manager_backups");
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+    Ok(temp_dir)
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let path = entry.path();
+
+        if ty.is_dir() {
+            copy_dir_all(&path, &dst.join(path.file_name().unwrap()))?;
+        } else {
+            std::fs::copy(&path, dst.join(path.file_name().unwrap()))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_background_state(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     map_error(db.get_background_enabled())
@@ -1047,6 +1259,9 @@ pub fn run() {
             register_local_mod,
             get_manual_mods,
             delete_manual_mod,
+            backup_local_mod,
+            restore_from_backup,
+            remove_backup
         ])
         .run(tauri::generate_context!());
 
