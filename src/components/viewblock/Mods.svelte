@@ -59,6 +59,14 @@
 		};
 	});
 
+	async function handleModUninstalled() {
+		// Refresh the local mods list
+		getLocalMods();
+
+		// Also refresh installed mods for consistency
+		refreshInstalledMods();
+	}
+
 	// let mods: Mod[] = [];
 	let isLoading = true;
 	interface DependencyCheck {
@@ -813,23 +821,27 @@
 					{#if $currentCategory === "Installed Mods" && localMods.length > 0}
 						<div class="section-header">
 							<h3>Local Mods</h3>
-							<p>These mods were installed manually</p>
+							<p>These mods were found in your Mods directory</p>
 						</div>
 
 						<div class="mods-grid local-mods-grid">
-							{#each localMods.filter((mod) => !mod.is_tracked) as mod}
+							{#each localMods as mod}
 								<LocalModCard
 									{mod}
 									onRegister={handleModRegistered}
+									onUninstall={handleModUninstalled}
 								/>
 							{/each}
 						</div>
 
 						<div class="section-header">
-							<h3>Installed Mods</h3>
-							<p>These mods are managed by Balatro Mod Manager</p>
+							<h3>Mod Manager Catalog</h3>
+							<p>
+								These mods are available from the online catalog
+							</p>
 						</div>
 					{/if}
+
 					<div class="mods-grid">
 						{#each paginatedMods as mod}
 							<ModCard

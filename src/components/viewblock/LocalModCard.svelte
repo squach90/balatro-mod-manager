@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Download, AlertCircle, CheckCircle2 } from "lucide-svelte";
+	import { Download, Trash2, AlertCircle, CheckCircle2 } from "lucide-svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
 
 	export let mod: any;
 	export let onRegister: (mod: any) => void;
+	export let onUninstall: (mod: any) => void;
 
 	async function registerMod() {
 		try {
@@ -21,9 +22,31 @@
 			addMessage(`Failed to register mod: ${error}`, "error");
 		}
 	}
+
+	async function uninstallMod() {
+		try {
+			// If the mod is tracked, use the remove_installed_mod API
+			if (mod.is_tracked) {
+				await invoke("remove_installed_mod", {
+					name: mod.name,
+					path: mod.path,
+				});
+			} else {
+				// For untracked mods, we can use a direct deletion
+				await invoke("delete_untracked_mod", {
+					path: mod.path,
+				});
+			}
+
+			addMessage(`Removed ${mod.name}`, "success");
+			onUninstall(mod);
+		} catch (error) {
+			addMessage(`Failed to remove mod: ${error}`, "error");
+		}
+	}
 </script>
 
-<div class="mod-card">
+<div class="mod-card {mod.is_tracked ? 'tracked-mod' : ''}">
 	<div class="mod-content">
 		<h3>{mod.name}</h3>
 		<p class="description">{mod.description}</p>
@@ -61,6 +84,10 @@
 				Register Mod
 			</button>
 		{/if}
+		<button class="uninstall-button" on:click={uninstallMod}>
+			<Trash2 size={16} />
+			Remove
+		</button>
 	</div>
 </div>
 
@@ -134,6 +161,7 @@
 	.actions {
 		display: flex;
 		padding: 1rem;
+		gap: 0.5rem; /* Add gap between buttons */
 		background: rgba(0, 0, 0, 0.1);
 		border-top: 1px solid rgba(244, 238, 224, 0.2);
 	}
@@ -155,5 +183,23 @@
 	.register-button:hover {
 		background: #f4eee0;
 		color: #393646;
+	}
+
+	.uninstall-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: #c14139;
+		color: #f4eee0;
+		border: none;
+		border-radius: 4px;
+		padding: 0.5rem 1rem;
+		font-family: "M6X11", sans-serif;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.uninstall-button:hover {
+		background: #d45a53;
 	}
 </style>
