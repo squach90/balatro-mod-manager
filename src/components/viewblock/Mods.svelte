@@ -351,7 +351,7 @@
 				manualMods = [];
 			} finally {
 				isLoadingManualMods = false;
-	}
+			}
 		}
 	}
 
@@ -835,11 +835,15 @@
 						</div>
 					</div>
 				</div>
+
 				<div class="mods-scroll-container default-scrollbar">
 					{#if $currentCategory === "Installed Mods" && localMods.length > 0}
 						<div class="section-header">
 							<h3>Local Mods</h3>
-							<p>These mods were found in your Mods directory</p>
+							<p>
+								These mods were installed manually (outside the
+								mod manager)
+							</p>
 						</div>
 
 						<div class="mods-grid local-mods-grid">
@@ -859,7 +863,11 @@
 						</div>
 					{/if}
 
-					<div class="mods-grid">
+					<div
+						class="mods-grid"
+						class:has-local-mods={$currentCategory ===
+							"Installed Mods" && localMods.length > 0}
+					>
 						{#each paginatedMods as mod}
 							<ModCard
 								{mod}
@@ -883,6 +891,28 @@
 </div>
 
 <style>
+	.section-header {
+		background: #c14139;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		padding: 1rem 2rem;
+		margin: 0 2rem 1rem 2rem;
+		margin-top: 2rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.section-header h3 {
+		margin: 0;
+		font-size: 1.8rem;
+		color: #f4eee0;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	.section-header p {
+		margin: 0.5rem 0 0 0;
+		font-size: 1.1rem;
+		color: #f4eee0;
+	}
 	.mods-container {
 		display: flex;
 		gap: 1rem;
@@ -1016,12 +1046,21 @@
 	}
 
 	.mods-grid {
-		padding: 2rem;
-		padding-top: 5rem;
+		padding: 1rem 2rem 2rem 2rem;
 		flex: 1;
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
+	}
+
+	.local-mods-grid {
+		padding-top: 0.5rem;
+		padding-bottom: 1rem;
+	}
+
+	/* Catalog section gets proper top padding */
+	.local-mods-grid + .section-header + .mods-grid {
+		padding-top: 1rem;
 	}
 
 	.sort-controls {

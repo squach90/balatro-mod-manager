@@ -4,7 +4,7 @@
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
-	import { showWarningPopup, backgroundEnabled } from "../../stores/modStore";
+	import { backgroundEnabled } from "../../stores/modStore";
 
 	let isReindexing = false;
 	let isClearingCache = false;
