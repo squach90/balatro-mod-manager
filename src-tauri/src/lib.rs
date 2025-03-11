@@ -457,6 +457,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
     #[cfg(target_os = "macos")]
     {
+        // macOS code remains unchanged
         let lovely_path = map_error(lovely::ensure_lovely_exists().await)?;
         let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
 
@@ -501,8 +502,10 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
     #[cfg(target_os = "windows")]
     {
-        // Paths for the executable
-        let exe_path = path.join("Balatro.exe");
+        // Find the executable file in the directory
+        let exe_path = find_executable_in_directory(&path)
+            .ok_or_else(|| format!("No executable found in {}", path.display()))?;
+
         let dll_path = path.join("version.dll");
 
         // If version.dll doesn't exist, download it
@@ -515,19 +518,53 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
             Command::new(&exe_path)
                 .current_dir(&path)
                 .spawn()
-                .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+                .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
         } else {
             Command::new(&exe_path)
                 .current_dir(&path)
                 .arg("--disable-console")
                 .spawn()
-                .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+                .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
         }
 
-        log::debug!("Launched Balatro from {}", exe_path.display());
+        log::debug!("Launched game from {}", exe_path.display());
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn find_executable_in_directory(dir: &PathBuf) -> Option<PathBuf> {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        // Create a Vec to hold all executable files
+        let mut executables: Vec<PathBuf> = Vec::new();
+
+        // First, collect all executable files in the directory
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("exe")) {
+                executables.push(path);
+            }
+        }
+
+        if executables.is_empty() {
+            return None;
+        }
+
+        // First, look for any executable with "balatro" in the name (case-insensitive)
+        for exe in &executables {
+            if let Some(file_name) = exe.file_name().and_then(|n| n.to_str()) {
+                if file_name.to_lowercase().contains("balatro") {
+                    return Some(exe.clone());
+                }
+            }
+        }
+
+        // If no Balatro-specific executable was found, return the first executable
+        return Some(executables[0].clone());
+    }
+
+    None
 }
 
 #[tauri::command]
