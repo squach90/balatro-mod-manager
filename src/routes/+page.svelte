@@ -5,8 +5,6 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { goto } from "$app/navigation";
 
-	let starsContainer: HTMLElement;
-
 	onMount(() => {
 		const init = async () => {
 			try {
@@ -16,63 +14,13 @@
 				if (existingPath) {
 					await goto("/main", { replaceState: true });
 				}
-				createStars();
 			} catch (error) {
 				console.error("Error checking existing installation:", error);
 			}
 		};
 
 		init();
-
-		window.addEventListener("resize", createStars);
-
-		return () => window.removeEventListener("resize", createStars);
 	});
-
-	function createStars() {
-		if (!starsContainer) return;
-		starsContainer.innerHTML = "";
-
-		const numberOfStars = 150;
-		const colors = ["#ffffff", "#fffacd", "#87ceeb"];
-
-		// Create normal stars
-		for (let i = 0; i < numberOfStars; i++) {
-			const star = document.createElement("div");
-			star.className = "star";
-
-			star.style.left = `${Math.random() * 100}%`;
-			star.style.top = `${Math.random() * 100}%`;
-
-			const size = Math.random() * 2 + 1;
-			star.style.width = `${size}px`;
-			star.style.height = `${size}px`;
-
-			star.style.backgroundColor =
-				colors[Math.floor(Math.random() * colors.length)];
-
-			const duration = 2 + Math.random() * 3;
-			const delay = Math.random() * 2;
-			star.style.animation = `twinkle ${duration}s infinite ${delay}s`;
-
-			starsContainer.appendChild(star);
-		}
-
-		// Create shooting stars [1]
-		const numberOfShootingStars = 5;
-		for (let i = 0; i < numberOfShootingStars; i++) {
-			const shootingStar = document.createElement("div");
-			shootingStar.className = "shooting-star";
-
-			shootingStar.style.left = `${Math.random() * 100}%`;
-			shootingStar.style.top = `${Math.random() * 50}%`;
-
-			const duration = 1 + Math.random() * 2;
-			shootingStar.style.animation = `shoot ${duration}s linear infinite`;
-
-			starsContainer.appendChild(shootingStar);
-		}
-	}
 
 	window.addEventListener("contextmenu", async (e) => {
 		e.preventDefault();
@@ -91,8 +39,19 @@
 	});
 </script>
 
-<div class="night-sky">
-	<div class="stars" bind:this={starsContainer}></div>
+<div class="area">
+	<ul class="circles">
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+		<li></li>
+	</ul>
 </div>
 
 <div class="app">
@@ -102,86 +61,127 @@
 </div>
 
 <style>
-	.night-sky {
-		width: 100vw;
+	/* Import Exo font if needed */
+	@import url("https://fonts.googleapis.com/css?family=Exo:400,700");
+
+	.area {
+		background: #10122d;
+		background: -webkit-linear-gradient(to left, #1a1e3c, #0d0f24);
+		width: 100%;
 		height: 100vh;
-		background: linear-gradient(
-			to bottom,
-			#0f1016 0%,
-			#1a1b2e 50%,
-			#232b4e 100%
-		);
 		position: fixed;
 		top: 0;
 		left: 0;
 		z-index: -1;
-		overflow: hidden;
 	}
 
-	.stars {
-		width: 100%;
-		height: 100%;
-		position: fixed;
+	.circles {
+		position: absolute;
 		top: 0;
 		left: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+		margin: 0;
+		padding: 0;
 	}
 
-	:global(.star) {
+	.circles li {
 		position: absolute;
-		border-radius: 50%;
-		pointer-events: none;
-		box-shadow:
-			0 0 4px currentColor,
-			0 0 8px currentColor;
-		will-change: transform, opacity;
-		transition: all 0.3s ease;
+		display: block;
+		list-style: none;
+		width: 20px;
+		height: 20px;
+		background: rgba(255, 255, 255, 0.1);
+		animation: animate 25s linear infinite;
+		bottom: -150px;
 	}
 
-	@keyframes twinkle {
+	.circles li:nth-child(1) {
+		left: 25%;
+		width: 80px;
+		height: 80px;
+		animation-delay: 0s;
+	}
+
+	.circles li:nth-child(2) {
+		left: 10%;
+		width: 20px;
+		height: 20px;
+		animation-delay: 2s;
+		animation-duration: 12s;
+	}
+
+	.circles li:nth-child(3) {
+		left: 70%;
+		width: 20px;
+		height: 20px;
+		animation-delay: 4s;
+	}
+
+	.circles li:nth-child(4) {
+		left: 40%;
+		width: 60px;
+		height: 60px;
+		animation-delay: 0s;
+		animation-duration: 18s;
+	}
+
+	.circles li:nth-child(5) {
+		left: 65%;
+		width: 20px;
+		height: 20px;
+		animation-delay: 0s;
+	}
+
+	.circles li:nth-child(6) {
+		left: 75%;
+		width: 110px;
+		height: 110px;
+		animation-delay: 3s;
+	}
+
+	.circles li:nth-child(7) {
+		left: 35%;
+		width: 150px;
+		height: 150px;
+		animation-delay: 7s;
+	}
+
+	.circles li:nth-child(8) {
+		left: 50%;
+		width: 25px;
+		height: 25px;
+		animation-delay: 15s;
+		animation-duration: 45s;
+	}
+
+	.circles li:nth-child(9) {
+		left: 20%;
+		width: 15px;
+		height: 15px;
+		animation-delay: 2s;
+		animation-duration: 35s;
+	}
+
+	.circles li:nth-child(10) {
+		left: 85%;
+		width: 150px;
+		height: 150px;
+		animation-delay: 0s;
+		animation-duration: 11s;
+	}
+
+	@keyframes animate {
 		0% {
-			opacity: 0.2;
-			transform: scale(0.8);
-			box-shadow:
-				0 0 2px currentColor,
-				0 0 4px currentColor;
-		}
-		50% {
+			transform: translateY(0) rotate(0deg);
 			opacity: 1;
-			transform: scale(1.2);
-			box-shadow:
-				0 0 6px currentColor,
-				0 0 12px currentColor,
-				0 0 18px currentColor;
+			border-radius: 0;
 		}
 		100% {
-			opacity: 0.2;
-			transform: scale(0.8);
-			box-shadow:
-				0 0 2px currentColor,
-				0 0 4px currentColor;
-		}
-	}
-
-	/* Shooting stars [1] */
-	:global(.shooting-star) {
-		position: absolute;
-		width: 2px;
-		height: 2px;
-		background-color: #ffffff;
-		box-shadow: 0 0 6px #ffffff;
-		border-radius: 50%;
-		transform: translateX(-50%) translateY(-50%);
-		animation: shoot 2s linear infinite;
-	}
-
-	@keyframes shoot {
-		0% {
-			opacity: 1;
-			transform: translateX(0) translateY(0);
-		}
-		100% {
+			transform: translateY(-1000px) rotate(720deg);
 			opacity: 0;
-			transform: translateX(100px) translateY(100px);
+			border-radius: 50%;
 		}
 	}
 
@@ -265,3 +265,4 @@
 		height: 100%;
 	}
 </style>
+
