@@ -188,22 +188,23 @@ impl Balatro {
 
         #[cfg(target_os = "windows")]
         {
-            // For Windows, check for existence of exe and certain DLLs
-            let exe_exists = self.get_exe_path().exists();
-            if !exe_exists {
-                return false;
-            }
-
-            // Check for at least one of these DLLs to verify it's a LÖVE-based application
+            // For Windows, only check for LÖVE engine DLLs
             let dll_files = ["love.dll", "lua51.dll", "SDL2.dll"];
             let dir = self.path.clone();
 
+            // Return true if at least one of the DLLs exists
             for dll in dll_files.iter() {
                 if dir.join(dll).exists() {
                     return true;
                 }
             }
             false
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // For Linux, keep existing validation
+            self.get_exe_path().exists()
         }
     }
 
