@@ -61,9 +61,6 @@
 </div>
 
 <style>
-	/* Import Exo font if needed */
-	@import url("https://fonts.googleapis.com/css?family=Exo:400,700");
-
 	.area {
 		background: #10122d;
 		background: -webkit-linear-gradient(to left, #1a1e3c, #0d0f24);
@@ -265,4 +262,3 @@
 		height: 100%;
 	}
 </style>
-
