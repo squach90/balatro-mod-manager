@@ -670,9 +670,9 @@
 							[mod.title]: hasUpdate,
 						}));
 
-						console.log(
-							`Update check for ${mod.title}: ${hasUpdate ? "Update available" : "No update"}`,
-						);
+						// console.log(
+						// 	`Update check for ${mod.title}: ${hasUpdate ? "Update available" : "No update"}`,
+						// );
 					} catch (error) {
 						console.error(
 							`Failed to check updates for ${mod.title}:`,

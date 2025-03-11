@@ -180,7 +180,32 @@ impl Balatro {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.get_exe_path().exists()
+        #[cfg(target_os = "macos")]
+        {
+            // For macOS, keep existing validation
+            self.get_exe_path().exists()
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // For Windows, only check for LÖVE engine DLLs
+            let dll_files = ["love.dll", "lua51.dll", "SDL2.dll"];
+            let dir = self.path.clone();
+
+            // Return true if at least one of the DLLs exists
+            for dll in dll_files.iter() {
+                if dir.join(dll).exists() {
+                    return true;
+                }
+            }
+            false
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // For Linux, keep existing validation
+            self.get_exe_path().exists()
+        }
     }
 
     pub fn from_custom_path(path: PathBuf) -> Option<Self> {
