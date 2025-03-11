@@ -2,12 +2,13 @@
 	import { fly } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "../lib/stores";
-
+	import { FolderDot, FileDigit } from "lucide-svelte";
 	import { goto } from "$app/navigation";
 
 	let selectedOption = "steam";
 	let showCustomInput = false;
 	let selectedPath = "";
+	let customPathType = "directory"; // New state to track directory or executable selection
 
 	const handleOptionChange = (option: string) => {
 		selectedOption = option;
@@ -29,10 +30,18 @@
 		const { open } = await import("@tauri-apps/plugin-dialog");
 
 		const selected = await open({
-			directory: true,
+			directory: customPathType === "directory",
 			multiple: false,
-			title: "Select Balatro Path",
+			title:
+				customPathType === "directory"
+					? "Select Balatro Directory"
+					: "Select Balatro Executable",
+			filters:
+				customPathType === "executable"
+					? [{ name: "Executable", extensions: ["exe"] }]
+					: undefined,
 		});
+
 		if (selected) {
 			selectedPath = selected as string;
 		}
@@ -66,9 +75,25 @@
 					isLoading = false;
 					return;
 				}
+
+				// If executable was selected, get the parent directory
+				let pathToCheck = selectedPath;
+				if (customPathType === "executable") {
+					// Extract directory from file path
+					const lastSlashIndex =
+						selectedPath.lastIndexOf("/") !== -1
+							? selectedPath.lastIndexOf("/")
+							: selectedPath.lastIndexOf("\\");
+
+					if (lastSlashIndex !== -1) {
+						pathToCheck = selectedPath.substring(0, lastSlashIndex);
+					}
+				}
+
 				const isValid = await invoke("check_custom_balatro", {
-					path: selectedPath,
+					path: pathToCheck,
 				});
+
 				if (isValid) {
 					addMessage(
 						"Successfully found Balatro installation",
@@ -122,18 +147,41 @@
 
 		{#if showCustomInput}
 			<div
-				class="input-container"
+				class="custom-input-section"
 				in:fly={{ duration: 200, y: 10 }}
 				out:fly={{ duration: 200, y: -10 }}
 			>
-				<input
-					type="text"
-					placeholder="Choose Balatro Path"
-					disabled={isLoading}
-					on:click={handlePathSelect}
-					value={selectedPath ? truncatePath(selectedPath) : ""}
-					readonly
-				/>
+				<div class="path-type-selector">
+					<button
+						class:active={customPathType === "directory"}
+						on:click={() => (customPathType = "directory")}
+						disabled={isLoading}
+					>
+						<FolderDot size={16} />
+						Directory
+					</button>
+					<button
+						class:active={customPathType === "executable"}
+						on:click={() => (customPathType = "executable")}
+						disabled={isLoading}
+					>
+						<FileDigit size={16} />
+						Executable
+					</button>
+				</div>
+
+				<div class="input-container">
+					<input
+						type="text"
+						placeholder={customPathType === "directory"
+							? "Choose Balatro Directory"
+							: "Choose Balatro Executable"}
+						disabled={isLoading}
+						on:click={handlePathSelect}
+						value={selectedPath ? truncatePath(selectedPath) : ""}
+						readonly
+					/>
+				</div>
 			</div>
 		{/if}
 
@@ -159,10 +207,6 @@
 <style>
 	:root {
 		/* Base Colors */
-		/* --color-dark: #459373; */
-		/* --color-medium: #56a786; */
-		/* --color-light: #74cca8; */
-		/* --color-cream: #f4eee0; */
 		--color-dark: #3b41a8; /* Brighter base blue */
 		--color-medium: #4b52d1; /* Vibrant medium blue */
 		--color-light: #6166ff; /* Bright highlight blue */
@@ -185,6 +229,7 @@
 
 	.button-wrapper {
 		position: relative;
+		margin-top: auto; /* Push to bottom of flex container */
 	}
 
 	.overlay {
@@ -216,22 +261,22 @@
 	}
 
 	.action-button {
-		margin-top: 2rem;
+		margin-top: 1rem; /* Reduced from 2rem */
 		padding: 0.75rem 2rem;
 		border: 2px solid var(--color-cream);
 		border-radius: 12px;
 		background-color: transparent;
 		color: var(--color-cream);
 		font-family: inherit;
-		font-size: 1.4rem; /* Slightly larger font */
+		font-size: 1.4rem;
 		cursor: pointer;
-		width: 150px; /* Increased from 120px */
-		height: 60px; /* Increased from 45px */
+		width: 150px;
+		height: 60px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		overflow: hidden; /* Prevents content from spilling during transition */
+		overflow: hidden;
 	}
 	.action-button:hover {
 		background-color: var(--color-cream);
@@ -283,9 +328,11 @@
 	}
 
 	.container.expanded {
-		min-height: 250px;
+		min-height: 290px; /* Reduced from 320px */
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between; /* Distribute content evenly */
 	}
-
 
 	h2 {
 		margin: 0;
@@ -304,8 +351,9 @@
 	.radio-group {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem; /* Increased from 1rem to 1.5rem to match the spacing in the image */
+		gap: 1rem;
 		width: 100%;
+		margin-bottom: 1.5rem; /* Added to reduce space after radio buttons */
 	}
 	.radio-label {
 		display: flex;
@@ -351,15 +399,58 @@
 
 	.radio-text {
 		color: #f4eee0;
-		/* distance between 2 elements */
 		font-size: 1.4rem;
 	}
 
-	/* To this */
+	.custom-input-section {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem; /* Reduced from 0.5rem */
+	}
+
+	.path-type-selector {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.25rem; /* Reduced from 0.5rem */
+		width: 100%;
+	}
+
+	.path-type-selector button {
+		flex: 1;
+		background: #c88000;
+		color: white;
+		border: 2px solid #fda200;
+		border-radius: 8px;
+		padding: 0.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+		font-size: 0.9rem;
+	}
+
+	.path-type-selector button.active {
+		background: #fda200;
+		border-color: white;
+	}
+
+	.path-type-selector button:hover:not(:disabled) {
+		border-color: white;
+	}
+
+	.path-type-selector button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
 	.input-container {
 		width: 100%;
-		margin: 1rem 0; /* Changed from 1rem to 1rem 0 to prevent horizontal overflow */
-		box-sizing: border-box; /* Include padding in width calculation */
+		margin: 0.25rem 0; /* Reduced from 0.5rem */
+		box-sizing: border-box;
 	}
 
 	input[type="text"] {
@@ -378,7 +469,7 @@
 		text-overflow: ellipsis;
 		-webkit-user-select: none;
 		user-select: none;
-		box-sizing: border-box; /* Include padding and border in width calculation */
+		box-sizing: border-box;
 	}
 
 	input[type="text"]:hover {
