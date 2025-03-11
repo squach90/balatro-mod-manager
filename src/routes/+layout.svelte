@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { blur } from "svelte/transition";
 	import MessageStack from "../components/MessageStack.svelte";
-	import { backgroundEnabled } from "../stores/modStore"; // Add this import
+	import { backgroundEnabled } from "../stores/modStore";
 
 	import "../app.css";
 
@@ -31,7 +31,7 @@
 		position: fixed;
 		top: 0;
 		left: 0;
-		overflow: hidden; /* Prevent scrolling at container level */
+		overflow: hidden;
 	}
 
 	.layout-container::before {
@@ -43,19 +43,13 @@
 		height: 100%;
 		opacity: var(--gradient-opacity, 1);
 		transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-		background: linear-gradient(
-				145deg,
-				rgba(97, 11, 15, 0.95) 0%,
-				rgba(165, 25, 31, 0.9) 30%,
-				rgba(194, 63, 55, 0.85) 70%,
-				rgba(140, 20, 31, 0.95) 100%
-			),
-			linear-gradient(
-				45deg,
-				rgba(0, 0, 0, 0.15) 0%,
-				rgba(50, 0, 0, 0.2) 100%
-			);
-		background-blend-mode: multiply;
+		background-color: #a53535;
+		background-image: radial-gradient(#d66060 0.45px, transparent 0.45px),
+			radial-gradient(#d66060 0.45px, #a53535 0.45px);
+		background-size: 18px 18px;
+		background-position:
+			0 0,
+			9px 9px;
 		z-index: -1;
 	}
 
@@ -63,6 +57,7 @@
 		width: 100%;
 		height: 100%;
 		position: relative;
-		overflow: hidden; /* Prevent scrolling at page content level */
+		overflow: hidden;
 	}
 </style>
+
