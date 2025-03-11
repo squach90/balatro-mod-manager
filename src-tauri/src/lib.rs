@@ -717,7 +717,6 @@ async fn get_detected_local_mods(
     local_mod_detection::detect_manual_mods(&db, &cached_mods)
 }
 
-
 #[tauri::command]
 async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
     let db = Database::new().map_err(|e| e.to_string())?;
@@ -1117,11 +1116,21 @@ async fn check_custom_balatro(
     path: String,
 ) -> Result<bool, String> {
     let path = PathBuf::from(&path);
-    let is_valid = bmm_lib::balamod::Balatro::from_custom_path(path.clone()).is_some();
+
+    // If the path points to an executable, use its parent directory
+    let path_to_check = if path.is_file() {
+        path.parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or(path.clone())
+    } else {
+        path.clone()
+    };
+
+    let is_valid = bmm_lib::balamod::Balatro::from_custom_path(path_to_check.clone()).is_some();
 
     if is_valid {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        map_error(db.set_installation_path(&path.to_string_lossy()))?;
+        map_error(db.set_installation_path(&path_to_check.to_string_lossy()))?;
     }
 
     Ok(is_valid)
