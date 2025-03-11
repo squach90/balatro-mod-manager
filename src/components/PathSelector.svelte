@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
-	import { FolderDot } from "lucide-svelte";
-    import { addMessage } from "$lib/stores";
+	import { FolderDot, FileDigit } from "lucide-svelte";
+	import { addMessage } from "$lib/stores";
 
 	let selectedPath = "";
 	let placeholder = "Choose Balatro Path";
 	let isLoading = false;
+	let selectMode = "directory"; // Can be "directory" or "executable"
 
 	const truncatePath = (path: string) => {
 		const maxLength = 50;
@@ -28,27 +29,50 @@
 
 	const handlePathSelect = async () => {
 		const { open } = await import("@tauri-apps/plugin-dialog");
+
 		const selected = await open({
-			directory: true,
+			directory: selectMode === "directory",
 			multiple: false,
-			title: "Select Balatro Path",
+			title:
+				selectMode === "directory"
+					? "Select Balatro Directory"
+					: "Select Balatro Executable",
+			filters:
+				selectMode === "executable"
+					? [{ name: "Executable", extensions: ["exe"] }]
+					: undefined,
 		});
 
 		if (selected) {
 			selectedPath = selected as string;
+
+			// If executable was selected, get the parent directory
+			let pathToCheck = selectedPath;
+			if (selectMode === "executable") {
+				// Extract directory from file path
+				const lastSlashIndex =
+					selectedPath.lastIndexOf("/") !== -1
+						? selectedPath.lastIndexOf("/")
+						: selectedPath.lastIndexOf("\\");
+
+				if (lastSlashIndex !== -1) {
+					pathToCheck = selectedPath.substring(0, lastSlashIndex);
+				}
+			}
+
 			const isValid = await invoke("check_custom_balatro", {
-				path: selectedPath,
+				path: pathToCheck,
 			});
 
 			if (isValid) {
-				await invoke("set_balatro_path", { path: selectedPath });
+				await invoke("set_balatro_path", { path: pathToCheck });
 				addMessage(
-					"Balatro path set successfully!",
+					"Balatro path set successfully! You can now manage mods for this installation.",
 					"success",
 				);
 			} else {
 				addMessage(
-					"Invalid Balatro path. Please select the correct directory.",
+					"Invalid Balatro path. Please select a directory containing the game files.",
 					"error",
 				);
 				selectedPath = "";
@@ -61,23 +85,14 @@
 		try {
 			const paths: string[] = await invoke("find_steam_balatro");
 			if (paths.length === 0) {
-				addMessage(
-					"Balatro not found in Steam installation",
-					"error",
-				);
+				addMessage("Balatro not found in Steam installation", "error");
 			} else {
 				selectedPath = paths[0];
 				await invoke("set_balatro_path", { path: selectedPath });
-				addMessage(
-					"Successfully set Steam path",
-					"success",
-				);
+				addMessage("Successfully set Steam path", "success");
 			}
 		} catch (error) {
-			addMessage(
-				"Error finding Steam path: " + error,
-				"error",
-			);
+			addMessage("Error finding Steam path: " + error, "error");
 		} finally {
 			isLoading = false;
 		}
@@ -85,6 +100,32 @@
 </script>
 
 <div class="path-selector">
+	<div class="toggle-buttons">
+		<button
+			class:active={selectMode === "directory"}
+			on:click={() => (selectMode = "directory")}
+		>
+			<FolderDot size={16} />
+			Select Directory
+		</button>
+		<button
+			class:active={selectMode === "executable"}
+			on:click={() => (selectMode = "executable")}
+		>
+			<FileDigit size={16} />
+			Select Executable
+		</button>
+	</div>
+
+	<div class="info-text">
+		{#if selectMode === "executable"}
+			Select a Balatro executable to manage mods for a specific
+			installation. This is useful for separate vanilla/modded setups.
+		{:else}
+			Select the Balatro game directory. This is the standard method.
+		{/if}
+	</div>
+
 	<div class="input-container">
 		<input
 			type="text"
@@ -106,6 +147,38 @@
 </div>
 
 <style>
+	.toggle-buttons {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.toggle-buttons button {
+		background: #85231b;
+		color: #f4eee0;
+		border: 2px solid #f4eee0;
+		border-radius: 4px;
+		padding: 0.5rem 1rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.toggle-buttons button.active {
+		background: #f4eee0;
+		color: #85231b;
+	}
+
+	.info-text {
+		font-size: 0.8rem;
+		color: #f4eee0;
+		margin-bottom: 0.5rem;
+		padding: 0.5rem;
+		background: rgba(133, 35, 27, 0.3);
+		border-radius: 4px;
+	}
 	.path-selector {
 		display: flex;
 		flex-direction: column;
