@@ -18,6 +18,7 @@
 		loadingStates2 as loadingStates,
 		uninstallDialogStore,
 		currentCategory, // Add this import
+		updateAvailableStore,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -25,7 +26,6 @@
 	import { cachedVersions } from "../../stores/modStore";
 	import { modsStore } from "../../stores/modStore";
 	import { untrack } from "svelte";
-	import { writable } from "svelte/store";
 	import {
 		checkModInCache,
 		fetchCachedMods,
@@ -33,7 +33,7 @@
 	} from "../../stores/modCache";
 
 	// Store to track which mods have updates available
-	const updateAvailable = writable<Record<string, boolean>>({});
+	// const updateAvailable = writable<Record<string, boolean>>({});
 
 	const VERSION_CACHE_DURATION = 60 * 60 * 1000;
 
@@ -83,7 +83,6 @@
 		modName: string;
 	}
 
-	// Check if an update is available for the current mod
 	async function checkForUpdate(modName: string) {
 		if (isCheckingForUpdates) return;
 
@@ -93,7 +92,7 @@
 				modName,
 			});
 
-			updateAvailable.update((updates) => ({
+			updateAvailableStore.update((updates: Record<string, boolean>) => ({
 				...updates,
 				[modName]: hasUpdate,
 			}));
@@ -315,7 +314,7 @@
 				}));
 
 				// Reset update status for this mod
-				updateAvailable.update((updates) => ({
+				updateAvailableStore.update((updates) => ({
 					...updates,
 					[mod.title]: false,
 				}));
@@ -397,7 +396,7 @@
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 
 				// Reset update status after successful update
-				updateAvailable.update((updates) => ({
+				updateAvailableStore.update((updates) => ({
 					...updates,
 					[mod.title]: false,
 				}));
@@ -432,7 +431,7 @@
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 
 				// Reset update status after successful update
-				updateAvailable.update((updates) => ({
+				updateAvailableStore.update((updates) => ({
 					...updates,
 					[mod.title]: false,
 				}));
@@ -451,7 +450,7 @@
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 
 				// Reset update status after successful update
-				updateAvailable.update((updates) => ({
+				updateAvailableStore.update((updates) => ({
 					...updates,
 					[mod.title]: false,
 				}));
@@ -784,7 +783,7 @@
 					{/if}
 				</div>
 				<div class="button-container">
-					{#if $installationStatus[mod.title] && $updateAvailable[mod.title]}
+					{#if $installationStatus[mod.title] && $updateAvailableStore[mod.title]}
 						<!-- Update button (when installed and update available) -->
 						<button
 							class="update-button"

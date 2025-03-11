@@ -47,6 +47,7 @@
 		fetchCachedMods,
 		forceRefreshCache,
 	} from "../../stores/modCache";
+	import { updateAvailableStore } from "../../stores/modStore";
 
 	const loadingDots = writable(0);
 
@@ -99,6 +100,7 @@
 
 	$: if ($currentCategory === "Installed Mods") {
 		getLocalMods();
+		refreshInstalledMods();
 	}
 
 	async function checkIfModIsInstalled(mod: Mod) {
@@ -278,6 +280,13 @@
 			});
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+
+			updateAvailableStore.update((s) => ({
+				...s,
+				[mod.title]: false,
+			}));
+
+			await refreshInstalledMods();
 		} catch (error) {
 			console.error("Failed to install mod:", error);
 			addMessage(
@@ -626,18 +635,51 @@
 
 	async function refreshInstalledMods() {
 		try {
-			await forceRefreshCache(); // Force refresh the cache
+			await forceRefreshCache();
 			installedMods = await fetchCachedMods();
 
 			// Update installation status for all mods in the store
 			for (const mod of $modsStore) {
-				const isInstalled = installedMods.some(
+				const installedMod = installedMods.find(
 					(m) => m.name === mod.title,
 				);
+
+				// Check if the mod is installed
+				const isInstalled = installedMod !== undefined;
+
+				// Update installation status
 				installationStatus.update((s) => ({
 					...s,
 					[mod.title]: isInstalled,
 				}));
+
+				// Only check for updates if the mod is installed
+				if (isInstalled && installedMod) {
+					try {
+						// Check for updates using the invoke command
+						const hasUpdate = await invoke<boolean>(
+							"mod_update_available",
+							{
+								modName: mod.title,
+							},
+						);
+
+						// Update the global store
+						updateAvailableStore.update((s) => ({
+							...s,
+							[mod.title]: hasUpdate,
+						}));
+
+						console.log(
+							`Update check for ${mod.title}: ${hasUpdate ? "Update available" : "No update"}`,
+						);
+					} catch (error) {
+						console.error(
+							`Failed to check updates for ${mod.title}:`,
+							error,
+						);
+					}
+				}
 			}
 		} catch (error) {
 			console.error("Failed to refresh installed mods:", error);

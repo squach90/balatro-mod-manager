@@ -4,13 +4,13 @@
 	import {
 		installationStatus,
 		loadingStates2 as loadingStates,
+		updateAvailableStore,
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
-	import { writable } from "svelte/store";
 
 	// Store to track which mods have updates available
-	const updateAvailable = writable<Record<string, boolean>>({});
+	// const updateAvailable = writable<Record<string, boolean>>({});
 
 	interface Props {
 		mod: Mod;
@@ -37,7 +37,7 @@
 				modName,
 			});
 
-			updateAvailable.update((updates) => ({
+			updateAvailableStore.update((updates: Record<string, boolean>) => ({
 				...updates,
 				[modName]: hasUpdate,
 			}));
@@ -112,7 +112,7 @@
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 
 			// After installing/updating, reset update status
-			updateAvailable.update((updates) => ({
+			updateAvailableStore.update((updates) => ({
 				...updates,
 				[mod.title]: false,
 			}));
@@ -150,7 +150,7 @@
 	</div>
 
 	<div class="button-container">
-		{#if $installationStatus[mod.title] && $updateAvailable[mod.title]}
+		{#if $installationStatus[mod.title] && $updateAvailableStore[mod.title]}
 			<!-- Update button (when installed and update available) -->
 			<button
 				class="update-button"
