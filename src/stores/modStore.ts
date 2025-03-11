@@ -44,6 +44,9 @@ export const backgroundEnabled = writable(false);
 
 export const currentSort = writable<SortOption>(SortOption.NameAsc);
 
+export const updateAvailableStore = writable<{ [key: string]: boolean }>({});
+
+
 export interface UninstallDialogState {
 	show: boolean;
 	modName: string;
