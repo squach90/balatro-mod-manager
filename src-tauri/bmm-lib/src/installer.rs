@@ -64,12 +64,19 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
         }
     };
 
+    // Uninstall old mod folder if it exists
+    let target_dir = mod_dir.join(&mod_name);
+    if target_dir.exists() {
+        log::info!("Uninstalling existing mod at: {:?}", target_dir);
+        uninstall_mod(target_dir.clone())?;
+    }
+
     log::info!("Installing mod: {}", url);
 
     let installed_path = match file_type {
         "application/zip" => handle_zip(file, &mod_dir, &mod_name)?,
-        "application/x-tar" => handle_tar(file, &mod_dir)?,
-        "application/gzip" => handle_tar_gz(file, &mod_dir)?,
+        "application/x-tar" => handle_tar(file, &mod_dir, &mod_name)?, // Updated
+        "application/gzip" => handle_tar_gz(file, &mod_dir, &mod_name)?, // Updated
         _ => {
             return Err(AppError::InvalidState(format!(
                 "Unsupported file type: {}",
@@ -226,42 +233,49 @@ fn extract_zip(zip: &mut ZipArchive<Cursor<bytes::Bytes>>, mod_dir: &Path) -> Re
     Ok(())
 }
 
-fn handle_tar(file: bytes::Bytes, mod_dir: &PathBuf) -> Result<PathBuf, AppError> {
+fn handle_tar(file: bytes::Bytes, mod_dir: &Path, mod_name: &str) -> Result<PathBuf, AppError> {
     let cursor = Cursor::new(file);
     let mut tar = Archive::new(cursor);
-    extract_tar(&mut tar, mod_dir)
+    extract_tar(&mut tar, mod_dir, mod_name)
 }
 
-fn handle_tar_gz(file: bytes::Bytes, mod_dir: &PathBuf) -> Result<PathBuf, AppError> {
+fn handle_tar_gz(file: bytes::Bytes, mod_dir: &Path, mod_name: &str) -> Result<PathBuf, AppError> {
     let cursor = Cursor::new(file);
     let gz = GzDecoder::new(cursor);
     let mut tar = Archive::new(gz);
-    extract_tar(&mut tar, mod_dir)
+    extract_tar(&mut tar, mod_dir, mod_name)
 }
 
-fn extract_tar(tar: &mut Archive<impl Read>, mod_dir: &PathBuf) -> Result<PathBuf, AppError> {
+fn extract_tar(
+    tar: &mut Archive<impl Read>,
+    mod_dir: &Path,
+    mod_name: &str,
+) -> Result<PathBuf, AppError> {
+    let target_dir = mod_dir.join(mod_name);
+    fs::create_dir_all(&target_dir).map_err(|e| AppError::DirCreate {
+        path: target_dir.clone(),
+        source: e.to_string(),
+    })?;
+
     let entries = tar.entries().map_err(|e| AppError::FileRead {
-        path: mod_dir.clone(),
+        path: mod_dir.to_path_buf(),
         source: format!("Tar entry error: {}", e),
     })?;
 
-    let mut installed_path = mod_dir.clone();
     for entry in entries {
         let mut entry = entry.map_err(|e| AppError::FileRead {
-            path: mod_dir.clone(),
+            path: mod_dir.to_path_buf(),
             source: format!("Tar entry error: {}", e),
         })?;
 
-        let path = mod_dir.join(entry.path().map_err(|e| AppError::FileRead {
-            path: mod_dir.clone(),
+        let entry_path = entry.path().map_err(|e| AppError::FileRead {
+            path: mod_dir.to_path_buf(),
             source: format!("Invalid path in tar: {}", e),
-        })?);
+        })?;
 
-        ensure_safe_path(mod_dir, &path)?;
-
-        if installed_path == *mod_dir {
-            installed_path = path.parent().unwrap_or(mod_dir).to_path_buf();
-        }
+        // Extract to the target directory instead of mod_dir
+        let path = target_dir.join(entry_path);
+        ensure_safe_path(&target_dir, &path)?;
 
         if entry.header().entry_type().is_dir() {
             fs::create_dir_all(&path).map_err(|e| AppError::DirCreate {
@@ -274,7 +288,7 @@ fn extract_tar(tar: &mut Archive<impl Read>, mod_dir: &PathBuf) -> Result<PathBu
         }
     }
 
-    Ok(installed_path)
+    Ok(target_dir)
 }
 
 fn create_parent_dir(path: &Path) -> Result<(), AppError> {
