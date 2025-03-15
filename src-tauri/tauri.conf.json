@@ -44,6 +44,11 @@
       "signingIdentity": null,
       "providerShortName": null,
       "frameworks": []
+    },
+	"windows": {
+        "webviewInstallMode": {
+          "type": "downloadBootstrapper"
+        }
     }
   },
   "plugins": {
