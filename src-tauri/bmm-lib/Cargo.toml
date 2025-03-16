@@ -18,22 +18,22 @@ libc = "0.2.171"
 libflate = "2.1.0"
 log = "0.4.26"
 regex = "1.11.1"
-reqwest = { version = "0.12.13", features = ["json"] }
+reqwest = { version = "0.12.14", features = ["json"] }
 rusqlite = { version = "0.33.0", features = ["bundled"] }
 serde = { version = "1.0.219", features = ["serde_derive"] }
 serde_json = "1.0.140"
 serde_repr = "0.1.20"
 tar = "0.4.44"
 tauri = "2.3.1"
-tempfile = "3.18.0"
-tokio = { version = "1.44.0", features = ["full"] }
-zip = "2.2.3"
+tempfile = "3.19.0"
+tokio = { version = "1.44.1", features = ["full"] }
+zip = "2.3.0"
 
 [dev-dependencies]
-tempfile = "3.18.0"
+tempfile = "3.19.0"
 scopeguard = "1.2.0"
 mockito = "1.7.0"
-tokio = { version = "1.44.0", features = ["full", "test-util"] }
+tokio = { version = "1.44.1", features = ["full", "test-util"] }
 rstest = "0.24.0"
 
 [target.'cfg(windows)'.dependencies]
