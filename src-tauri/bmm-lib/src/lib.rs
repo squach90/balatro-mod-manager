@@ -9,3 +9,4 @@ pub mod cache;
 pub mod errors;
 pub mod discord_rpc;
 pub mod local_mod_detection;
+pub mod logging;
