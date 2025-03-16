@@ -12,7 +12,6 @@ use tauri::Manager;
 //
 use std::collections::HashSet;
 use std::fs::File;
-use std::panic;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -1180,11 +1179,6 @@ async fn check_custom_balatro(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Set up panic hook with proper logging
-    panic::set_hook(Box::new(|panic_info| {
-        log::error!("Application crashed: {:?}", panic_info);
-    }));
-
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             app.emit("single-instance", Payload { args: argv, cwd })
@@ -1285,6 +1279,7 @@ pub fn run() {
 
     if let Err(e) = result {
         log::error!("Failed to run application: {}", e);
+        log::logger().flush();
         std::process::exit(1);
     }
 }

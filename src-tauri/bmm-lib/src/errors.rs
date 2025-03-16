@@ -10,6 +10,9 @@ pub enum AppError {
     DatabaseQuery(String),
     DatabaseTransaction(String),
 
+    // Logging errors
+    Logging(String),
+
     // File system errors
     FileRead {
         path: PathBuf,
