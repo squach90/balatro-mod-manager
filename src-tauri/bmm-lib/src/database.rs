@@ -32,38 +32,63 @@ impl Database {
             })?;
         }
 
-        // Check if database exists
-        if storage_path.exists() {
-            // Try to open the existing database
-            let conn_result = Connection::open(&storage_path);
+        // Try to open the database with a retry mechanism
+        let mut retry_count = 0;
+        let max_retries = 3;
 
-            if let Ok(conn) = conn_result {
-                // Check if database needs migration
-                if Self::needs_migration(&conn)? {
-                    // Perform migration
-                    Self::migrate_database(&storage_path)?;
-                }
-
-                // Database is now compatible, open a fresh connection
+        while retry_count < max_retries {
+            // Try to open or create the database
+            let conn_result = if storage_path.exists() {
+                Connection::open(&storage_path)
+            } else {
+                // Create a new database
                 let conn = Connection::open(&storage_path)
                     .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
-                return Ok(Database { conn });
-            } else {
-                // Corrupted database - backup and recreate
-                let backup_path = storage_path.with_extension("db.bak");
-                if let Err(e) = std::fs::copy(&storage_path, &backup_path) {
-                    log::warn!("Failed to backup corrupted database: {}", e);
+                Self::initialize_database(&conn)?;
+                Ok(conn)
+            };
+
+            match conn_result {
+                Ok(conn) => {
+                    // Check if database needs migration
+                    if Self::needs_migration(&conn)? {
+                        // Close the connection before migration
+                        drop(conn);
+
+                        // Perform migration
+                        Self::migrate_database(&storage_path)?;
+
+                        // Reopen the database after migration
+                        let conn = Connection::open(&storage_path)
+                            .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+                        return Ok(Database { conn });
+                    }
+
+                    return Ok(Database { conn });
                 }
-                // Continue to database creation below
+                Err(e) => {
+                    if retry_count == max_retries - 1 {
+                        return Err(AppError::DatabaseInit(format!(
+                            "Failed to open database after {} attempts: {}",
+                            max_retries, e
+                        )));
+                    }
+
+                    log::warn!(
+                        "Failed to open database, retrying ({}/{}): {}",
+                        retry_count + 1,
+                        max_retries,
+                        e
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    retry_count += 1;
+                }
             }
         }
 
-        // Create a new database
-        let conn =
-            Connection::open(&storage_path).map_err(|e| AppError::DatabaseInit(e.to_string()))?;
-        Self::initialize_database(&conn)?;
-
-        Ok(Database { conn })
+        Err(AppError::DatabaseInit(
+            "Failed to open database after maximum retries".to_string(),
+        ))
     }
 
     // Check if database needs migration
@@ -104,39 +129,81 @@ impl Database {
         }
     }
 
-    // Migrate data from old database to new one
     fn migrate_database(db_path: &PathBuf) -> Result<(), AppError> {
         // Create a temporary database path
         let temp_db_path = db_path.with_file_name("bmm_storage_new.db");
 
-        // Open connections to both databases
-        let old_conn = Connection::open(db_path)
-            .map_err(|e| AppError::DatabaseInit(format!("Failed to open old database: {}", e)))?;
-        let new_conn = Connection::open(&temp_db_path)
-            .map_err(|e| AppError::DatabaseInit(format!("Failed to create new database: {}", e)))?;
+        // If the old database exists but we can't access it, try with a retry mechanism
+        let max_retries = 3;
+        let mut retry_count = 0;
 
-        // Initialize the new database with current schema
-        Self::initialize_database(&new_conn)?;
+        while retry_count < max_retries {
+            // Open connections to both databases
+            let old_conn_result = Connection::open(db_path);
 
-        // Migrate data
-        Self::migrate_settings(&old_conn, &new_conn)?;
-        Self::migrate_installed_mods(&old_conn, &new_conn)?;
+            if let Err(e) = old_conn_result {
+                if retry_count == max_retries - 1 {
+                    return Err(AppError::DatabaseInit(format!(
+                        "Failed to open old database after {} retries: {}",
+                        max_retries, e
+                    )));
+                }
 
-        // Close connections before file operations
-        drop(old_conn);
-        drop(new_conn);
+                // Wait before retrying
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                retry_count += 1;
+                continue;
+            }
 
-        // Backup the old database
-        let backup_path = db_path.with_extension("db.bak");
-        std::fs::rename(db_path, &backup_path)
-            .map_err(|e| AppError::DatabaseInit(format!("Failed to backup old database: {}", e)))?;
+            let old_conn = old_conn_result.unwrap();
+            let new_conn = Connection::open(&temp_db_path).map_err(|e| {
+                AppError::DatabaseInit(format!("Failed to create new database: {}", e))
+            })?;
 
-        // Replace with the new one
-        std::fs::rename(&temp_db_path, db_path).map_err(|e| {
-            AppError::DatabaseInit(format!("Failed to install new database: {}", e))
-        })?;
+            // Initialize the new database with current schema
+            Self::initialize_database(&new_conn)?;
 
-        Ok(())
+            // Migrate data
+            Self::migrate_settings(&old_conn, &new_conn)?;
+            Self::migrate_installed_mods(&old_conn, &new_conn)?;
+
+            // IMPORTANT: Explicitly close connections before file operations
+            drop(old_conn);
+            drop(new_conn);
+
+            // Add a small delay to ensure all handles are released
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            // Try to backup the old database
+            let backup_path = db_path.with_extension("db.bak");
+
+            // If backup fails, just log a warning but continue
+            match std::fs::rename(db_path, &backup_path) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::warn!("Failed to backup old database, continuing anyway: {}", e);
+                    // Try to directly remove the old file if we can't rename it
+                    if let Err(e) = std::fs::remove_file(db_path) {
+                        log::warn!("Failed to remove old database: {}", e);
+                    }
+                }
+            }
+
+            // Replace with the new one
+            match std::fs::rename(&temp_db_path, db_path) {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    return Err(AppError::DatabaseInit(format!(
+                        "Failed to install new database: {}",
+                        e
+                    )));
+                }
+            }
+        }
+
+        Err(AppError::DatabaseInit(
+            "Failed to access database after maximum retries".to_string(),
+        ))
     }
 
     fn migrate_settings(old_conn: &Connection, new_conn: &Connection) -> Result<(), AppError> {
