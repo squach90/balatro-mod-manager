@@ -17,42 +17,210 @@ pub struct InstalledMod {
 }
 
 impl Database {
+    const CURRENT_DB_VERSION: &'static str = "1.0"; // Update this when schema changes
+
     pub fn new() -> Result<Self, AppError> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?;
-        let storage_path = config_dir.join("Balatro").join("bmm_storage.db");
+        let balatro_dir = config_dir.join("Balatro");
+        let storage_path = balatro_dir.join("bmm_storage.db");
 
-        let db_exists = storage_path.exists();
+        // Create directory if it doesn't exist
+        if !balatro_dir.exists() {
+            std::fs::create_dir_all(&balatro_dir).map_err(|e| {
+                AppError::DirNotFound(format!("Failed to create config directory: {}", e).into())
+            })?;
+        }
+
+        // Check if database exists
+        if storage_path.exists() {
+            // Try to open the existing database
+            let conn_result = Connection::open(&storage_path);
+
+            if let Ok(conn) = conn_result {
+                // Check if database needs migration
+                if Self::needs_migration(&conn)? {
+                    // Perform migration
+                    Self::migrate_database(&storage_path)?;
+                }
+
+                // Database is now compatible, open a fresh connection
+                let conn = Connection::open(&storage_path)
+                    .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+                return Ok(Database { conn });
+            } else {
+                // Corrupted database - backup and recreate
+                let backup_path = storage_path.with_extension("db.bak");
+                if let Err(e) = std::fs::copy(&storage_path, &backup_path) {
+                    log::warn!("Failed to backup corrupted database: {}", e);
+                }
+                // Continue to database creation below
+            }
+        }
+
+        // Create a new database
         let conn =
             Connection::open(&storage_path).map_err(|e| AppError::DatabaseInit(e.to_string()))?;
-
-        if !db_exists {
-            Self::initialize_database(&conn)?;
-        }
+        Self::initialize_database(&conn)?;
 
         Ok(Database { conn })
     }
 
-    pub fn get_mod_details(&self, mod_name: &str) -> Result<InstalledMod, AppError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT name, path, dependencies, current_version FROM installed_mods WHERE name = ?1",
-        )?;
+    // Check if database needs migration
+    fn needs_migration(conn: &Connection) -> Result<bool, AppError> {
+        // First check if the version table exists
+        let has_version_setting = match conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='settings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        ) {
+            Ok(count) if count > 0 => {
+                // Now check if the version setting exists
+                match conn.query_row(
+                    "SELECT COUNT(*) FROM settings WHERE setting = 'db_version'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                ) {
+                    Ok(count) => count > 0,
+                    Err(_) => false,
+                }
+            }
+            _ => false,
+        };
 
-        let mut rows = stmt.query([mod_name])?;
-
-        if let Some(row) = rows.next()? {
-            Ok(InstalledMod {
-                name: row.get(0)?,
-                path: row.get(1)?,
-                dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
-                current_version: row.get(3)?,
-            })
-        } else {
-            Err(AppError::InvalidState(format!(
-                "Mod {} not found",
-                mod_name
-            )))
+        // If no version in settings, this is an old database needing migration
+        if !has_version_setting {
+            return Ok(true);
         }
+
+        // Check if the version matches
+        match conn.query_row(
+            "SELECT value FROM settings WHERE setting = 'db_version'",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(version) => Ok(version != Self::CURRENT_DB_VERSION),
+            Err(_) => Ok(true), // If we can't get the version, assume migration is needed
+        }
+    }
+
+    // Migrate data from old database to new one
+    fn migrate_database(db_path: &PathBuf) -> Result<(), AppError> {
+        // Create a temporary database path
+        let temp_db_path = db_path.with_file_name("bmm_storage_new.db");
+
+        // Open connections to both databases
+        let old_conn = Connection::open(db_path)
+            .map_err(|e| AppError::DatabaseInit(format!("Failed to open old database: {}", e)))?;
+        let new_conn = Connection::open(&temp_db_path)
+            .map_err(|e| AppError::DatabaseInit(format!("Failed to create new database: {}", e)))?;
+
+        // Initialize the new database with current schema
+        Self::initialize_database(&new_conn)?;
+
+        // Migrate data
+        Self::migrate_settings(&old_conn, &new_conn)?;
+        Self::migrate_installed_mods(&old_conn, &new_conn)?;
+
+        // Close connections before file operations
+        drop(old_conn);
+        drop(new_conn);
+
+        // Backup the old database
+        let backup_path = db_path.with_extension("db.bak");
+        std::fs::rename(db_path, &backup_path)
+            .map_err(|e| AppError::DatabaseInit(format!("Failed to backup old database: {}", e)))?;
+
+        // Replace with the new one
+        std::fs::rename(&temp_db_path, db_path).map_err(|e| {
+            AppError::DatabaseInit(format!("Failed to install new database: {}", e))
+        })?;
+
+        Ok(())
+    }
+
+    fn migrate_settings(old_conn: &Connection, new_conn: &Connection) -> Result<(), AppError> {
+        // Check if settings table exists in old database
+        let has_settings = match old_conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='settings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        ) {
+            Ok(count) => count > 0,
+            Err(_) => false,
+        };
+
+        if !has_settings {
+            return Ok(()); // No settings to migrate
+        }
+
+        // Get all settings except db_version (which will be set by initialize_database)
+        let mut stmt = match old_conn
+            .prepare("SELECT setting, value FROM settings WHERE setting != 'db_version'")
+        {
+            Ok(stmt) => stmt,
+            Err(_) => return Ok(()), // If query fails, just continue
+        };
+
+        for (setting, value) in stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .flatten()
+        {
+            new_conn.execute(
+                "INSERT OR REPLACE INTO settings (setting, value) VALUES (?1, ?2)",
+                [&setting, &value],
+            )?;
+        }
+
+        Ok(())
+    }
+    // Migrate installed mods from old database to new one
+    fn migrate_installed_mods(
+        old_conn: &Connection,
+        new_conn: &Connection,
+    ) -> Result<(), AppError> {
+        // Check if installed_mods table exists in old database
+        let has_installed_mods = match old_conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='installed_mods'",
+            [],
+            |row| row.get::<_, i64>(0),
+        ) {
+            Ok(count) => count > 0,
+            Err(_) => false,
+        };
+
+        if !has_installed_mods {
+            return Ok(()); // No mods to migrate
+        }
+
+        // Get all installed mods
+        let mut stmt = match old_conn
+            .prepare("SELECT name, path, dependencies, current_version FROM installed_mods")
+        {
+            Ok(stmt) => stmt,
+            Err(_) => return Ok(()), // If query fails, just continue
+        };
+
+        for (name, path, dependencies, current_version) in stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })?
+            .flatten()
+        {
+            new_conn.execute(
+            "INSERT INTO installed_mods (name, path, dependencies, current_version) VALUES (?1, ?2, ?3, ?4)",
+            [&name, &path, &dependencies, &current_version.unwrap_or_default()],
+        )?;
+        }
+
+        Ok(())
     }
 
     fn initialize_database(conn: &Connection) -> Result<(), AppError> {
@@ -76,7 +244,36 @@ impl Database {
         )
         .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
 
+        // Set the database version
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('db_version', ?1)",
+            [Self::CURRENT_DB_VERSION],
+        )
+        .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
         Ok(())
+    }
+
+    pub fn get_mod_details(&self, mod_name: &str) -> Result<InstalledMod, AppError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT name, path, dependencies, current_version FROM installed_mods WHERE name = ?1",
+        )?;
+
+        let mut rows = stmt.query([mod_name])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(InstalledMod {
+                name: row.get(0)?,
+                path: row.get(1)?,
+                dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
+                current_version: row.get(3)?,
+            })
+        } else {
+            Err(AppError::InvalidState(format!(
+                "Mod {} not found",
+                mod_name
+            )))
+        }
     }
 
     pub fn set_discord_rpc_enabled(&self, enabled: bool) -> Result<(), AppError> {
@@ -125,76 +322,7 @@ impl Database {
             Ok(0)
         }
     }
-    //
-    // pub fn get_cached_mods(&self) -> Result<Vec<Mod>, AppError> {
-    //     let mut stmt = self.conn.prepare(
-    //         "SELECT title, description, image, last_updated, categories, colors,
-    //         installed, requires_steamodded, requires_talisman, publisher, repo, download_url
-    //         FROM mod_cache",
-    //     )?;
-    //
-    //     let mut rows = stmt.query([])?;
-    //     let mut mods = Vec::new();
-    //
-    //     while let Some(row) = rows.next()? {
-    //         let categories: String = row.get(4)?;
-    //         let colors: String = row.get(5)?;
-    //
-    //         mods.push(Mod {
-    //             title: row.get(0)?,
-    //             description: row.get(1)?,
-    //             image: row.get(2)?,
-    //             // last_updated: row.get(3)?,
-    //             categories: serde_json::from_str(&categories)?,
-    //             colors: serde_json::from_str(&colors)?,
-    //             installed: row.get::<_, String>(6)?.parse().expect("Invalid boolean"),
-    //             requires_steamodded: row.get::<_, String>(7)?.parse().expect("Invalid boolean"),
-    //             requires_talisman: row.get::<_, String>(8)?.parse().expect("Invalid boolean"),
-    //             publisher: row.get(9)?,
-    //             repo: row.get(10)?,
-    //             download_url: row.get(11)?,
-    //             folderName: row.get(12)?
-    //         });
-    //     }
-    //
-    //     Ok(mods)
-    // }
-    //
-    // pub fn update_mod_cache(&mut self, mods: Vec<Mod>) -> Result<(), AppError> {
-    //     let tx = self.conn.transaction()?;
-    //
-    //     tx.execute("DELETE FROM mod_cache", [])?;
-    //
-    //     for m in mods {
-    //         let colors = serde_json::to_string(&m.colors)?;
-    //         tx.execute(
-    //             "INSERT INTO mod_cache (
-    //                 title, description, image, categories,
-    //                 colors, installed, requires_steamodded, requires_talisman,
-    //                 publisher, repo, download_url, folder_name
-    //             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-    //             [
-    //                 m.title,
-    //                 m.description,
-    //                 m.image,
-    //                 // m.last_updated,
-    //                 serde_json::to_string(&m.categories)?,
-    //                 colors,
-    //                 m.installed.to_string(),
-    //                 m.requires_steamodded.to_string(),
-    //                 m.requires_talisman.to_string(),
-    //                 m.publisher,
-    //                 m.repo,
-    //                 m.download_url,
-    //                 m.folderName.unwrap_or_default()
-    //             ],
-    //         )?;
-    //     }
-    //
-    //     tx.commit()?;
-    //     Ok(())
-    // }
-    //
+
     pub fn get_installed_mods(&self) -> Result<Vec<InstalledMod>, AppError> {
         let mut stmt = self
             .conn
@@ -232,10 +360,10 @@ impl Database {
     pub fn get_dependents(&self, mod_name: &str) -> Result<Vec<String>, AppError> {
         let mut stmt = self.conn.prepare(
             "SELECT name FROM installed_mods
-         WHERE EXISTS (
-             SELECT 1 FROM json_each(dependencies)
-             WHERE TRIM(json_each.value, '\"') = ?1
-         )",
+            WHERE EXISTS (
+                SELECT 1 FROM json_each(dependencies)
+                WHERE TRIM(json_each.value, '\"') = ?1
+            )",
         )?;
 
         let mut rows = stmt.query([mod_name])?;
