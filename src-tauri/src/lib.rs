@@ -1,10 +1,13 @@
 mod github_repo;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tar::Archive;
 use tauri::Emitter;
 use tauri::Manager;
+use zip::ZipArchive;
 
 // use tauri::WebviewUrl;
 // use tauri::WebviewWindowBuilder;
@@ -18,6 +21,7 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use std::{fs, io::Cursor};
 
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::cache;
@@ -352,6 +356,420 @@ async fn get_mods_folder() -> Result<String, String> {
         .join("Mods")
         .to_string_lossy()
         .into_owned())
+}
+/// Process a mod file that was dropped onto the application
+#[tauri::command]
+fn process_dropped_file(path: String) -> Result<String, String> {
+    log::debug!("Processing dropped file: {}", path);
+    // Get the mods directory path
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
+    let mods_dir = config_dir.join("Balatro").join("Mods");
+
+    // Create the mods directory if it doesn't exist
+    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
+
+    // Get the filename from the path
+    let file_path = Path::new(&path);
+    let file_name = file_path
+        .file_name()
+        .ok_or_else(|| "Invalid file path".to_string())?
+        .to_str()
+        .ok_or_else(|| "Invalid file name".to_string())?;
+
+    // Determine the name of the mod (without extension)
+    let mod_name = file_name
+        .trim_end_matches(".zip")
+        .trim_end_matches(".tar")
+        .trim_end_matches(".tar.gz")
+        .trim_end_matches(".tgz");
+
+    // Create a target directory for this mod
+    let mod_dir = mods_dir.join(mod_name);
+
+    // If the mod directory already exists, remove it first
+    if mod_dir.exists() {
+        fs::remove_dir_all(&mod_dir)
+            .map_err(|e| format!("Failed to remove existing mod directory: {}", e))?;
+    }
+
+    // Process based on file extension
+    if file_name.ends_with(".zip") {
+        extract_zip(&path, &mod_dir)?;
+    } else if file_name.ends_with(".tar") {
+        extract_tar(&path, &mod_dir)?;
+    } else if file_name.ends_with(".tar.gz") || file_name.ends_with(".tgz") {
+        extract_tar_gz(&path, &mod_dir)?;
+    } else {
+        return Err(
+            "Unsupported file format. Only ZIP, TAR, and TAR.GZ are supported.".to_string(),
+        );
+    }
+
+    // Check for nested directories (common with GitHub downloads)
+    if let Ok(entries) = fs::read_dir(&mod_dir) {
+        let dirs: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .collect();
+
+        // If there's only one directory and no other files at the top level
+        if dirs.len() == 1 && fs::read_dir(&mod_dir).map(|e| e.count()).unwrap_or(0) == 1 {
+            // This is likely a nested directory structure from GitHub
+            let nested_dir = dirs[0].path();
+
+            // Move all contents from the nested directory up one level
+            for entry in fs::read_dir(&nested_dir)
+                .map_err(|e| format!("Failed to read nested directory: {}", e))?
+            {
+                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let target_path = mod_dir.join(entry.file_name());
+
+                if entry
+                    .file_type()
+                    .map_err(|e| format!("Failed to get file type: {}", e))?
+                    .is_dir()
+                {
+                    fs::rename(entry.path(), &target_path)
+                        .map_err(|e| format!("Failed to move directory: {}", e))?;
+                } else {
+                    fs::rename(entry.path(), &target_path)
+                        .map_err(|e| format!("Failed to move file: {}", e))?;
+                }
+            }
+
+            // Remove the now-empty nested directory
+            fs::remove_dir_all(&nested_dir)
+                .map_err(|e| format!("Failed to remove nested directory: {}", e))?;
+        }
+    }
+
+    // Return the path to the installed mod
+    Ok(mod_dir.to_string_lossy().to_string())
+}
+
+/// Process a mod archive from raw binary data (alternative approach if needed)
+#[tauri::command]
+fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String> {
+    // Get the mods directory path
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
+    let mods_dir = config_dir.join("Balatro").join("Mods");
+
+    // Create the mods directory if it doesn't exist
+    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
+
+    // Determine the name of the mod (without extension)
+    let mod_name = filename
+        .trim_end_matches(".zip")
+        .trim_end_matches(".tar")
+        .trim_end_matches(".tar.gz")
+        .trim_end_matches(".tgz");
+
+    // Create a target directory for this mod
+    let mod_dir = mods_dir.join(mod_name);
+
+    // If the mod directory already exists, remove it first
+    if mod_dir.exists() {
+        fs::remove_dir_all(&mod_dir)
+            .map_err(|e| format!("Failed to remove existing mod directory: {}", e))?;
+    }
+
+    // Create a cursor for the data
+    let cursor = Cursor::new(data);
+
+    // Process based on file extension
+    if filename.ends_with(".zip") {
+        extract_zip_from_memory(cursor, &mod_dir)?;
+    } else if filename.ends_with(".tar") {
+        extract_tar_from_memory(cursor, &mod_dir)?;
+    } else if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
+        extract_tar_gz_from_memory(cursor, &mod_dir)?;
+    } else {
+        return Err(
+            "Unsupported file format. Only ZIP, TAR, and TAR.GZ are supported.".to_string(),
+        );
+    }
+
+    // Check for nested directories (same as in process_dropped_file)
+    if let Ok(entries) = fs::read_dir(&mod_dir) {
+        let dirs: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .collect();
+
+        if dirs.len() == 1 && fs::read_dir(&mod_dir).map(|e| e.count()).unwrap_or(0) == 1 {
+            let nested_dir = dirs[0].path();
+
+            for entry in fs::read_dir(&nested_dir)
+                .map_err(|e| format!("Failed to read nested directory: {}", e))?
+            {
+                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let target_path = mod_dir.join(entry.file_name());
+
+                if entry
+                    .file_type()
+                    .map_err(|e| format!("Failed to get file type: {}", e))?
+                    .is_dir()
+                {
+                    fs::rename(entry.path(), &target_path)
+                        .map_err(|e| format!("Failed to move directory: {}", e))?;
+                } else {
+                    fs::rename(entry.path(), &target_path)
+                        .map_err(|e| format!("Failed to move file: {}", e))?;
+                }
+            }
+
+            fs::remove_dir_all(&nested_dir)
+                .map_err(|e| format!("Failed to remove nested directory: {}", e))?;
+        }
+    }
+
+    // Return the path to the installed mod
+    Ok(mod_dir.to_string_lossy().to_string())
+}
+
+// Helper function to extract ZIP files from disk
+fn extract_zip(path: &str, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Open the ZIP file
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
+
+    // Open the ZIP archive
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+
+    // Extract all files
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to access file in archive: {}", e))?;
+
+        let file_path = match file.enclosed_name() {
+            Some(path) => path.to_owned(),
+            None => continue,
+        };
+
+        let output_path = target_dir.join(&file_path);
+
+        if file.is_dir() {
+            fs::create_dir_all(&output_path)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        } else {
+            // Ensure the parent directory exists
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+
+            let mut outfile = fs::File::create(&output_path)
+                .map_err(|e| format!("Failed to create file {}: {}", output_path.display(), e))?;
+
+            std::io::copy(&mut file, &mut outfile)
+                .map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
+        }
+    }
+
+    Ok(())
+}
+
+// Helper function to extract ZIP files from memory
+fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Open the ZIP archive
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+
+    // Extract all files
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to access file in archive: {}", e))?;
+
+        let file_path = match file.enclosed_name() {
+            Some(path) => path.to_owned(),
+            None => continue,
+        };
+
+        let output_path = target_dir.join(&file_path);
+
+        if file.is_dir() {
+            fs::create_dir_all(&output_path)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        } else {
+            // Ensure the parent directory exists
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+
+            let mut outfile = fs::File::create(&output_path)
+                .map_err(|e| format!("Failed to create file {}: {}", output_path.display(), e))?;
+
+            std::io::copy(&mut file, &mut outfile)
+                .map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
+        }
+    }
+
+    Ok(())
+}
+
+// Helper function to extract TAR files from disk
+fn extract_tar(path: &str, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Open the TAR file
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR file: {}", e))?;
+
+    // Open the TAR archive
+    let mut archive = Archive::new(file);
+
+    // Extract all files
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+    {
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+        let output_path = target_dir.join(path);
+
+        // Ensure the parent directory exists
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+
+        entry
+            .unpack(&output_path)
+            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+    }
+
+    Ok(())
+}
+
+// Helper function to extract TAR files from memory
+fn extract_tar_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Open the TAR archive
+    let mut archive = Archive::new(cursor);
+
+    // Extract all files
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+    {
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+        let output_path = target_dir.join(path);
+
+        // Ensure the parent directory exists
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+
+        entry
+            .unpack(&output_path)
+            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+    }
+
+    Ok(())
+}
+
+// Helper function to extract TAR.GZ files from disk
+fn extract_tar_gz(path: &str, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Open the TAR.GZ file
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR.GZ file: {}", e))?;
+
+    // Create a GzDecoder to decompress the data
+    let gz = GzDecoder::new(file);
+
+    // Open the TAR archive
+    let mut archive = Archive::new(gz);
+
+    // Extract all files
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+    {
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+        let output_path = target_dir.join(path);
+
+        // Ensure the parent directory exists
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+
+        entry
+            .unpack(&output_path)
+            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+    }
+
+    Ok(())
+}
+
+// Helper function to extract TAR.GZ files from memory
+fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+
+    // Create a GzDecoder to decompress the data
+    let gz = GzDecoder::new(cursor);
+
+    // Open the TAR archive
+    let mut archive = Archive::new(gz);
+
+    // Extract all files
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+    {
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+        let output_path = target_dir.join(path);
+
+        // Ensure the parent directory exists
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+
+        entry
+            .unpack(&output_path)
+            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1286,7 +1704,9 @@ pub fn run() {
             restore_from_backup,
             remove_backup,
             open_directory,
-            get_mods_folder
+            get_mods_folder,
+            process_dropped_file,
+            process_mod_archive
         ])
         .run(tauri::generate_context!());
 
