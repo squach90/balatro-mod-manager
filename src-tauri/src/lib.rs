@@ -344,6 +344,17 @@ async fn check_untracked_mods() -> Result<bool, String> {
 }
 
 #[tauri::command]
+async fn get_mods_folder() -> Result<String, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
+    Ok(config_dir
+        .join("Balatro")
+        .join("Mods")
+        .to_string_lossy()
+        .into_owned())
+}
+
+#[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let mod_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
@@ -1274,7 +1285,8 @@ pub fn run() {
             backup_local_mod,
             restore_from_backup,
             remove_backup,
-            open_directory
+            open_directory,
+            get_mods_folder
         ])
         .run(tauri::generate_context!());
 

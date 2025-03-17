@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PathSelector from "../PathSelector.svelte";
-	import { Settings2, RefreshCw } from "lucide-svelte";
+	import { Settings2, RefreshCw, Folder } from "lucide-svelte";
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
@@ -62,6 +62,52 @@
 				"Failed to update Discord Rich Presence status",
 				"error",
 			);
+		}
+	}
+
+	async function openModsFolder() {
+		try {
+			// Get the repository path (which should be config_dir/Balatro/mod_index)
+			const modsFolderPath: string = await invoke("get_mods_folder");
+
+			// Get the parent directory (config_dir/Balatro) by finding the last path separator
+			const lastSeparatorIndex = Math.max(
+				modsFolderPath.lastIndexOf("/"),
+				modsFolderPath.lastIndexOf("\\"),
+			);
+			if (lastSeparatorIndex === -1) {
+				addMessage(
+					"Failed to determine the parent directory of the repository path.",
+					"error",
+				);
+				return;
+			}
+
+			const parentPath = modsFolderPath.substring(0, lastSeparatorIndex);
+			const separator = modsFolderPath.includes("/") ? "/" : "\\"; // Determine the separator used in the path
+
+			// Construct the mods path
+			const modsPath = `${parentPath}${separator}Mods`;
+
+			// Check if the path exists
+			const pathExists = await invoke("path_exists", { path: modsPath });
+
+			if (!pathExists) {
+				addMessage(
+					"Mods directory not found. It might not have been created yet.",
+					"warning",
+				);
+				addMessage(
+					"Install a mod using the mod manager to create the mods directory.",
+					"info",
+				);
+				return;
+			}
+
+			// Open the directory
+			await invoke("open_directory", { path: modsPath });
+		} catch (error) {
+			addMessage(`Failed to open mods directory: ${error}`, "error");
 		}
 	}
 
@@ -147,6 +193,19 @@
 			<h3>Mods</h3>
 
 			<div class="mods-settings">
+				<button
+					class="open-folder-button"
+					on:click={openModsFolder}
+					title="Open mods folder"
+				>
+					<Folder size={20} />
+					Open Mods Folder
+				</button>
+
+				<p class="description">
+					Open the folder where mods are stored on your system.
+				</p>
+
 				<button
 					class="reindex-button"
 					on:click={performReindexMods}
@@ -321,6 +380,33 @@
 		opacity: 0.8;
 		transform: none;
 	}
+
+	.open-folder-button {
+		background: #4caf50;
+		color: #f4eee0;
+		border: none;
+		outline: #3d8b40 solid 2px;
+		border-radius: 4px;
+		padding: 0.75rem 1.5rem;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.2rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		align-self: flex-start;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
+	.open-folder-button:hover {
+		background: #45a049;
+		transform: translateY(-2px);
+	}
+
+	.open-folder-button:active {
+		transform: translateY(1px);
+	}
 	.description {
 		color: #f4eee0;
 		font-size: 1.2rem;
@@ -422,6 +508,10 @@
 			transition: all 0.2s ease;
 		}
 		.reindex-button {
+			font-size: 1rem;
+			padding: 0.6rem 1.2rem;
+		}
+		.open-folder-button {
 			font-size: 1rem;
 			padding: 0.6rem 1.2rem;
 		}
