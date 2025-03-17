@@ -55,15 +55,6 @@
 
 	// Animate the dots
 	let dotInterval: number;
-	onMount(() => {
-		dotInterval = setInterval(() => {
-			loadingDots.update((n) => (n + 1) % 4);
-		}, 500);
-
-		return () => {
-			clearInterval(dotInterval);
-		};
-	});
 
 	async function handleModUninstalled() {
 		// Refresh the local mods list
@@ -132,7 +123,57 @@
 		}
 	}
 
+	let isProgrammaticScroll = false;
+
+	// Update the pagination functions to reset scroll position when switching pages
+	function nextPage() {
+		if ($currentPage < totalPages) {
+			currentPage.update((n) => n + 1);
+			updatePaginationWindow();
+			scrollToTop();
+		}
+	}
+
+	function previousPage() {
+		if ($currentPage > 1) {
+			currentPage.update((n) => n - 1);
+			updatePaginationWindow();
+			scrollToTop();
+		}
+	}
+
+	function goToPage(page: number) {
+		currentPage.set(page);
+		updatePaginationWindow();
+		scrollToTop();
+	}
+
+	// Add this helper function to handle scrolling to top
+	function scrollToTop() {
+		isProgrammaticScroll = true;
+		const scrollContainer = document.querySelector(
+			".mods-scroll-container",
+		);
+		if (scrollContainer) {
+			scrollContainer.scrollTo({
+				top: 0,
+				behavior: "smooth",
+			});
+		}
+		setTimeout(() => {
+			isProgrammaticScroll = false;
+		}, 500); // Delay to prevent scroll handler triggering during animated scroll
+	}
+
 	onMount(() => {
+		// Animation dots initialization
+		dotInterval = setInterval(() => {
+			loadingDots.update((n) => (n + 1) % 4);
+		}, 500);
+
+
+
+		// Separate async function for initialization
 		const initialize = async () => {
 			const cached = await getFromCache();
 			if (
@@ -170,7 +211,30 @@
 			}
 		};
 
+		// Separate async function for background state
+		const initBackgroundState = async () => {
+			try {
+				const isBackgroundAnimationEnabled: boolean = await invoke(
+					"get_background_state",
+				);
+				backgroundEnabled.set(isBackgroundAnimationEnabled);
+			} catch (error) {
+				console.error("Failed to get background status:", error);
+				addMessage(
+					"Error fetching background animation status",
+					"error",
+				);
+			}
+		};
+
+		// Call async functions without awaiting them directly in onMount
 		initialize();
+		initBackgroundState();
+
+		// Return synchronous cleanup function
+		return () => {
+			clearInterval(dotInterval);
+		};
 	});
 
 	const getAllInstalledMods = async () => {
@@ -578,18 +642,6 @@
 		});
 	}
 
-	onMount(async () => {
-		try {
-			let isBackgroundAnimationEnabled: boolean = await invoke(
-				"get_background_state",
-			);
-			backgroundEnabled.set(isBackgroundAnimationEnabled);
-		} catch (error) {
-			console.error("Failed to get background status:", error);
-			addMessage("Error fetching background animation status", "error");
-		}
-	});
-
 	// Add sort handler
 	function handleSortChange(event: Event) {
 		const select = event.target as HTMLSelectElement;
@@ -612,25 +664,6 @@
 		} else if ($currentPage < startPage) {
 			startPage = $currentPage;
 		}
-	}
-
-	function nextPage() {
-		if ($currentPage < totalPages) {
-			currentPage.update((n) => n + 1);
-			updatePaginationWindow();
-		}
-	}
-
-	function previousPage() {
-		if ($currentPage > 1) {
-			currentPage.update((n) => n - 1);
-			updatePaginationWindow();
-		}
-	}
-
-	function goToPage(page: number) {
-		currentPage.set(page);
-		updatePaginationWindow();
 	}
 
 	async function refreshInstalledMods() {
