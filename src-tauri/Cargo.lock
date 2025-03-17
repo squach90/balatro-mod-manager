@@ -423,6 +423,7 @@ dependencies = [
  "bmm-lib",
  "dirs",
  "fix-path-env",
+ "flate2",
  "log",
  "mockito",
  "open",
@@ -431,6 +432,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -442,6 +444,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "tokio-test",
+ "walkdir",
  "zip",
 ]
 

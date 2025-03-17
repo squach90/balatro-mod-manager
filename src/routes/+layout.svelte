@@ -3,6 +3,7 @@
 	import MessageStack from "../components/MessageStack.svelte";
 	import { backgroundEnabled } from "../stores/modStore";
 	import { onMount } from "svelte";
+	import DragDropOverlay from "../components/DragDropOverlay.svelte";
 
 	import "../app.css";
 
@@ -16,6 +17,7 @@
 </script>
 
 <MessageStack />
+<DragDropOverlay />
 <div
 	class="layout-container"
 	style:--gradient-opacity={$backgroundEnabled ? 0 : 1}
@@ -41,6 +43,7 @@
 		top: 0;
 		left: 0;
 		overflow: hidden;
+		background-color: #a53535; /* Fallback background color */
 	}
 
 	.layout-container::before {
@@ -65,7 +68,8 @@
 		background-position:
 			0 0,
 			9px 9px;
-		z-index: -1;
+		z-index: -2; /* Adjust z-index to ensure proper layering */
+		pointer-events: none; /* Ensure the background doesn't block interactions */
 	}
 
 	.page-content {
@@ -73,6 +77,7 @@
 		height: 100%;
 		position: relative;
 		overflow: hidden;
+		z-index: 1; /* Ensure content sits above the background */
 	}
 
 	@media screen and (min-width: 1920px) {

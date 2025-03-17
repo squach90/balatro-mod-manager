@@ -36,6 +36,9 @@ reqwest = "0.12.14"
 zip = "2.3.0"
 open = "5.3.2"
 tauri-plugin-prevent-default = "1.2.1"
+tar = "0.4.44"
+flate2 = "1.1.0"
+walkdir = "2.5.0"
 
 [dev-dependencies]
 tempfile = "3.19.0"
