@@ -7,6 +7,7 @@ use serde_json::json;
 use tar::Archive;
 use tauri::Emitter;
 use tauri::Manager;
+use walkdir::WalkDir;
 use zip::ZipArchive;
 
 // use tauri::WebviewUrl;
@@ -357,10 +358,9 @@ async fn get_mods_folder() -> Result<String, String> {
         .to_string_lossy()
         .into_owned())
 }
-/// Process a mod file that was dropped onto the application
+
 #[tauri::command]
-fn process_dropped_file(path: String) -> Result<String, String> {
-    log::debug!("Processing dropped file: {}", path);
+async fn process_dropped_file(path: String) -> Result<String, String> {
     // Get the mods directory path
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
@@ -444,8 +444,37 @@ fn process_dropped_file(path: String) -> Result<String, String> {
         }
     }
 
+    let has_lua_files = check_for_lua_files(&mod_dir)?;
+
+    if !has_lua_files {
+        // Clean up invalid mod directory
+        fs::remove_dir_all(&mod_dir)
+            .map_err(|e| format!("Failed to remove invalid mod directory: {}", e))?;
+
+        return Err(
+            "No Lua files found in the archive. This doesn't appear to be a valid Balatro mod."
+                .to_string(),
+        );
+    }
+
     // Return the path to the installed mod
     Ok(mod_dir.to_string_lossy().to_string())
+}
+
+// Helper function to check for .lua files
+fn check_for_lua_files(dir: &PathBuf) -> Result<bool, String> {
+    // Walk the directory recursively to find any .lua files
+    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        if entry.file_type().is_file() {
+            if let Some(extension) = entry.path().extension() {
+                if extension == "lua" {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 /// Process a mod archive from raw binary data (alternative approach if needed)
