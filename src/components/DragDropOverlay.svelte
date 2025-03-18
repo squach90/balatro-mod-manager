@@ -16,7 +16,7 @@
 
 			// Listen for file drop events
 			unlisten = await webview.onDragDropEvent(async (event: any) => {
-				console.log("Drag drop event received:", event);
+				// console.log("Drag drop event received:", event);
 
 				// Handle different event types based on the actual event structure from logs
 				if (event.event === "tauri://drag-over") {
@@ -28,26 +28,26 @@
 					isDragging = false;
 				} else if (event.event === "tauri://drag-drop") {
 					// FIXED: The correct event name!
-					console.log("Drop event detected:", JSON.stringify(event));
+					// console.log("Drop event detected:", JSON.stringify(event));
 					// Always hide the drag overlay on drop
 					isDragging = false;
 
 					// According to your logs, paths are directly in event.payload.paths
 					const paths = event.payload.paths;
-					console.log("Extracted paths:", paths);
+					// console.log("Extracted paths:", paths);
 
 					if (!paths || paths.length === 0) {
-						console.log("No valid paths found in drop event");
+						// console.log("No valid paths found in drop event");
 						return;
 					}
 
 					isProcessing = true;
-					console.log("Processing files:", paths);
+					// console.log("Processing files:", paths);
 
 					// Process each dropped file
 					for (const filePath of paths) {
 						try {
-							console.log("Processing file:", filePath);
+							// console.log("Processing file:", filePath);
 
 							// Check if it's a supported file type
 							if (
@@ -56,7 +56,7 @@
 								!filePath.endsWith(".tar.gz") &&
 								!filePath.endsWith(".tgz")
 							) {
-								console.log("Unsupported file type:", filePath);
+								// console.log("Unsupported file type:", filePath);
 								addMessage(
 									`Skipped ${filePath}: Only ZIP and TAR archives are supported`,
 									"warning",
@@ -65,19 +65,19 @@
 							}
 
 							// Process the file
-							console.log(
-								"Invoking process_dropped_file for:",
-								filePath,
-							);
+							// console.log(
+							// 	"Invoking process_dropped_file for:",
+							// 	filePath,
+							// );
 							try {
 								await invoke("process_dropped_file", {
 									path: filePath,
 								});
 
-								console.log(
-									"Successfully processed file:",
-									filePath,
-								);
+								// console.log(
+								// 	"Successfully processed file:",
+								// 	filePath,
+								// );
 								addMessage(
 									`Successfully installed mod from: ${filePath}`,
 									"success",
@@ -105,12 +105,12 @@
 						}
 					}
 
-					console.log("Finished processing all files");
+
 					isProcessing = false;
 				}
 			});
 
-			console.log("Drag-drop event listener set up successfully");
+			// console.log("Drag-drop event listener set up successfully");
 		} catch (error) {
 			console.error("Error setting up drag-drop handler:", error);
 			addMessage(`Error setting up drag-drop handler: ${error}`, "error");
