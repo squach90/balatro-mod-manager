@@ -34,8 +34,7 @@ pub fn init_logger() -> Result<(), AppError> {
     // Open log file
     let file = fs::OpenOptions::new()
         .create(true)
-        .write(true)
-        .append(true)
+        .append(true)  // removed .write(true)
         .open(&log_file)
         .map_err(|e| AppError::FileWrite {
             path: log_file.clone(),
@@ -106,11 +105,11 @@ fn cleanup_old_logs(log_dir: &PathBuf) -> Result<(), AppError> {
         let mut log_files: Vec<_> = entries
             .filter_map(Result::ok)
             .filter(|entry| {
-                entry.path().extension().map_or(false, |ext| ext == "log")
+                entry.path().extension().is_some_and(|ext| ext == "log")
                     && entry
                         .path()
                         .file_name()
-                        .map_or(false, |name| name.to_string_lossy().starts_with("bmm_"))
+                        .is_some_and(|name| name.to_string_lossy().starts_with("bmm_"))
             })
             .collect();
 

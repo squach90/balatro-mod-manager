@@ -5,7 +5,7 @@ use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -158,10 +158,20 @@ pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), Ap
         versions: versions.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache).map_err(|e| AppError::Serialization {
-        format: "bincode".into(),
-        source: e.to_string(),
-    })?;
+    // Use bincode 2.0 for serialization
+    let config = bincode::config::standard();
+    let encoded =
+        bincode::serde::encode_to_vec(&cache, config).map_err(|e| AppError::Serialization {
+            format: "bincode".into(),
+            source: e.to_string(),
+        })?;
+
+    encoder
+        .write_all(&encoded)
+        .map_err(|e| AppError::FileWrite {
+            path,
+            source: e.to_string(),
+        })?;
 
     Ok(())
 }
@@ -184,11 +194,24 @@ pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>, AppErr
             source: e.to_string(),
         })?;
 
-    let decoder = GzDecoder::new(buffer.as_slice());
-    let cache: VersionCache = match bincode::deserialize_from(decoder) {
-        Ok(c) => c,
-        Err(_) => return Ok(None),
-    };
+    let mut decoder = GzDecoder::new(buffer.as_slice());
+    let mut decompressed = Vec::new();
+
+    // Decompress the data
+    if let Err(e) = decoder.read_to_end(&mut decompressed) {
+        return Err(AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        });
+    }
+
+    // Deserialize using bincode 2.0
+    let config = bincode::config::standard();
+    let (cache, _): (VersionCache, _) =
+        match bincode::serde::decode_from_slice(&decompressed, config) {
+            Ok(result) => result,
+            Err(_) => return Ok(None),
+        };
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -243,10 +266,20 @@ pub fn save_cache(mods: &[Mod]) -> Result<(), AppError> {
         mods: mods.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache).map_err(|e| AppError::Serialization {
-        format: "bincode".into(),
-        source: e.to_string(),
-    })?;
+    // Use bincode 2.0 for serialization
+    let config = bincode::config::standard();
+    let encoded =
+        bincode::serde::encode_to_vec(&cache, config).map_err(|e| AppError::Serialization {
+            format: "bincode".into(),
+            source: e.to_string(),
+        })?;
+
+    encoder
+        .write_all(&encoded)
+        .map_err(|e| AppError::FileWrite {
+            path,
+            source: e.to_string(),
+        })?;
 
     Ok(())
 }
@@ -265,9 +298,21 @@ pub fn load_cache() -> Result<Option<(Vec<Mod>, u64)>, AppError> {
             source: e.to_string(),
         })?;
 
-    let decoder = GzDecoder::new(buffer.as_slice());
-    let cache: ModCache = match bincode::deserialize_from(decoder) {
-        Ok(c) => c,
+    let mut decoder = GzDecoder::new(buffer.as_slice());
+    let mut decompressed = Vec::new();
+
+    // Decompress the data
+    if let Err(e) = decoder.read_to_end(&mut decompressed) {
+        return Err(AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        });
+    }
+
+    // Deserialize using bincode 2.0
+    let config = bincode::config::standard();
+    let (cache, _): (ModCache, _) = match bincode::serde::decode_from_slice(&decompressed, config) {
+        Ok(result) => result,
         Err(_) => return Ok(None),
     };
 
@@ -315,7 +360,6 @@ mod tests {
                 title: "Test Mod".into(),
                 description: "Test Description".into(),
                 image: "test.png".into(),
-                // last_updated: "2024-01-01".into(),
                 categories: vec![Category::Content],
                 colors: ColorPair {
                     color1: "#fff".into(),
@@ -340,3 +384,4 @@ mod tests {
         })
     }
 }
+
