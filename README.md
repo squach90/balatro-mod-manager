@@ -65,17 +65,15 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
     git clone https://github.com/skyline69/balatro-mod-manager.git
     cd balatro-mod-manager && deno install --allow-scripts
     ```
-
-2. Install dependencies for the Svelte frontend:
-    ```sh
-    cd src-tauri
-    deno task install
-    ```
-
-3. Install dependencies for the Rust backend:
-    ```sh
-    cargo build
-    ```
+2. Run the task based on your OS
+    - For Windows:
+        ```sh
+        task release-windows
+        ```
+    - For macOS:
+        ```sh
+        task release-macos
+        ```
 
 ## Running the Project
 
@@ -92,13 +90,13 @@ To start the project in development mode, use the provided taskfile:
 
 To build the project for production:
 
-1. Build the release target:
+1. Build the release target (`release-windows` for Windows, `release-macos` for macOS):
     ```sh
-    task release
+    task release-windows # or task release-macos
     ```
 
 
-The built application will be located in the `src-tauri/target/release` directory.
+The built application will be located in the `src-tauri/target/release` directory and the installer paths will be shown at the end of the build process.
 
 ## Cleaning the Build
 
