@@ -34,8 +34,6 @@ Version Updater recursively scans your project directory and updates version str
 Note: If your compiler doesn't support OpenMP, you can build without it:
 `fpm build --profile release`
 
-text
-
 ## Usage
 
 ### Basic Usage
