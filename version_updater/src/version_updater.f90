@@ -113,6 +113,7 @@ end subroutine write_file_content
     write(*, '(a)') ""
     write(*, '(a)') "Options:"
     write(*, '(a)') "  -h, --help   Show this help message and exit"
+    write(*, '(a)') "  --bun        Update package.json to use Bun package manager"
     write(*, '(a)') ""
     write(*, '(a)') "Files updated:"
     write(*, '(a)') "  - tauri.conf.json"
@@ -124,15 +125,17 @@ end subroutine write_file_content
     write(*, '(a)') "Notes:"
     write(*, '(a)') "  - The 'v' prefix is automatically removed for certain files"
     write(*, '(a)') "  - Directories like .git, node_modules, etc. are automatically excluded"
+    write(*, '(a)') "  - Use --bun to update package.json to use Bun as the package manager"
   end subroutine show_help
   
-  subroutine update_versions(version_arg, directory_arg)
+  subroutine update_versions(version_arg, directory_arg, use_bun)
     character(len=*), intent(in) :: version_arg
     character(len=*), intent(in), optional :: directory_arg
+    logical, intent(in), optional :: use_bun
     
     character(len=100) :: version
     character(len=MAX_PATH_LEN) :: directory
-    logical :: has_v_prefix
+    logical :: has_v_prefix, update_to_bun
     
     ! Check if version starts with 'v' and remove it for certain files
     has_v_prefix = .false.
@@ -141,6 +144,12 @@ end subroutine write_file_content
       version = version_arg(2:)
     else
       version = version_arg
+    end if
+    
+    ! Set update_to_bun flag
+    update_to_bun = .false.
+    if (present(use_bun)) then
+      update_to_bun = use_bun
     end if
     
     ! Get current directory if not provided
@@ -153,11 +162,14 @@ end subroutine write_file_content
     write(*, '(a)') "Starting version update process..."
     write(*, '(a,a)') "Target directory: ", trim(directory)
     write(*, '(a,a)') "Version: ", trim(version_arg)
+    if (update_to_bun) then
+      write(*, '(a)') "Will update package.json to use Bun package manager"
+    end if
     
     !$ write(*, '(a,i0)') "Using OpenMP with threads: ", omp_get_max_threads()
     
     ! Process the directory and update files
-    call process_directory(trim(directory), trim(version), trim(version_arg))
+    call process_directory(trim(directory), trim(version), trim(version_arg), update_to_bun)
     
     write(*, '(a)') "Version update completed successfully!"
   end subroutine update_versions
@@ -202,8 +214,9 @@ end subroutine write_file_content
   end subroutine get_current_directory
   
   ! Simplified directory processing to avoid memory issues
-  subroutine process_directory(dir_path, version_no_v, version_with_v)
+  subroutine process_directory(dir_path, version_no_v, version_with_v, update_to_bun)
     character(len=*), intent(in) :: dir_path, version_no_v, version_with_v
+    logical, intent(in) :: update_to_bun
     character(len=MAX_PATH_LEN) :: cmd, file_path
     integer :: io_stat, file_unit
     
@@ -276,7 +289,7 @@ end subroutine write_file_content
         do
           read(file_unit, '(a)', iostat=io_stat) file_path
           if (io_stat /= 0) exit
-          call update_package_json(trim(file_path), version_no_v)
+          call update_package_json(trim(file_path), version_no_v, update_to_bun)
         end do
         close(file_unit)
       end if
@@ -372,11 +385,12 @@ end subroutine write_file_content
 end subroutine update_tauri_conf
 
  
-  subroutine update_package_json(file_path, version_str)
+  subroutine update_package_json(file_path, version_str, update_to_bun)
     character(len=*), intent(in) :: file_path, version_str
+    logical, intent(in) :: update_to_bun
     character(len=MAX_BUFFER_SIZE) :: content
-    integer :: io_stat, file_unit, pos1, pos2, content_len, file_size
-    logical :: file_exists
+    integer :: io_stat, pos1, pos2, content_len
+    logical :: file_exists, package_manager_updated
     
     ! Check if file exists
     inquire(file=file_path, exist=file_exists)
@@ -384,35 +398,14 @@ end subroutine update_tauri_conf
       return
     end if
     
-    ! Get file size to prevent buffer overflow
-    inquire(file=file_path, size=file_size)
-    if (file_size <= 0 .or. file_size > MAX_BUFFER_SIZE-1) then
-      write(error_unit, '(a,a,a,i0,a)') "Error: File too large or empty: ", trim(file_path), &
-            " (", file_size, " bytes)"
-      return
-    end if
-    
-    ! Read the file line by line
-    open(newunit=file_unit, file=file_path, status='old', action='read', iostat=io_stat)
+    ! Read the file using our improved reader
+    call read_file_content(file_path, content, content_len, io_stat)
     if (io_stat /= 0) then
-      write(error_unit, '(a,a)') "Error: Could not open file: ", trim(file_path)
+      write(error_unit, '(a,a)') "Error: Could not read file: ", trim(file_path)
       return
     end if
     
-    content = ""
-    content_len = 0
-    do
-      if (content_len >= MAX_BUFFER_SIZE - 1024) exit  ! Leave room for safety
-      
-      read(file_unit, '(a)', iostat=io_stat) content(content_len+1:content_len+1000)
-      if (io_stat /= 0) exit
-      
-      content_len = content_len + len_trim(content(content_len+1:content_len+1000))
-      content(content_len+1:content_len+1) = char(10)  ! newline
-      content_len = content_len + 1
-    end do
-    
-    close(file_unit)
+    package_manager_updated = .false.
     
     ! Update the version
     pos1 = index(content(1:content_len), '"version": "')
@@ -425,22 +418,80 @@ end subroutine update_tauri_conf
         if (content_len - (pos1+pos2-1) + len_trim(version_str) < MAX_BUFFER_SIZE) then
           ! Build new content
           content = content(1:pos1-1) // trim(version_str) // content(pos1+pos2-1:content_len)
-          
-          ! Write back to file
-          open(newunit=file_unit, file=file_path, status='replace', action='write', iostat=io_stat)
-          if (io_stat /= 0) then
-            write(error_unit, '(a,a)') "Error: Could not write to file: ", trim(file_path)
-            return
-          end if
-          
-          write(file_unit, '(a)', advance='no') content(1:content_len)
-          close(file_unit)
-          
-          write(*, '(a,a)') "Updated: ", trim(file_path)
+          content_len = len_trim(content)
         else
           write(error_unit, '(a,a)') "Error: Buffer overflow prevented for file: ", trim(file_path)
         end if
       end if
+    end if
+    
+    ! Update the package manager if requested
+    if (update_to_bun) then
+      pos1 = index(content(1:content_len), '"packageManager": "')
+      if (pos1 > 0) then
+        pos1 = pos1 + 18  ! Length of '"packageManager": "'
+        pos2 = index(content(pos1:content_len), '"')
+        
+        if (pos2 > 0) then
+          ! Check if we have room for the new package manager
+          if (content_len - (pos1+pos2-1) + 10 < MAX_BUFFER_SIZE) then  ! 10 is length of "bun@1.2.5"
+            ! Replace with Bun
+            content = content(1:pos1-1) // "bun@1.2.5" // content(pos1+pos2-1:content_len)
+            content_len = len_trim(content)
+            package_manager_updated = .true.
+          else
+            write(error_unit, '(a,a)') "Error: Buffer overflow prevented for file: ", trim(file_path)
+          end if
+        end if
+      else
+        ! packageManager field doesn't exist, add it before the closing brace
+        pos1 = content_len
+        ! Find the last closing brace
+        do while (pos1 > 1)
+          if (content(pos1:pos1) == '}') exit
+          pos1 = pos1 - 1
+        end do
+        
+        if (pos1 > 1) then
+          ! Check if we have comma before this or need to add one
+          pos2 = pos1 - 1
+          ! Skip whitespace
+          do while (pos2 > 1 .and. (content(pos2:pos2) == ' ' .or. content(pos2:pos2) == char(9) .or. &
+                  content(pos2:pos2) == char(10) .or. content(pos2:pos2) == char(13)))
+            pos2 = pos2 - 1
+          end do
+          
+          ! Check if we have room to add the package manager
+          if (content_len + 30 < MAX_BUFFER_SIZE) then  ! 30 is a safe length for new field
+            ! Insert packageManager before the closing brace
+            content = content(1:pos2) // "," // char(10) // '  "packageManager": "bun@1.2.5"' // &
+                      content(pos1:content_len)
+            content_len = len_trim(content)
+            package_manager_updated = .true.
+          else
+            write(error_unit, '(a,a)') "Error: Buffer overflow prevented for file: ", trim(file_path)
+          end if
+        end if
+      end if
+    end if
+    
+    ! Write back to file if anything changed
+    if (package_manager_updated) then
+      call write_file_content(file_path, content, content_len, io_stat)
+      if (io_stat /= 0) then
+        write(error_unit, '(a,a)') "Error: Could not write to file: ", trim(file_path)
+        return
+      end if
+      
+      write(*, '(a,a)') "Updated package manager to bun@1.2.5 in: ", trim(file_path)
+    else
+      call write_file_content(file_path, content, content_len, io_stat)
+      if (io_stat /= 0) then
+        write(error_unit, '(a,a)') "Error: Could not write to file: ", trim(file_path)
+        return
+      end if
+      
+      write(*, '(a,a)') "Updated version in: ", trim(file_path)
     end if
   end subroutine update_package_json
   
