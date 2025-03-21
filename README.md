@@ -41,7 +41,7 @@ Alternatively, if you would prefer to build Balatro Mod Manager yourself instead
 ## Build Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (for the backend)
-- [Deno](https://deno.land/#installation) (for the frontend)
+- [Bun](https://bun.sh/) (for the frontend)
 - [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites#installing-the-tauri-cli)
 - [Task](https://taskfile.dev/) (for running task commands)
 
@@ -60,10 +60,10 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
 
 ## Manual Installation
 
-1. Clone the repository & install deno's dependencies:
+1. Clone the repository & install bun's dependencies:
     ```sh
     git clone https://github.com/skyline69/balatro-mod-manager.git
-    cd balatro-mod-manager && deno install --allow-scripts
+    cd balatro-mod-manager && bun install --allow-scripts
     ```
 2. Run the task based on your OS
     - For Windows:
