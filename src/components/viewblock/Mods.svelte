@@ -171,8 +171,6 @@
 			loadingDots.update((n) => (n + 1) % 4);
 		}, 500);
 
-
-
 		// Separate async function for initialization
 		const initialize = async () => {
 			const cached = await getFromCache();
@@ -841,6 +839,10 @@
 									catalog
 								</p>
 							</div>
+						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
+							<div class="no-mods-message">
+								<p>No installed mods.</p>
+							</div>
 						{/if}
 					{/if}
 
@@ -901,6 +903,37 @@
 		overflow: hidden;
 
 		height: 100%;
+	}
+
+	.no-mods-message {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 100%;
+		width: 100%;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		margin: auto;
+		padding-top: 3rem; /* Add space for the controls at the top */
+	}
+
+	.no-mods-message p {
+		font-family: "M6X11", sans-serif;
+		font-size: 1.8rem;
+		color: #f4eee0;
+		text-align: center;
+		/* Add black stroke with two methods for better browser compatibility */
+		-webkit-text-stroke: 0.1px black;
+		/* Fallback using text-shadow for browsers that don't support text-stroke */
+		text-shadow:
+			-1px -1px 0 #000,
+			1px -1px 0 #000,
+			-1px 1px 0 #000,
+			1px 1px 0 #000,
+			2px 2px 3px rgba(0, 0, 0, 0.5);
 	}
 
 	.separator {
