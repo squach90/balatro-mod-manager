@@ -17,8 +17,9 @@
 		installationStatus,
 		loadingStates2 as loadingStates,
 		uninstallDialogStore,
-		currentCategory, // Add this import
+		currentCategory,
 		updateAvailableStore,
+		currentPage,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -51,6 +52,27 @@
 		if (event.button === 3) {
 			event.preventDefault();
 			handleBack();
+		}
+	}
+
+	function getCategoryName(category: number): string {
+		switch (category) {
+			case 0:
+				return "Content";
+			case 1:
+				return "Joker";
+			case 2:
+				return "Quality of Life";
+			case 3:
+				return "Technical";
+			case 4:
+				return "Miscellaneous";
+			case 5:
+				return "Resource Packs";
+			case 6:
+				return "API";
+			default:
+				return "All Mods";
 		}
 	}
 
@@ -882,6 +904,46 @@
 						<Github size={16} /> Repository
 					</button>
 				{/if}
+
+				{#if mod.categories && mod.categories.length > 0}
+					<div class="categories-section">
+						<h3>Categories</h3>
+						<div class="category-tags">
+							{#each mod.categories as category}
+								<button
+									class="category-tag"
+									onclick={() => {
+										currentPage.set(1);
+										currentModView.set(null);
+										currentCategory.set(
+											getCategoryName(category),
+										);
+										setTimeout(() => {
+											const modsContainer =
+												document.querySelector(
+													".mods-scroll-container",
+												);
+											if (modsContainer) {
+												modsContainer.scrollTo({
+													top: 0,
+													behavior: "smooth",
+												});
+											} else {
+												// Fallback to window scroll
+												window.scrollTo({
+													top: 0,
+													behavior: "smooth",
+												});
+											}
+										}, 50);
+									}}
+								>
+									{getCategoryName(category)}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</div>
 			<div class="right-column">
 				<div
@@ -906,6 +968,58 @@
 <style>
 	:global(.description > p > img) {
 		width: 100%;
+	}
+
+	.categories-section {
+		margin-top: 1.5rem;
+		padding: 0.75rem;
+		background: rgba(244, 238, 224, 0.05);
+		border-radius: 6px;
+	}
+
+	.categories-section h3 {
+		margin: 0 0 0.7rem 0;
+		font-size: 1.2rem;
+		color: #f4eee0;
+		text-align: center;
+	}
+
+	.category-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem; /* Increased gap between tags */
+		width: 100%;
+		justify-content: center;
+	}
+
+	.category-tag {
+		background: rgba(255, 255, 255, 0.1); /* Transparent background */
+		color: #f4eee0;
+		border: 1px solid rgba(244, 238, 224, 0.3); /* Subtle border */
+		border-radius: 6px;
+		padding: 0.5rem 1rem; /* Larger padding for bigger tags */
+		font-size: 1.1rem; /* Larger font size */
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+		backdrop-filter: blur(8px); /* Add blur effect */
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.category-tag:hover {
+		background: rgba(
+			255,
+			255,
+			255,
+			0.2
+		); /* Slightly more visible on hover */
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
+
+	.category-tag:active {
+		transform: translateY(1px);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 	}
 
 	.mod-view {
