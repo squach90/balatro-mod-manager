@@ -497,13 +497,12 @@
 		const anchor = (event.target as HTMLElement).closest("a");
 		if (!anchor || !anchor.href) return;
 
-		// Check if this is an internal mod link using the data attribute
+		event.preventDefault();
+		event.stopPropagation();
+
 		const internalModName = anchor.getAttribute("data-internal-mod");
 
 		if (internalModName) {
-			event.preventDefault();
-			event.stopPropagation(); // This is crucial
-
 			let modsArray: Mod[] = [];
 			modsStore.subscribe((m) => (modsArray = m))();
 
@@ -514,8 +513,6 @@
 				currentModView.set(targetMod);
 			}
 		} else if (anchor.href.startsWith("http")) {
-			// External link
-			event.preventDefault();
 			open(anchor.href).catch((e) =>
 				console.error("Failed to open link:", e),
 			);
@@ -551,6 +548,7 @@
 		history = [{ isMod: true, modName: mod.title }];
 	});
 
+	// In the processInternalModLinks function
 	async function processInternalModLinks() {
 		if (!description) return;
 
@@ -564,7 +562,6 @@
 				if (linkCache.has(link.href)) {
 					result = linkCache.get(link.href)!;
 				} else {
-					// Use the TypeScript implementation instead of invoking Rust
 					const { isMod, modName } = isInternalModLink(link.href);
 					result = { isMod, modName };
 					linkCache.set(link.href, result);
@@ -572,28 +569,11 @@
 
 				if (result.isMod) {
 					link.classList.add("internal-mod-link");
-					// looks general better without this.
-					// link.setAttribute("title", "Open in Mod Manager");
 					link.setAttribute("data-internal-mod", result.modName);
-
-					// Add direct click handler to each internal link
-					link.onclick = (e) => {
-						e.preventDefault();
-						e.stopPropagation();
-
-						history.unshift(result);
-
-						// console.log("hist:", history);
-
-						setModViewByTitle(result.modName);
-
-						return false;
-					};
 				}
 			}
 		}
 	}
-
 	const getAllInstalledMods = async () => {
 		try {
 			installedMods = await fetchCachedMods();
