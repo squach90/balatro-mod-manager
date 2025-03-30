@@ -52,7 +52,7 @@ if ($env:OS -ne "Windows_NT") {
 $deps = @(
     @{Name="git"; Url="https://git-scm.com/downloads"},
     @{Name="cargo"; Url="https://www.rust-lang.org/tools/install"},
-    @{Name="deno"; Url="https://deno.land/#installation"},
+    @{Name="bun"; Url="https://bun.sh/"},
     @{Name="cargo-tauri"; Url="https://crates.io/crates/tauri-cli"}
 )
 
@@ -90,14 +90,14 @@ try {
     
     Set-Location (Join-Path $BUILD_DIR "balatro-mod-manager")
     
-    Write-Host "2. Installing deno dependencies..." -ForegroundColor $YELLOW
-    $denoOutput = deno install --allow-scripts 2>&1
+    Write-Host "2. Installing bun dependencies..." -ForegroundColor $YELLOW
+    $bunOutput = bun install 2>&1
     if ($LASTEXITCODE -ne 0) { 
-        throw "Deno install failed: $denoOutput" 
+        throw "Bun install failed: $bunOutput"
     }
 
     Write-Host "3. Building frontend..." -ForegroundColor $YELLOW
-    $frontendOutput = deno task build 2>&1
+    $frontendOutput = bun run build 2>&1
     if ($LASTEXITCODE -ne 0) { 
         throw "Frontend build failed: $frontendOutput" 
     }

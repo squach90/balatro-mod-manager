@@ -44,9 +44,9 @@ if ! command -v cargo &> /dev/null; then
     exit 1
 fi
 
-if ! command -v deno &> /dev/null; then
-    echo -e "${RED}Error: deno not found. Please install deno first.${NC}"
-    echo -e "${BLUE}https://docs.deno.com/runtime/getting_started/installation${NC}"  # Light blue hyperlink
+if ! command -v bun &> /dev/null; then
+    echo -e "${RED}Error: bun not found. Please install bun first.${NC}"
+    echo -e "${BLUE}https://bun.sh/${NC}"  # Light blue hyperlink
     exit 1
 fi
 
@@ -78,15 +78,15 @@ cd "${BUILD_DIR}/balatro-mod-manager" || {
 }
 
 # Build steps
-echo -e "${YELLOW}2. Installing deno dependencies...${NC}"
-deno install --allow-scripts || {
-    echo -e "${RED}deno install failed${NC}"
+echo -e "${YELLOW}2. Installing bun dependencies...${NC}"
+bun install || {
+    echo -e "${RED}Bun install failed${NC}"
     rm -rf "${BUILD_DIR}"
     exit 1
 }
 
 echo -e "${YELLOW}3. Building frontend...${NC}"
-deno task build || {
+bun run build || {
     echo -e "${RED}Frontend build failed${NC}"
     rm -rf "${BUILD_DIR}"
     exit 1
