@@ -74,23 +74,11 @@
 	let localMods: LocalMod[] = [];
 	let isLoadingLocalMods = false;
 
-	// Debug variables
-	let debugInfo = {
-		paginatedModsCount: 0,
-		localModsCount: 0,
-		containerHeight: 0,
-		containerWidth: 0,
-		gridColumns: 0,
-	};
-
-	let containerRef: HTMLDivElement;
-
 	async function getLocalMods() {
 		if ($currentCategory === "Installed Mods") {
 			isLoadingLocalMods = true;
 			try {
 				localMods = await invoke("get_detected_local_mods");
-				debugInfo.localModsCount = localMods.length;
 			} catch (error) {
 				console.error("Failed to load local mods:", error);
 				addMessage(`Failed to load local mods: ${error}`, "error");
@@ -163,8 +151,11 @@
 	// Add this helper function to handle scrolling to top
 	function scrollToTop() {
 		isProgrammaticScroll = true;
-		if (containerRef) {
-			containerRef.scrollTo({
+		const scrollContainer = document.querySelector(
+			".mods-scroll-container",
+		);
+		if (scrollContainer) {
+			scrollContainer.scrollTo({
 				top: 0,
 				behavior: "smooth",
 			});
@@ -174,35 +165,11 @@
 		}, 500); // Delay to prevent scroll handler triggering during animated scroll
 	}
 
-	// Update grid columns based on container width
-	function updateGridColumns() {
-		if (!containerRef) return;
-
-		const containerWidth = containerRef.clientWidth;
-		// Calculate how many columns can fit (280px card + 30px gap)
-		const columns = Math.max(1, Math.floor((containerWidth - 80) / 310));
-		debugInfo.gridColumns = columns;
-		debugInfo.containerWidth = containerWidth;
-		debugInfo.containerHeight = containerRef.clientHeight;
-	}
-
 	onMount(() => {
 		// Animation dots initialization
 		dotInterval = setInterval(() => {
 			loadingDots.update((n) => (n + 1) % 4);
 		}, 500);
-
-		// Update grid columns when container is available
-		if (containerRef) {
-			updateGridColumns();
-
-			// Add resize observer
-			const resizeObserver = new ResizeObserver(() => {
-				updateGridColumns();
-			});
-
-			resizeObserver.observe(containerRef);
-		}
 
 		// Separate async function for initialization
 		const initialize = async () => {
@@ -265,10 +232,6 @@
 		// Return synchronous cleanup function
 		return () => {
 			clearInterval(dotInterval);
-			if (containerRef) {
-				const resizeObserver = new ResizeObserver(() => {});
-				resizeObserver.disconnect();
-			}
 		};
 	});
 
@@ -689,7 +652,6 @@
 		($currentPage - 1) * $itemsPerPage,
 		$currentPage * $itemsPerPage,
 	);
-	$: debugInfo.paginatedModsCount = paginatedMods.length;
 
 	const maxVisiblePages = 5;
 	let startPage = 1;
@@ -832,25 +794,18 @@
 								<option value={SortOption.NameDesc}
 									>Name (Z-A)</option
 								>
+								<!-- <option value={SortOption.LastUpdatedDesc} -->
+								<!-- 	>Latest Updated</option -->
+								<!-- > -->
+								<!-- <option value={SortOption.LastUpdatedAsc} -->
+								<!-- 	>Oldest Updated</option -->
+								<!-- > -->
 							</select>
 						</div>
 					</div>
 				</div>
 
-				<!-- Debug info display - remove in production -->
-				{#if import.meta.env.DEV}
-					<div class="debug-info">
-						<p>Paginated Mods: {debugInfo.paginatedModsCount}</p>
-						<p>Local Mods: {debugInfo.localModsCount}</p>
-						<p>Container Width: {debugInfo.containerWidth}px</p>
-						<p>Grid Columns: {debugInfo.gridColumns}</p>
-					</div>
-				{/if}
-
-				<div
-					class="mods-scroll-container default-scrollbar"
-					bind:this={containerRef}
-				>
+				<div class="mods-scroll-container default-scrollbar">
 					{#if $currentCategory === "Installed Mods"}
 						{#if isLoadingLocalMods}
 							<div class="section-header">
@@ -941,30 +896,13 @@
 		font-size: 1.1rem;
 		color: #f4eee0;
 	}
-
 	.mods-container {
 		display: flex;
 		gap: 1rem;
 		padding: 0 2rem;
 		overflow: hidden;
+
 		height: 100%;
-	}
-
-	/* Debug info box */
-	.debug-info {
-		position: fixed;
-		top: 10px;
-		right: 10px;
-		background: rgba(0, 0, 0, 0.8);
-		color: #fff;
-		padding: 10px;
-		border-radius: 4px;
-		z-index: 9999;
-		font-size: 12px;
-	}
-
-	.debug-info p {
-		margin: 5px 0;
 	}
 
 	.no-mods-message {
@@ -1119,8 +1057,6 @@
 	.mods-scroll-container {
 		overflow-y: auto;
 		height: 100%;
-		position: relative;
-		padding-top: 75px; /* Space for controls */
 	}
 
 	.mods-grid {
@@ -1136,8 +1072,9 @@
 		padding-bottom: 1rem;
 	}
 
-	.has-local-mods {
-		margin-top: 20px;
+	/* Catalog section gets proper top padding */
+	.local-mods-grid + .section-header + .mods-grid {
+		padding-top: 1rem;
 	}
 
 	.sort-controls {
@@ -1150,6 +1087,15 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 		/* transform: translateY(0); /* Reset any transforms */
 	}
+	/**/
+	/* 	.sort-controls { */
+	/*     position: absolute; */
+	/*     top: 1rem; */
+	/*     right: 3rem; */
+	/*     z-index: 1000; */
+	/*     margin: 0; */
+	/*     background: transparent; */
+	/* } */
 
 	.sort-wrapper {
 		background: #ea9600;
