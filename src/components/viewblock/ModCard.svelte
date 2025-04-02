@@ -134,7 +134,13 @@
 		.color2};"
 >
 	<div class="mod-image">
-		<img src={mod.image} alt={mod.title} draggable="false" />
+		<img
+			src={mod.image}
+			alt={mod.title}
+			draggable="false"
+			loading="lazy"
+			decoding="async"
+		/>
 
 		<div class="tags">
 			<!-- <span class="tag updated"> -->

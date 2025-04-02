@@ -229,46 +229,34 @@ fn find_catalog_match(
             }
         }
     }
-
-    // Rest of the function remains the same...
-    // 1. Try exact ID match (most specific)
     for catalog_mod in catalog_mods {
+        // Precompute catalog names/IDs once per catalog mod
+        let catalog_title_lower = catalog_mod.title.to_lowercase();
         let catalog_id_lower = catalog_mod.title.replace(" ", "").to_lowercase();
+
+        // 1. Try exact ID match
         if catalog_id_lower == local_id_lower {
             return Some(create_match(catalog_mod));
         }
-    }
 
-    // 2. Try exact name match
-    for catalog_mod in catalog_mods {
-        let catalog_name_lower = catalog_mod.title.to_lowercase();
-        if catalog_name_lower == local_name_lower {
+        // 2. Try exact name match
+        if catalog_title_lower == local_name_lower {
             return Some(create_match(catalog_mod));
         }
-    }
 
-    // 3. Try directory name match (already handled above for Steamodded)
-    if let Some(dir_name) = Path::new(&local_mod.path)
-        .file_name()
-        .and_then(|n| n.to_str())
-    {
-        let dir_name_lower = dir_name.to_lowercase();
-        for catalog_mod in catalog_mods {
-            let catalog_name_lower = catalog_mod.title.to_lowercase();
-            if catalog_name_lower == dir_name_lower {
+        // 3. Try directory name match (already handled above for Steamodded)
+        if catalog_title_lower == dir_name_lower && !dir_name_lower.is_empty() {
+            return Some(create_match(catalog_mod));
+        }
+
+        // 4. Try substring matching (check if one contains the other)
+        // Avoid matching if one is very short to prevent too many false positives
+        if local_name_lower.len() > 3 && catalog_title_lower.len() > 3 {
+            if local_name_lower.contains(&catalog_title_lower)
+                || catalog_title_lower.contains(&local_name_lower)
+            {
                 return Some(create_match(catalog_mod));
             }
-        }
-    }
-
-    // 4. Try substring matching in either direction
-    for catalog_mod in catalog_mods {
-        let catalog_name_lower = catalog_mod.title.to_lowercase();
-
-        if local_name_lower.contains(&catalog_name_lower)
-            || catalog_name_lower.contains(&local_name_lower)
-        {
-            return Some(create_match(catalog_mod));
         }
     }
 
