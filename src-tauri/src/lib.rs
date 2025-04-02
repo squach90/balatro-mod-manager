@@ -7,6 +7,7 @@ use serde_json::json;
 use tar::Archive;
 use tauri::Emitter;
 use tauri::Manager;
+use tauri_plugin_window_state::StateFlags;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -1638,6 +1639,11 @@ async fn check_custom_balatro(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             app.emit("single-instance", Payload { args: argv, cwd })
                 .unwrap();

@@ -4,6 +4,7 @@
 	import { backgroundEnabled } from "../stores/modStore";
 	import { onMount } from "svelte";
 	import DragDropOverlay from "../components/DragDropOverlay.svelte";
+	import { Window } from "@tauri-apps/api/window";
 
 	import "../app.css";
 
@@ -11,8 +12,16 @@
 
 	let isWindows = false;
 
+	async function setupAppWindow() {
+		const appWindow = Window.getCurrent();
+
+		await appWindow.show();
+		await appWindow.setFocus();
+	}
+
 	onMount(() => {
 		isWindows = navigator.userAgent.indexOf("Windows") !== -1;
+		setupAppWindow();
 	});
 </script>
 
@@ -89,4 +98,3 @@
 		}
 	}
 </style>
-
