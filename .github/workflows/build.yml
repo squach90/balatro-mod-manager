@@ -132,7 +132,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           MACOSX_DEPLOYMENT_TARGET: 11.0
         with:
-          tagName: app-v__VERSION__
+          tagName: v__VERSION__
           releaseName: 'Balatro Mod Manager v__VERSION__ (Alpha Build) Pre-release'
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: true
