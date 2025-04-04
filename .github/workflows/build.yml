@@ -27,6 +27,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
 
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
@@ -54,13 +56,61 @@ jobs:
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
         run: bun install # change this to npm or pnpm depending on which one you use.
 
+      - name: Generate Release Notes
+        if: matrix.platform == 'ubuntu-22.04' # Only run once
+        id: generate_notes
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          
+          echo "## What's New" > RELEASE_NOTES.md
+          
+          if [ "$LATEST_TAG" != "none" ]; then
+            # Generate changelog from commits since the last tag
+            echo "### Changes since $LATEST_TAG" >> RELEASE_NOTES.md
+            git log $LATEST_TAG..HEAD --pretty=format:"- %s" --reverse | grep -v "Merge" >> RELEASE_NOTES.md
+          else
+            # No previous tags, list recent commits
+            echo "### Initial Release" >> RELEASE_NOTES.md
+            git log --pretty=format:"- %s" --reverse -n 10 | grep -v "Merge" >> RELEASE_NOTES.md
+          fi
+          
+          # Add the security warning template
+          cat >> RELEASE_NOTES.md << 'EOL'
+          
+          ## ⚠️ Important Security Note for Windows Users
+          Our .exe and .msi installers are unsigned at this time. This means:
+
+              Windows Defender/SmartScreen will show "Windows protected your PC"
+              Antivirus software might flag the files
+
+          ## Why?
+          We're a brand-new project and code signing certificates cost ~$400/year.
+
+          How to install safely:
+          1. Download the files from Assets below
+          2. On the warning screen: Click "More info" → "Run anyway"
+
+          ❓ FAQ
+          Q: Why is Windows blocking the installer?
+          A: We're unsigned – verify the code here first!
+          Q: How do I know this isn't malware?
+          A: Check the source code
+          EOL
+          
+          # Store release notes to be used by tauri-action
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat RELEASE_NOTES.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: 'Balatro Mod Manager v__VERSION__ (Alpha Build) Pre-release'
+          releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
+
