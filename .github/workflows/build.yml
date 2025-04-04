@@ -37,14 +37,27 @@ jobs:
       - name: Setup macOS Signing
         if: matrix.platform == 'macos-latest'
         run: |
-          # Import certificate
-          echo ${{ secrets.APPLE_CERTIFICATE }} | base64 --decode > certificate.p12
-          security create-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
-          security import certificate.p12 -k build.keychain -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
-          rm certificate.p12
+          # Create a temporary file for the certificate
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          
+          # Import certificate from secrets
+          echo -n "${{ secrets.APPLE_CERTIFICATE }}" | base64 --decode --output $CERTIFICATE_PATH
+          
+          # Create temporary keychain
+          security create-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" $KEYCHAIN_PATH
+          
+          # Add certificate to keychain
+          security import $CERTIFICATE_PATH -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          
+          # Allow codesigning from keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" $KEYCHAIN_PATH
+          
+          # Clean up temp file
+          rm $CERTIFICATE_PATH
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
