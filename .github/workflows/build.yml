@@ -76,6 +76,16 @@ jobs:
       - name: install frontend dependencies
         run: bun install
 
+      - name: Create version tag
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          # Extract version from Cargo.toml
+          APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
+          echo "Creating tag for version $APP_VERSION"
+          git tag "v$APP_VERSION"
+          echo "CURRENT_VERSION=v$APP_VERSION" >> $GITHUB_ENV
+
+
       - name: Generate GitHub-Style Release Notes
         if: matrix.platform == 'ubuntu-22.04'
         id: generate_notes
