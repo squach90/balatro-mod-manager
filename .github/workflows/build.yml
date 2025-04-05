@@ -81,26 +81,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Install GitHub CLI
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install gh
-          
           # Get repository details
           REPO_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 1)
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 2)
           
-          # Get the latest tag and determine previous tag for comparison
+          # Get the latest and previous tags
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $LATEST_TAG^ 2>/dev/null || echo "none")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude=$LATEST_TAG 2>/dev/null || echo "none")
           
           # Start release notes
           echo "## What's Changed" > RELEASE_NOTES.md
           
-          if [ "$LATEST_TAG" != "none" ]; then
-            # Get merged PRs since the last tag
-            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --since $(git log -1 --format=%at $LATEST_TAG) | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
+          # Get all merged PRs between tags
+          if [ "$LATEST_TAG" != "none" ] && [ "$PREVIOUS_TAG" != "none" ]; then
+            # Get PRs that were merged between previous and latest tag
+            MERGED_AFTER=$(git log -1 --format=%at $PREVIOUS_TAG)
+            MERGED_BEFORE=$(git log -1 --format=%at $LATEST_TAG)
+            
+            # Get merged PRs and filter manually
+            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,mergedAt,url --limit 100 > prs.json
+            cat prs.json | jq --arg after "$MERGED_AFTER" --arg before "$MERGED_BEFORE" '[.[] | select(.mergedAt | fromdateiso8601 > ($after | tonumber) and fromdateiso8601 < ($before | tonumber))]' > filtered_prs.json
+            cat filtered_prs.json | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
           else
             # No previous tag, get recent PRs
             gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --limit 10 | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
