@@ -75,23 +75,41 @@ jobs:
       - name: install frontend dependencies
         run: bun install
 
-      - name: Generate Release Notes
+      - name: Generate GitHub-Style Release Notes
         if: matrix.platform == 'ubuntu-22.04'
         id: generate_notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the latest tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          # Install GitHub CLI
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh
           
-          echo "## What's New" > RELEASE_NOTES.md
+          # Get repository details
+          REPO_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 1)
+          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 2)
+          
+          # Get the latest tag and determine previous tag for comparison
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $LATEST_TAG^ 2>/dev/null || echo "none")
+          
+          # Start release notes
+          echo "## What's Changed" > RELEASE_NOTES.md
           
           if [ "$LATEST_TAG" != "none" ]; then
-            # Generate changelog from commits since the last tag
-            echo "### Changes since $LATEST_TAG" >> RELEASE_NOTES.md
-            git log $LATEST_TAG..HEAD --pretty=format:"- %s" --reverse | grep -v "Merge" >> RELEASE_NOTES.md
+            # Get merged PRs since the last tag
+            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --since $(git log -1 --format=%at $LATEST_TAG) | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
           else
-            # No previous tags, list recent commits
-            echo "### Initial Release" >> RELEASE_NOTES.md
-            git log --pretty=format:"- %s" --reverse -n 10 | grep -v "Merge" >> RELEASE_NOTES.md
+            # No previous tag, get recent PRs
+            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --limit 10 | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
+          fi
+          
+          # Add full changelog link
+          if [ "$PREVIOUS_TAG" != "none" ] && [ "$LATEST_TAG" != "none" ]; then
+            echo "" >> RELEASE_NOTES.md
+            echo "**Full Changelog**: https://github.com/$REPO_OWNER/$REPO_NAME/compare/$PREVIOUS_TAG...$LATEST_TAG" >> RELEASE_NOTES.md
           fi
           
           # Add the security warning template
