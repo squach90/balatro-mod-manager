@@ -1,4 +1,4 @@
-name: 'publish'
+name: 'build-sign'
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
       - release
 
 jobs:
-  publish-tauri:
+  build-tauri:
     timeout-minutes: 60
     permissions:
       contents: write
@@ -75,96 +75,55 @@ jobs:
 
       - name: install frontend dependencies
         run: bun install
-
-      - name: Create version tag
-        if: matrix.platform == 'ubuntu-22.04'
+        
+      - name: Extract app version
         run: |
-          # Extract version from Cargo.toml
-          APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
-          echo "Creating tag for version $APP_VERSION"
-          git tag "v$APP_VERSION"
-          echo "CURRENT_VERSION=v$APP_VERSION" >> $GITHUB_ENV
-
-
-      - name: Generate GitHub-Style Release Notes
-        if: matrix.platform == 'ubuntu-22.04'
-        id: generate_notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get repository details
-          REPO_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 1)
-          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 2)
-          
-          # Get the latest and previous tags
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude=$LATEST_TAG 2>/dev/null || echo "none")
-          
-          # Start release notes
-          echo "## What's Changed" > RELEASE_NOTES.md
-          
-          # Get all merged PRs between tags
-          if [ "$LATEST_TAG" != "none" ] && [ "$PREVIOUS_TAG" != "none" ]; then
-            # Get PRs that were merged between previous and latest tag
-            MERGED_AFTER=$(git log -1 --format=%at $PREVIOUS_TAG)
-            MERGED_BEFORE=$(git log -1 --format=%at $LATEST_TAG)
-            
-            # Get merged PRs and filter manually
-            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,mergedAt,url --limit 100 > prs.json
-            cat prs.json | jq --arg after "$MERGED_AFTER" --arg before "$MERGED_BEFORE" '[.[] | select(.mergedAt | fromdateiso8601 > ($after | tonumber) and fromdateiso8601 < ($before | tonumber))]' > filtered_prs.json
-            cat filtered_prs.json | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
+          if [ "${{ matrix.platform }}" = "macos-latest" ] || [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
           else
-            # No previous tag, get recent PRs
-            gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --limit 10 | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
+            APP_VERSION=$(findstr /C:"version =" src-tauri/Cargo.toml | cut -d '"' -f2)
           fi
-          
-          # Add full changelog link
-          if [ "$PREVIOUS_TAG" != "none" ] && [ "$LATEST_TAG" != "none" ]; then
-            echo "" >> RELEASE_NOTES.md
-            echo "**Full Changelog**: https://github.com/$REPO_OWNER/$REPO_NAME/compare/$PREVIOUS_TAG...$LATEST_TAG" >> RELEASE_NOTES.md
-          fi
-          
-          # Add the security warning template
-          cat >> RELEASE_NOTES.md << 'EOL'
-          
-          ## ⚠️ Important Security Note for Windows Users
-          Our .exe and .msi installers are unsigned at this time. This means:
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
-              Windows Defender/SmartScreen will show "Windows protected your PC"
-              Antivirus software might flag the files
-
-          ## Why?
-          We're a brand-new project and code signing certificates cost ~$400/year.
-
-          How to install safely:
-          1. Download the files from Assets below
-          2. On the warning screen: Click "More info" → "Run anyway"
-
-          ❓ FAQ
-          Q: Why is Windows blocking the installer?
-          A: We're unsigned – verify the code here first!
-          Q: How do I know this isn't malware?
-          A: Check the source code
-          EOL
-          
-          # Store release notes to be used by tauri-action
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          cat RELEASE_NOTES.md >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && env.CERT_ID || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           MACOSX_DEPLOYMENT_TARGET: 11.0
+          TAURI_SKIP_APPLE_NOTARIZATION: true # Skip notarization during build
         with:
-          tagName: v__VERSION__
-          releaseName: 'Balatro Mod Manager v__VERSION__ (Alpha Build) Pre-release'
-          releaseBody: ${{ env.RELEASE_NOTES }}
-          releaseDraft: true
-          prerelease: true
           args: ${{ matrix.args }}
+          
+      # Upload artifacts by platform
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-app
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Balatro Mod Manager.app
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/Balatro Mod Manager_${{ env.APP_VERSION }}_universal.dmg
+          retention-days: 1
+          
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-app
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 1
+          
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-app
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 1
 
