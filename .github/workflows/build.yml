@@ -76,18 +76,24 @@ jobs:
       - name: install frontend dependencies
         run: bun install
         
-      - name: Extract app version
+      - name: Extract app version on Unix systems
+        if: matrix.platform == 'macos-latest' || matrix.platform == 'ubuntu-22.04'
+        shell: bash
         run: |
-          if [ "${{ matrix.platform }}" = "macos-latest" ] || [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
-          else
-            APP_VERSION=$(findstr /C:"version =" src-tauri/Cargo.toml | cut -d '"' -f2)
-          fi
+          APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+      - name: Extract app version on Windows
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $APP_VERSION = Select-String -Path src-tauri/Cargo.toml -Pattern 'version = "([^"]*)"' | ForEach-Object { $_.Matches.Groups[1].Value }
+          echo "APP_VERSION=$APP_VERSION" >> $env:GITHUB_ENV
 
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
+          CI: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && env.CERT_ID || '' }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -103,7 +109,7 @@ jobs:
         with:
           name: macos-app
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/Balatro Mod Manager.app
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Balatro Mod Manager.app/**
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/Balatro Mod Manager_${{ env.APP_VERSION }}_universal.dmg
           retention-days: 1
           
