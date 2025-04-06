@@ -8,7 +8,7 @@ on:
 
 jobs:
   publish-tauri:
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
     strategy:
