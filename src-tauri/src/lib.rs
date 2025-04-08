@@ -1030,9 +1030,21 @@ async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
     let db = map_error(Database::new())?;
     let installed_mods = map_error(db.get_installed_mods())?;
 
+    let cached_mods = match cache::load_cache() {
+        Ok(Some((mods, _))) => mods,
+        _ => Vec::new(), // Empty vector if no cache
+    };
+    let detected_mods = local_mod_detection::detect_manual_mods(&db, &cached_mods)?;
+
     Ok(match mod_type.as_str() {
-        "Steamodded" => installed_mods.iter().any(|m| m.name == "Steamodded"),
-        "Talisman" => installed_mods.iter().any(|m| m.name == "Talisman"),
+        "Steamodded" => {
+            installed_mods.iter().any(|m| m.name == "Steamodded")
+                || detected_mods.iter().any(|m| m.name == "Steamodded")
+        }
+        "Talisman" => {
+            installed_mods.iter().any(|m| m.name == "Talisman")
+                || detected_mods.iter().any(|m| m.name == "Talisman")
+        }
         _ => return Err(AppError::InvalidState("Invalid mod type".to_string()).to_string()),
     })
 }
