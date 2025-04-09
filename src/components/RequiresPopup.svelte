@@ -110,22 +110,25 @@
 							- Extended modding API
 						</li>
 					{/if}
-
-					<div class="button-container">
-						<button
-							class="proceed-button"
-							onclick={handleProceedClick}
-						>
-							Download Anyway
-						</button>
-						<button
-							class="cancel-button"
-							onclick={() => (show = false)}
-						>
-							Close
-						</button>
-					</div>
 				</ul>
+
+				{#if (requiresSteamodded && !steamoddedInstalled) || (requiresTalisman && !talismanInstalled)}
+					<p>It's recommended to install these first.</p>
+				{:else}
+					<p>All required dependencies seem to be installed.</p>
+				{/if}
+
+				<div class="button-container">
+					<button class="proceed-button" onclick={handleProceedClick}>
+						Download Anyway
+					</button>
+					<button
+						class="cancel-button"
+						onclick={() => (show = false)}
+					>
+						Close
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
