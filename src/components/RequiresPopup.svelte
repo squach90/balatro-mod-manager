@@ -3,12 +3,21 @@
 	import { fade, scale } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
 
-	export let show: boolean = false;
-	export let requiresSteamodded: boolean = false;
-	export let requiresTalisman: boolean = false;
+	let {
+		show = $bindable(false), // Use $bindable for two-way binding
+		requiresSteamodded = false,
+		requiresTalisman = false,
+		onProceed = () => {}, // Add a prop for the callback, provide default no-op
+	}: {
+		show?: boolean;
+		requiresSteamodded?: boolean;
+		requiresTalisman?: boolean;
+		onProceed?: () => void; // Type the callback prop
+	} = $props();
 
-	let steamoddedInstalled = false;
-	let talismanInstalled = false;
+	let steamoddedInstalled = $state(false);
+	let talismanInstalled = $state(false);
+
 
 	async function checkInstallations() {
 		if (requiresSteamodded) {
@@ -23,9 +32,20 @@
 		}
 	}
 
-	$: if (show) {
-		checkInstallations();
+	// Function to handle the "Download Anyway" click
+	function handleProceedClick() {
+		// Call the passed-in callback function
+		if (onProceed) {
+			onProceed();
+		}
+		show = false; // Close the popup
 	}
+
+	$effect(() => {
+		if (show) {
+			checkInstallations();
+		}
+	});
 </script>
 
 {#if show}
@@ -39,7 +59,7 @@
 				<h2>Required Dependencies</h2>
 			</div>
 			<div class="popup-body">
-				<p>This mod requires the following dependencies:</p>
+				<p>This mod requires the following missing dependencies:</p>
 				<ul>
 					{#if requiresSteamodded && !steamoddedInstalled}
 						<li>
@@ -54,11 +74,24 @@
 						</li>
 					{/if}
 				</ul>
+				{#if (requiresSteamodded && !steamoddedInstalled) || (requiresTalisman && !talismanInstalled)}
+					<p>It's recommended to install these first.</p>
+				{:else}
+					<p>All required dependencies seem to be installed.</p>
+				{/if}
 
 				<div class="button-container">
+					<!-- Download Anyway Button -->
+					<button
+						class="proceed-button"
+						onclick={handleProceedClick}
+					>
+						Download Anyway
+					</button>
+					<!-- Close Button -->
 					<button
 						class="cancel-button"
-						on:click={() => (show = false)}
+						onclick={() => (show = false)}
 					>
 						Close
 					</button>
@@ -69,6 +102,7 @@
 {/if}
 
 <style>
+	/* Styles remain the same */
 	.popup-overlay {
 		position: fixed;
 		top: 0;
@@ -139,12 +173,11 @@
 		justify-content: flex-end;
 	}
 
-	.cancel-button {
+	.cancel-button,
+	.proceed-button {
 		padding: 1rem 1.5rem;
-		background: #c14139;
 		color: #f4eee0;
 		border: none;
-		outline: #a13029 solid 2px;
 		border-radius: 6px;
 		font-family: "M6X11", sans-serif;
 		font-size: 1.2rem;
@@ -152,8 +185,23 @@
 		transition: all 0.2s ease;
 	}
 
+	.cancel-button {
+		background: #c14139;
+		outline: #a13029 solid 2px;
+	}
+
 	.cancel-button:hover {
 		background: #d4524a;
+		transform: translateY(-2px);
+	}
+
+	.proceed-button {
+		background: #4f5a9c;
+		outline: #3a4275 solid 2px;
+	}
+
+	.proceed-button:hover {
+		background: #606db7;
 		transform: translateY(-2px);
 	}
 
@@ -163,30 +211,25 @@
 			width: 90%;
 			max-width: 400px;
 		}
-
 		.popup-header h2 {
 			font-size: 1.5rem;
 		}
-
 		.popup-body {
 			font-size: 1rem;
 		}
-
 		.popup-body li {
 			font-size: 1rem;
 			margin-bottom: 0.75rem;
 		}
-
 		.dependency {
 			font-size: 1.1rem;
 		}
-
-		.cancel-button {
+		.cancel-button,
+		.proceed-button {
 			padding: 0.75rem 1.25rem;
 			font-size: 1rem;
 			border-radius: 4px;
 		}
-
 		.popup-header {
 			gap: 0.5rem;
 			margin-bottom: 1rem;

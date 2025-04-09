@@ -27,17 +27,11 @@
 		currentModView.set(mod);
 	}
 
-	function focusSearchInput() {
-		if (searchInput) {
-			searchInput.focus();
-		}
-	}
-
 	const { onCheckDependencies } = $props<{
-		onCheckDependencies?: (event: {
-			steamodded: boolean;
-			talisman: boolean;
-		}) => void;
+		onCheckDependencies?: (
+			requirements: { steamodded: boolean; talisman: boolean },
+			downloadAction: () => Promise<void>,
+		) => void;
 	}>();
 
 	const getAllInstalledMods = async () => {
@@ -104,62 +98,92 @@
 	};
 
 	const installMod = async (mod: Mod) => {
-		// Check dependencies first before doing anything else
-		if (mod.requires_steamodded || mod.requires_talisman) {
-			// Check Steamodded if required
-			const steamoddedInstalled = mod.requires_steamodded
+		// Create a closure-safe reference to the mod
+		const modToInstall = { ...mod };
+
+		// Define the actual download function
+		const performDownload = async () => {
+			try {
+				loadingStates.update((s) => ({
+					...s,
+					[modToInstall.title]: true,
+				}));
+
+				// Create dependencies list
+				const dependencies = [];
+				if (modToInstall.requires_steamodded)
+					dependencies.push("Steamodded");
+				if (modToInstall.requires_talisman)
+					dependencies.push("Talisman");
+
+				const installedPath = await invoke<string>("install_mod", {
+					url: modToInstall.downloadURL,
+					folderName:
+						modToInstall.folderName ||
+						modToInstall.title.replace(/\s+/g, ""),
+				});
+
+				await invoke("add_installed_mod", {
+					name: modToInstall.title,
+					path: installedPath,
+					dependencies,
+					currentVersion: modToInstall.version || "",
+				});
+
+				await getAllInstalledMods();
+				installationStatus.update((s) => ({
+					...s,
+					[modToInstall.title]: true,
+				}));
+			} catch (error) {
+				console.error("Failed to install mod:", error);
+			} finally {
+				loadingStates.update((s) => ({
+					...s,
+					[modToInstall.title]: false,
+				}));
+			}
+		};
+
+		// Check dependencies first
+		if (
+			modToInstall.requires_steamodded ||
+			modToInstall.requires_talisman
+		) {
+			const steamoddedInstalled = modToInstall.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Steamodded",
 					})
 				: true;
 
-			// Check Talisman if required
-			const talismanInstalled = mod.requires_talisman
+			const talismanInstalled = modToInstall.requires_talisman
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Talisman",
 					})
 				: true;
 
-			// If any dependency is missing, show the RequiresPopup
 			if (
-				(mod.requires_steamodded && !steamoddedInstalled) ||
-				(mod.requires_talisman && !talismanInstalled)
+				(modToInstall.requires_steamodded && !steamoddedInstalled) ||
+				(modToInstall.requires_talisman && !talismanInstalled)
 			) {
-				// Call the handler with the appropriate requirements
-				onCheckDependencies?.({
-					steamodded: mod.requires_steamodded && !steamoddedInstalled,
-					talisman: mod.requires_talisman && !talismanInstalled,
-				});
-				return; // Stop installation
+				// Key change: pass both requirements AND download function
+				onCheckDependencies?.(
+					{
+						steamodded:
+							modToInstall.requires_steamodded &&
+							!steamoddedInstalled,
+						talisman:
+							modToInstall.requires_talisman &&
+							!talismanInstalled,
+					},
+					performDownload,
+				);
+				return;
 			}
 		}
 
-		// Create dependencies list for the database
-		const dependencies = [];
-		if (mod.requires_steamodded) dependencies.push("Steamodded");
-		if (mod.requires_talisman) dependencies.push("Talisman");
-
-		try {
-			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-			const installedPath = await invoke<string>("install_mod", {
-				url: mod.downloadURL,
-				folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
-			});
-
-			await invoke("add_installed_mod", {
-				name: mod.title,
-				path: installedPath,
-				dependencies,
-				currentVersion: mod.version || "",
-			});
-
-			await getAllInstalledMods();
-			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
-		} catch (error) {
-			console.error("Failed to install mod:", error);
-		} finally {
-			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
-		}
+		// Execute download if no dependencies are missing
+		await performDownload();
 	};
 
 	const isModInstalled = async (mod: Mod) => {

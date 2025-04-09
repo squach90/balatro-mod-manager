@@ -36,6 +36,26 @@
 	// Add these for the RequiresPopup
 	let showRequiresPopup = $state(false);
 
+	let storedDownloadAction: (() => Promise<void>) | null = $state(null);
+
+	function handleProceedDownload() {
+		if (storedDownloadAction) {
+			storedDownloadAction()
+				.catch((error) => {
+					console.error(
+						"Error during download action execution:",
+						error,
+					);
+					showError(error);
+				});
+		} else {
+			console.warn(
+				"Proceed action requested, but no download action was stored.",
+			);
+		}
+		storedDownloadAction = null; // Clear the stored action
+	}
+
 	let contentElement: HTMLDivElement;
 
 	let showUninstallDialog = $state(false);
@@ -74,8 +94,19 @@
 		talisman: false,
 	});
 
-	function handleDependencyCheck(requirements: DependencyCheck) {
+	function handleDependencyCheck(
+		requirements: DependencyCheck,
+		downloadAction?: () => Promise<void>,
+	) {
 		modRequirements = requirements;
+		if (downloadAction) {
+			storedDownloadAction = downloadAction;
+		} else {
+			console.warn(
+				"handleDependencyCheck called without a download action",
+			);
+			storedDownloadAction = null;
+		}
 		showRequiresPopup = true;
 	}
 
@@ -166,6 +197,7 @@
 		bind:show={showRequiresPopup}
 		requiresSteamodded={modRequirements.steamodded}
 		requiresTalisman={modRequirements.talisman}
+		onProceed={handleProceedDownload}
 	/>
 
 	<WarningPopup
