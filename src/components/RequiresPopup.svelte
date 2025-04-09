@@ -62,13 +62,22 @@
 				<ul>
 					{#if requiresSteamodded && !steamoddedInstalled}
 						<li>
-							<!-- Make Steamodded clickable -->
+							<!-- Accessible clickable Steamodded link -->
 							<span
 								class="dependency clickable"
+								role="button"
+								tabindex="0"
 								onclick={(e) => {
 									e.stopPropagation();
 									onDependencyClick("Steamodded");
-									show = false; // Close the popup
+									show = false;
+								}}
+								onkeydown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										onDependencyClick("Steamodded");
+										show = false;
+									}
 								}}
 							>
 								Steamodded
@@ -78,13 +87,22 @@
 					{/if}
 					{#if requiresTalisman && !talismanInstalled}
 						<li>
-							<!-- Make Talisman clickable -->
+							<!-- Accessible clickable Talisman link -->
 							<span
 								class="dependency clickable"
+								role="button"
+								tabindex="0"
 								onclick={(e) => {
 									e.stopPropagation();
 									onDependencyClick("Talisman");
-									show = false; // Close the popup
+									show = false;
+								}}
+								onkeydown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										onDependencyClick("Talisman");
+										show = false;
+									}
 								}}
 							>
 								Talisman
@@ -92,24 +110,22 @@
 							- Extended modding API
 						</li>
 					{/if}
-				</ul>
-				{#if (requiresSteamodded && !steamoddedInstalled) || (requiresTalisman && !talismanInstalled)}
-					<p>It's recommended to install these first.</p>
-				{:else}
-					<p>All required dependencies seem to be installed.</p>
-				{/if}
 
-				<div class="button-container">
-					<button class="proceed-button" onclick={handleProceedClick}>
-						Download Anyway
-					</button>
-					<button
-						class="cancel-button"
-						onclick={() => (show = false)}
-					>
-						Close
-					</button>
-				</div>
+					<div class="button-container">
+						<button
+							class="proceed-button"
+							onclick={handleProceedClick}
+						>
+							Download Anyway
+						</button>
+						<button
+							class="cancel-button"
+							onclick={() => (show = false)}
+						>
+							Close
+						</button>
+					</div>
+				</ul>
 			</div>
 		</div>
 	</div>
