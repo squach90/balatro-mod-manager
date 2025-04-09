@@ -10,6 +10,7 @@
 		FolderHeart,
 		Search,
 		BookOpen,
+		Folder,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { fly } from "svelte/transition";
@@ -737,6 +738,52 @@
 		}
 	}
 
+	async function openModsFolder() {
+		try {
+			// Get the repository path (which should be config_dir/Balatro/mod_index)
+			const modsFolderPath: string = await invoke("get_mods_folder");
+
+			// Get the parent directory (config_dir/Balatro) by finding the last path separator
+			const lastSeparatorIndex = Math.max(
+				modsFolderPath.lastIndexOf("/"),
+				modsFolderPath.lastIndexOf("\\"),
+			);
+			if (lastSeparatorIndex === -1) {
+				addMessage(
+					"Failed to determine the parent directory of the repository path.",
+					"error",
+				);
+				return;
+			}
+
+			const parentPath = modsFolderPath.substring(0, lastSeparatorIndex);
+			const separator = modsFolderPath.includes("/") ? "/" : "\\"; // Determine the separator used in the path
+
+			// Construct the mods path
+			const modsPath = `${parentPath}${separator}Mods`;
+
+			// Check if the path exists
+			const pathExists = await invoke("path_exists", { path: modsPath });
+
+			if (!pathExists) {
+				addMessage(
+					"Mods directory not found. It might not have been created yet.",
+					"warning",
+				);
+				addMessage(
+					"Install a mod using the mod manager to create the mods directory.",
+					"info",
+				);
+				return;
+			}
+
+			// Open the directory
+			await invoke("open_directory", { path: modsPath });
+		} catch (error) {
+			addMessage(`Failed to open mods directory: ${error}`, "error");
+		}
+	}
+
 	$: if ($currentModView === null && $currentCategory === "Installed Mods") {
 		refreshInstalledMods();
 	}
@@ -836,11 +883,21 @@
 							</div>
 						{:else if localMods.length > 0}
 							<div class="section-header">
-								<h3>Local Mods</h3>
-								<p>
-									These mods were installed manually (outside
-									the mod manager)
-								</p>
+								<div class="section-header-content">
+									<h3>Local Mods</h3>
+									<p>
+										These mods were installed manually
+										(outside the mod manager)
+									</p>
+								</div>
+								<button
+									class="open-folder-button"
+									onclick={openModsFolder}
+									title="Open mods folder"
+								>
+									<Folder size={20} />
+									Open Mods Folder
+								</button>
 							</div>
 
 							<div class="mods-grid local-mods-grid">
@@ -862,6 +919,14 @@
 						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
 							<div class="no-mods-message">
 								<p>No installed mods.</p>
+								<button
+									class="open-folder-button"
+									onclick={openModsFolder}
+									title="Open mods folder"
+								>
+									<Folder size={20} />
+									Open Mods Folder
+								</button>
 							</div>
 						{/if}
 					{/if}
@@ -894,6 +959,31 @@
 </div>
 
 <style>
+	.open-folder-button {
+		background: #4caf50;
+		color: #f4eee0;
+		border: none;
+		outline: #3d8b40 solid 2px;
+		border-radius: 4px;
+		padding: 0.75rem 1.5rem;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.2rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.open-folder-button:hover {
+		background: #45a049;
+		transform: translateY(-2px);
+	}
+
+	.open-folder-button:active {
+		transform: translateY(1px);
+	}
+
 	.section-header {
 		background: #c14139;
 		border: 2px solid #f4eee0;
@@ -902,6 +992,18 @@
 		margin: 0 2rem 1rem 2rem;
 		margin-top: 2rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.section-header-content {
+		flex: 1;
 	}
 
 	.section-header h3 {
@@ -928,6 +1030,7 @@
 	.no-mods-message {
 		display: flex;
 		justify-content: center;
+		flex-direction: column;
 		align-items: center;
 		height: 100%;
 		width: 100%;
