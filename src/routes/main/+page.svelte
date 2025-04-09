@@ -7,7 +7,7 @@
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
-	import { currentModView } from "../../stores/modStore";
+	import { currentModView, modsStore } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
 	import { selectedModStore, dependentsStore } from "../../stores/modStore";
 	import {
@@ -40,14 +40,10 @@
 
 	function handleProceedDownload() {
 		if (storedDownloadAction) {
-			storedDownloadAction()
-				.catch((error) => {
-					console.error(
-						"Error during download action execution:",
-						error,
-					);
-					showError(error);
-				});
+			storedDownloadAction().catch((error) => {
+				console.error("Error during download action execution:", error);
+				showError(error);
+			});
 		} else {
 			console.warn(
 				"Proceed action requested, but no download action was stored.",
@@ -93,6 +89,24 @@
 		steamodded: false,
 		talisman: false,
 	});
+
+	function handleDependencyClick(dependency: string) {
+		// Find the mod in the store
+		let foundMod = null;
+		const unsubscribe = modsStore.subscribe((mods) => {
+			foundMod = mods.find(
+				(m) => m.title.toLowerCase() === dependency.toLowerCase(),
+			);
+		});
+		unsubscribe(); // Important to prevent memory leaks
+
+		// If found, open it in the mod view
+		if (foundMod) {
+			currentModView.set(foundMod);
+		} else {
+			console.warn(`Dependency mod not found: ${dependency}`);
+		}
+	}
 
 	function handleDependencyCheck(
 		requirements: DependencyCheck,
@@ -193,11 +207,13 @@
 			<About />
 		{/if}
 	</div>
+
 	<RequiresPopup
 		bind:show={showRequiresPopup}
 		requiresSteamodded={modRequirements.steamodded}
 		requiresTalisman={modRequirements.talisman}
 		onProceed={handleProceedDownload}
+		onDependencyClick={handleDependencyClick}
 	/>
 
 	<WarningPopup

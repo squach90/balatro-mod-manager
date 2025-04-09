@@ -4,20 +4,21 @@
 	import { invoke } from "@tauri-apps/api/core";
 
 	let {
-		show = $bindable(false), // Use $bindable for two-way binding
+		show = $bindable(false),
 		requiresSteamodded = false,
 		requiresTalisman = false,
-		onProceed = () => {}, // Add a prop for the callback, provide default no-op
+		onProceed = () => {},
+		onDependencyClick = () => {}, // New prop to handle dependency clicks
 	}: {
 		show?: boolean;
 		requiresSteamodded?: boolean;
 		requiresTalisman?: boolean;
-		onProceed?: () => void; // Type the callback prop
+		onProceed?: () => void;
+		onDependencyClick?: (dependency: string) => void; // New type
 	} = $props();
 
 	let steamoddedInstalled = $state(false);
 	let talismanInstalled = $state(false);
-
 
 	async function checkInstallations() {
 		if (requiresSteamodded) {
@@ -32,13 +33,11 @@
 		}
 	}
 
-	// Function to handle the "Download Anyway" click
 	function handleProceedClick() {
-		// Call the passed-in callback function
 		if (onProceed) {
 			onProceed();
 		}
-		show = false; // Close the popup
+		show = false;
 	}
 
 	$effect(() => {
@@ -63,13 +62,33 @@
 				<ul>
 					{#if requiresSteamodded && !steamoddedInstalled}
 						<li>
-							<span class="dependency">Steamodded</span>
+							<!-- Make Steamodded clickable -->
+							<span
+								class="dependency clickable"
+								onclick={(e) => {
+									e.stopPropagation();
+									onDependencyClick("Steamodded");
+									show = false; // Close the popup
+								}}
+							>
+								Steamodded
+							</span>
 							- Core modding framework
 						</li>
 					{/if}
 					{#if requiresTalisman && !talismanInstalled}
 						<li>
-							<span class="dependency">Talisman</span>
+							<!-- Make Talisman clickable -->
+							<span
+								class="dependency clickable"
+								onclick={(e) => {
+									e.stopPropagation();
+									onDependencyClick("Talisman");
+									show = false; // Close the popup
+								}}
+							>
+								Talisman
+							</span>
 							- Extended modding API
 						</li>
 					{/if}
@@ -81,14 +100,9 @@
 				{/if}
 
 				<div class="button-container">
-					<!-- Download Anyway Button -->
-					<button
-						class="proceed-button"
-						onclick={handleProceedClick}
-					>
+					<button class="proceed-button" onclick={handleProceedClick}>
 						Download Anyway
 					</button>
-					<!-- Close Button -->
 					<button
 						class="cancel-button"
 						onclick={() => (show = false)}
@@ -102,6 +116,35 @@
 {/if}
 
 <style>
+	.dependency.clickable {
+		cursor: pointer;
+		transition: all 0.2s ease;
+		position: relative;
+		display: inline-block;
+		text-decoration: underline; /* Add underline to indicate it's clickable */
+		text-underline-offset: 5px; /* Add some space between text and underline */
+	}
+
+	.dependency.clickable:hover {
+		color: #ffffff;
+		transform: translateY(-1px);
+		text-decoration-thickness: 2px; /* Make underline thicker on hover */
+	}
+
+	.dependency.clickable:hover::after {
+		content: "Open mod page";
+		position: absolute;
+		bottom: -25px;
+		left: 0;
+		background: rgba(0, 0, 0, 0.8);
+		color: #f4eee0;
+		padding: 4px 8px;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		white-space: nowrap;
+		pointer-events: none;
+		z-index: 10;
+	}
 	/* Styles remain the same */
 	.popup-overlay {
 		position: fixed;
