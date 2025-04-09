@@ -877,7 +877,39 @@ contains
          pos1 = close_tag_start + 6
       end do
 
-      ! [Keep existing <p id="versiontext"> handling from previous working version]
+      ! Process <p id="versiontext"> elements
+      pos1 = 1
+      do while (pos1 <= content_len - 20)
+         rel_pos = index(content(pos1:content_len), '<p id="versiontext">')
+         if (rel_pos == 0) exit
+
+         pos1 = pos1 + rel_pos - 1
+
+         ! Find closing </p>
+         rel_pos = index(content(pos1:content_len), '</p>')
+         if (rel_pos == 0) then
+            pos1 = pos1 + 20
+            cycle
+         end if
+         close_tag_start = pos1 + rel_pos - 1
+
+         ! Find "Current version: " text
+         tag_end = index(content(pos1:close_tag_start), 'Current version: ')
+         if (tag_end == 0) then
+            pos1 = close_tag_start + 4
+            cycle
+         end if
+         tag_end = pos1 + tag_end + 16  ! Move past "Current version: "
+
+         ! Update the version text
+         content = content(1:tag_end - 1)//trim(normalized_version)// &
+                   content(close_tag_start:content_len)
+         content_len = content_len - (close_tag_start - tag_end) + &
+                       len_trim(normalized_version)
+         file_modified = .true.
+
+         pos1 = close_tag_start + 4
+      end do
 
       ! Write modified content
       if (file_modified) then
