@@ -816,6 +816,16 @@
 		{:else}
 			<div class="mods-wrapper">
 				<div class="controls-container">
+					{#if $currentCategory === "Installed Mods" && paginatedMods.length > 0 && !$currentModView}
+						<button
+							class="folder-icon-button"
+							onclick={openModsFolder}
+							title="Open Mods Folder"
+							in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+						>
+							<Folder size={20} />
+						</button>
+					{/if}
 					<div
 						class="pagination-controls"
 						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
@@ -845,6 +855,7 @@
 							Next
 						</button>
 					</div>
+
 					<div
 						class="sort-controls"
 						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
@@ -959,6 +970,43 @@
 </div>
 
 <style>
+	.folder-icon-button {
+		position: absolute;
+		top: 50%;
+		left: -1.2rem; /* Position on the left side */
+		transform: translateY(-50%);
+		z-index: 3000;
+		background: #4caf50;
+		color: #f4eee0;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		width: 52px;
+		height: 47px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+		padding: 0;
+	}
+
+	.folder-icon-button:hover {
+		background: #45a049;
+		transform: translateY(-50%) scale(1.1);
+	}
+
+	.folder-icon-button:active {
+		transform: translateY(-50%) scale(0.95);
+	}
+
+	/* Adjust position for smaller screens */
+	@media (max-width: 1160px) {
+		.folder-icon-button {
+			left: -1.6rem;
+		}
+	}
+
 	.open-folder-button {
 		background: #4caf50;
 		color: #f4eee0;
