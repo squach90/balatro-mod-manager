@@ -102,7 +102,11 @@
 		return status;
 	}
 
-	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
+	export let handleDependencyCheck: (
+		requirements: DependencyCheck,
+		downloadAction?: () => Promise<void>,
+	) => void;
+
 	// function onDependencyCheck(
 	// 	event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
 	// ) {
@@ -288,6 +292,46 @@
 
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
+
+		// Define the actual download function that will be stored and executed later if needed
+		const performDownload = async () => {
+			try {
+				loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Create dependencies array for the database
+				const dependencies = [];
+				if (mod.requires_steamodded) dependencies.push("Steamodded");
+				if (mod.requires_talisman) dependencies.push("Talisman");
+
+				const installedPath = await invoke<string>("install_mod", {
+					url: mod.downloadURL,
+					folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
+				});
+
+				await invoke("add_installed_mod", {
+					name: mod.title,
+					path: installedPath,
+					dependencies,
+					currentVersion: mod.version || "",
+				});
+
+				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+				updateAvailableStore.update((s) => ({
+					...s,
+					[mod.title]: false,
+				}));
+				await refreshInstalledMods();
+			} catch (error) {
+				console.error("Failed to install mod:", error);
+				addMessage(
+					`Installation failed: ${error instanceof Error ? error.message : String(error)}`,
+					"error",
+				);
+			} finally {
+				loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+			}
+		};
+
 		try {
 			// Check for dependencies
 			if (mod.requires_steamodded || mod.requires_talisman) {
@@ -310,53 +354,29 @@
 					(mod.requires_steamodded && !steamoddedInstalled) ||
 					(mod.requires_talisman && !talismanInstalled)
 				) {
-					// Call the handler with the appropriate requirements
-					const requirements = {
-						steamodded:
-							mod.requires_steamodded && !steamoddedInstalled,
-						talisman: mod.requires_talisman && !talismanInstalled,
-					};
-					handleDependencyCheck(requirements);
+					// Call the handler with the appropriate requirements and download action
+					handleDependencyCheck(
+						{
+							steamodded:
+								mod.requires_steamodded && !steamoddedInstalled,
+							talisman:
+								mod.requires_talisman && !talismanInstalled,
+						},
+						performDownload,
+					);
 					return; // Stop installation
 				}
 			}
 
-			// Proceed with installation
-			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-
-			// Create dependencies array for the database
-			const dependencies = [];
-			if (mod.requires_steamodded) dependencies.push("Steamodded");
-			if (mod.requires_talisman) dependencies.push("Talisman");
-
-			const installedPath = await invoke<string>("install_mod", {
-				url: mod.downloadURL,
-				folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
-			});
-
-			await invoke("add_installed_mod", {
-				name: mod.title,
-				path: installedPath,
-				dependencies,
-				currentVersion: mod.version || "",
-			});
-
-			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
-
-			updateAvailableStore.update((s) => ({
-				...s,
-				[mod.title]: false,
-			}));
-
-			await refreshInstalledMods();
+			// If we get here, either no dependencies are required or all are installed
+			// Proceed with installation directly
+			await performDownload();
 		} catch (error) {
-			console.error("Failed to install mod:", error);
+			console.error("Failed to check dependencies:", error);
 			addMessage(
-				`Installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				`Dependency check failed: ${error instanceof Error ? error.message : String(error)}`,
 				"error",
 			);
-		} finally {
-			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
 

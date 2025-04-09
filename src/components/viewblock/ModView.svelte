@@ -40,10 +40,10 @@
 
 	interface Props {
 		mod: Mod;
-		onCheckDependencies?: (event: {
-			steamodded: boolean;
-			talisman: boolean;
-		}) => void;
+		onCheckDependencies?: (
+			requirements: { steamodded: boolean; talisman: boolean },
+			downloadAction: () => Promise<void>,
+		) => void;
 	}
 
 	const { mod, onCheckDependencies }: Props = $props();
@@ -230,7 +230,7 @@
 				}
 			}
 		} catch (e) {
-			console.log("Version cache check failed:", e);
+			console.error("Version cache check failed:", e);
 		}
 		loadingVersions = true;
 		try {
@@ -277,7 +277,7 @@
 				}
 			}
 		} catch (e) {
-			console.log("Version cache check failed:", e);
+			console.error("Version cache check failed:", e);
 		}
 		loadingVersions = true;
 		try {
@@ -347,6 +347,127 @@
 	};
 
 	const installMod = async (mod: Mod, isUpdate = false) => {
+		// Extract the download functionality into a separate async function
+		const performDownload = async () => {
+			try {
+				loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Build dependencies list for the database
+				const dependencies = [];
+				if (mod.requires_steamodded) dependencies.push("Steamodded");
+				if (mod.requires_talisman) dependencies.push("Talisman");
+
+				if (mod.title.toLowerCase() === "steamodded") {
+					let installedPath;
+					if (selectedVersion === "newest") {
+						installedPath = await invoke<string>("install_mod", {
+							url: mod.downloadURL,
+							folderName:
+								mod.folderName || mod.title.replace(/\s+/g, ""),
+						});
+					} else {
+						installedPath = await invoke<string>(
+							"install_steamodded_version",
+							{ version: selectedVersion },
+						);
+					}
+					const pathExists = await invoke("verify_path_exists", {
+						path: installedPath,
+					});
+					if (!pathExists)
+						throw new Error(
+							"Installation failed - files not found at destination",
+						);
+					await invoke("add_installed_mod", {
+						name: mod.title,
+						path: installedPath,
+						dependencies,
+						currentVersion: mod.version || "",
+					});
+					await getAllInstalledMods();
+					installationStatus.update((s) => ({
+						...s,
+						[mod.title]: true,
+					}));
+
+					// Reset update status after successful update
+					updateAvailableStore.update((updates) => ({
+						...updates,
+						[mod.title]: false,
+					}));
+				} else if (mod.title.toLowerCase() === "talisman") {
+					let installedPath;
+					if (selectedVersion === "newest") {
+						installedPath = await invoke<string>("install_mod", {
+							url: mod.downloadURL,
+							folderName:
+								mod.folderName || mod.title.replace(/\s+/g, ""),
+						});
+					} else {
+						installedPath = await invoke<string>(
+							"install_talisman_version",
+							{ version: selectedVersion },
+						);
+					}
+					const pathExists = await invoke("verify_path_exists", {
+						path: installedPath,
+					});
+					if (!pathExists)
+						throw new Error(
+							"Installation failed - files not found at destination",
+						);
+					await invoke("add_installed_mod", {
+						name: mod.title,
+						path: installedPath,
+						dependencies: [],
+						currentVersion: mod.version || "",
+					});
+					await getAllInstalledMods();
+					installationStatus.update((s) => ({
+						...s,
+						[mod.title]: true,
+					}));
+
+					// Reset update status after successful update
+					updateAvailableStore.update((updates) => ({
+						...updates,
+						[mod.title]: false,
+					}));
+				} else {
+					const installedPath = await invoke<string>("install_mod", {
+						url: mod.downloadURL,
+						folderName:
+							mod.folderName || mod.title.replace(/\s+/g, ""),
+					});
+					await invoke("add_installed_mod", {
+						name: mod.title,
+						path: installedPath,
+						dependencies,
+						currentVersion: mod.version || "",
+					});
+					await getAllInstalledMods();
+					installationStatus.update((s) => ({
+						...s,
+						[mod.title]: true,
+					}));
+
+					// Reset update status after successful update
+					updateAvailableStore.update((updates) => ({
+						...updates,
+						[mod.title]: false,
+					}));
+				}
+			} catch (e) {
+				console.error(
+					`Failed to ${isUpdate ? "update" : "install"} mod:`,
+					e,
+				);
+			} finally {
+				loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+				await forceRefreshCache();
+			}
+		};
+
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
 			// Check Steamodded if required
@@ -370,122 +491,21 @@
 				((mod.requires_steamodded && !steamoddedInstalled) ||
 					(mod.requires_talisman && !talismanInstalled))
 			) {
-				// Call the handler with the appropriate requirements
-				onCheckDependencies?.({
-					steamodded: mod.requires_steamodded && !steamoddedInstalled,
-					talisman: mod.requires_talisman && !talismanInstalled,
-				});
+				// Call the handler with the appropriate requirements AND the download action
+				onCheckDependencies?.(
+					{
+						steamodded:
+							mod.requires_steamodded && !steamoddedInstalled,
+						talisman: mod.requires_talisman && !talismanInstalled,
+					},
+					performDownload,
+				);
 				return; // Stop installation
 			}
 		}
 
-		// Build dependencies list for the database
-		const dependencies = [];
-		if (mod.requires_steamodded) dependencies.push("Steamodded");
-		if (mod.requires_talisman) dependencies.push("Talisman");
-
-		try {
-			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-
-			if (mod.title.toLowerCase() === "steamodded") {
-				let installedPath;
-				if (selectedVersion === "newest") {
-					installedPath = await invoke<string>("install_mod", {
-						url: mod.downloadURL,
-						folderName:
-							mod.folderName || mod.title.replace(/\s+/g, ""),
-					});
-				} else {
-					installedPath = await invoke<string>(
-						"install_steamodded_version",
-						{ version: selectedVersion },
-					);
-				}
-				const pathExists = await invoke("verify_path_exists", {
-					path: installedPath,
-				});
-				if (!pathExists)
-					throw new Error(
-						"Installation failed - files not found at destination",
-					);
-				await invoke("add_installed_mod", {
-					name: mod.title,
-					path: installedPath,
-					dependencies,
-					currentVersion: mod.version || "",
-				});
-				await getAllInstalledMods();
-				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
-
-				// Reset update status after successful update
-				updateAvailableStore.update((updates) => ({
-					...updates,
-					[mod.title]: false,
-				}));
-			} else if (mod.title.toLowerCase() === "talisman") {
-				let installedPath;
-				if (selectedVersion === "newest") {
-					installedPath = await invoke<string>("install_mod", {
-						url: mod.downloadURL,
-						folderName:
-							mod.folderName || mod.title.replace(/\s+/g, ""),
-					});
-				} else {
-					installedPath = await invoke<string>(
-						"install_talisman_version",
-						{ version: selectedVersion },
-					);
-				}
-				const pathExists = await invoke("verify_path_exists", {
-					path: installedPath,
-				});
-				if (!pathExists)
-					throw new Error(
-						"Installation failed - files not found at destination",
-					);
-				await invoke("add_installed_mod", {
-					name: mod.title,
-					path: installedPath,
-					dependencies: [],
-					currentVersion: mod.version || "",
-				});
-				await getAllInstalledMods();
-				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
-
-				// Reset update status after successful update
-				updateAvailableStore.update((updates) => ({
-					...updates,
-					[mod.title]: false,
-				}));
-			} else {
-				const installedPath = await invoke<string>("install_mod", {
-					url: mod.downloadURL,
-					folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
-				});
-				await invoke("add_installed_mod", {
-					name: mod.title,
-					path: installedPath,
-					dependencies,
-					currentVersion: mod.version || "",
-				});
-				await getAllInstalledMods();
-				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
-
-				// Reset update status after successful update
-				updateAvailableStore.update((updates) => ({
-					...updates,
-					[mod.title]: false,
-				}));
-			}
-		} catch (e) {
-			console.error(
-				`Failed to ${isUpdate ? "update" : "install"} mod:`,
-				e,
-			);
-		} finally {
-			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
-			await forceRefreshCache();
-		}
+		// If we get here, either no dependencies are required or all are installed
+		await performDownload();
 	};
 
 	// Function to handle updating the mod
