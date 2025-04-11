@@ -128,8 +128,6 @@
 		}
 	}
 
-	let isProgrammaticScroll = false;
-
 	// Update the pagination functions to reset scroll position when switching pages
 	function nextPage() {
 		if ($currentPage < totalPages) {
@@ -155,7 +153,6 @@
 
 	// Add this helper function to handle scrolling to top
 	function scrollToTop() {
-		isProgrammaticScroll = true;
 		const scrollContainer = document.querySelector(
 			".mods-scroll-container",
 		);
@@ -165,9 +162,7 @@
 				behavior: "smooth",
 			});
 		}
-		setTimeout(() => {
-			isProgrammaticScroll = false;
-		}, 500); // Delay to prevent scroll handler triggering during animated scroll
+		setTimeout(() => {}, 500); // Delay to prevent scroll handler triggering during animated scroll
 	}
 
 	onMount(() => {
