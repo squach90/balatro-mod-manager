@@ -20,6 +20,7 @@
 		currentCategory,
 		updateAvailableStore,
 		currentPage,
+		modEnabledStore,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -83,6 +84,9 @@
 	let loadingVersions = $state(false);
 	let renderedDescription = $state("");
 	let isCheckingForUpdates = $state(false);
+
+	// Add a local state variable for tracking enabled status
+	let isEnabled = $state(true);
 
 	let versionLoadStarted = false;
 	let prevModTitle = "";
@@ -747,6 +751,64 @@
 			}
 		}
 	});
+
+	async function checkModEnabled(modName: string) {
+		try {
+			const enabled = await invoke<boolean>("is_mod_enabled", {
+				modName,
+			});
+
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: enabled,
+			}));
+
+			// Update local variable for reactive binding
+			isEnabled = enabled;
+		} catch (error) {
+			console.error(
+				`Failed to check if mod ${modName} is enabled:`,
+				error,
+			);
+			// Default to enabled on error
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: true,
+			}));
+			isEnabled = true;
+		}
+	}
+
+	async function toggleModEnabled(e: Event) {
+		e.stopPropagation();
+		try {
+			const currentState = $modEnabledStore[mod.title] ?? isEnabled;
+			const newState = !currentState;
+
+			await invoke("toggle_mod_enabled", {
+				modName: mod.title,
+				enabled: newState,
+			});
+
+			// Update both the store and local variable
+			modEnabledStore.update((enabledMods) => ({
+				...enabledMods,
+				[mod.title]: newState,
+			}));
+			isEnabled = newState;
+		} catch (error) {
+			console.error(
+				`Failed to toggle mod ${mod.title} enabled state:`,
+				error,
+			);
+		}
+	}
+
+	$effect(() => {
+		if ($installationStatus[mod.title]) {
+			checkModEnabled(mod.title);
+		}
+	});
 </script>
 
 <svelte:window
@@ -804,7 +866,30 @@
 						/>
 					{/if}
 				</div>
+
 				<div class="button-container">
+					<!-- Enable/Disable toggle button - MOVED TO FIRST POSITION -->
+					{#if $installationStatus[mod.title]}
+						<button
+							class="toggle-button"
+							class:enabled={$modEnabledStore[mod.title] ??
+								isEnabled}
+							class:disabled={!(
+								$modEnabledStore[mod.title] ?? isEnabled
+							)}
+							title={($modEnabledStore[mod.title] ?? isEnabled)
+								? "Disable Mod"
+								: "Enable Mod"}
+							onclick={toggleModEnabled}
+						>
+							{#if $modEnabledStore[mod.title] ?? isEnabled}
+								ON
+							{:else}
+								OFF
+							{/if}
+						</button>
+					{/if}
+
 					{#if $installationStatus[mod.title] && $updateAvailableStore[mod.title]}
 						<!-- Update button (when installed and update available) -->
 						<button
@@ -849,6 +934,7 @@
 						</button>
 					{/if}
 				</div>
+
 				{#if mod.title.toLowerCase() === "talisman" && !$installationStatus[mod.title]}
 					<div class="version-selector">
 						{#if loadingVersions}
@@ -968,6 +1054,45 @@
 <style>
 	:global(.description > p > img) {
 		width: 100%;
+	}
+
+	.toggle-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 1rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+		min-height: 48px;
+	}
+
+	.toggle-button.enabled {
+		background: #27ae60; /* Bright green when enabled */
+		color: #f4eee0;
+	}
+
+	.toggle-button.disabled {
+		background: #7f8c8d; /* Gray when disabled */
+		color: #f4eee0;
+	}
+
+	.toggle-button:hover.enabled {
+		background: #2ecc71; /* Lighter green on hover */
+		transform: translateY(-2px);
+	}
+
+	.toggle-button:hover.disabled {
+		background: #95a5a6; /* Lighter gray on hover */
+		transform: translateY(-2px);
+	}
+
+	.toggle-button:active {
+		transform: translateY(1px);
 	}
 
 	.categories-section {
