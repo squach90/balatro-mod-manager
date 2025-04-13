@@ -56,7 +56,16 @@ if ! command -v cargo-tauri &> /dev/null; then
     exit 1
 fi
 
+# Check cargo-tauri version
+echo -e "${YELLOW}Checking Tauri CLI version...${NC}"
+TAURI_VERSION=$(cargo tauri --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+REQUIRED_VERSION="2.3.1"
 
+if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$TAURI_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
+    echo -e "${RED}Error: cargo-tauri version $TAURI_VERSION is too old. Please update to at least version $REQUIRED_VERSION${NC}"
+    exit 1
+fi
+echo -e "${GREEN}cargo-tauri version $TAURI_VERSION ✓${NC}"
 
 # Create a temporary directory
 BUILD_DIR=$(mktemp -d)
