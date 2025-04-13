@@ -1,143 +1,88 @@
-name: 'notarize-release'
+name: 'sign-macos'
 
 on:
-  workflow_dispatch:
   workflow_run:
-    workflows: ['build-sign']
+    workflows: ["build"]
     types:
       - completed
-      
+  workflow_dispatch:
+
 jobs:
-  prepare-release-notes:
-    runs-on: ubuntu-latest
-    outputs:
-      release_notes: ${{ steps.notes.outputs.RELEASE_NOTES }}
-      app_version: ${{ steps.version.outputs.APP_VERSION }}
+  sign-macos:
+    runs-on: macos-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Extract app version
-        id: version
-        run: |
-          APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
-          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_OUTPUT
-          
-      - name: Generate GitHub-Style Release Notes
-        id: notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get repository details
-          REPO_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 1)
-          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 2)
-          
-          # Get the latest and previous tags
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude=$LATEST_TAG 2>/dev/null || echo "none")
-          
-          # Start release notes
-          echo "## What's Changed" > RELEASE_NOTES.md
-          
-          # Get merged PRs
-          gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --limit 10 | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
-          
-          # Add full changelog link
-          if [ "$PREVIOUS_TAG" != "none" ]; then
-            echo "" >> RELEASE_NOTES.md
-            echo "**Full Changelog**: https://github.com/$REPO_OWNER/$REPO_NAME/compare/$PREVIOUS_TAG...v$APP_VERSION" >> RELEASE_NOTES.md
-          fi
-          
-          # Add the security warning template
-          cat >> RELEASE_NOTES.md << 'EOL'
-          
-          ## ⚠️ Important Security Note for Windows Users
-          Our .exe and .msi installers are unsigned at this time. This means:
 
-              Windows Defender/SmartScreen will show "Windows protected your PC"
-              Antivirus software might flag the files
-
-          ## Why?
-          We're a brand-new project and code signing certificates cost ~$400/year.
-
-          How to install safely:
-          1. Download the files from Assets below
-          2. On the warning screen: Click "More info" → "Run anyway"
-
-          ❓ FAQ
-          Q: Why is Windows blocking the installer?
-          A: We're unsigned – verify the code here first!
-          Q: How do I know this isn't malware?
-          A: Check the source code
-          EOL
-          
-          # Store release notes to be used by release step
-          NOTES=$(cat RELEASE_NOTES.md)
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-  
-  notarize:
-    needs: prepare-release-notes
-    runs-on: macos-latest
-    timeout-minutes: 120  # 2 hours for notarization
-    steps:
-      - name: Download macOS app
+      - name: Download macOS unsigned artifact
         uses: actions/download-artifact@v4
         with:
-          name: macos-app
-          path: macos-app
-          
-      - name: Notarize macOS app
+          name: macos-app-unsigned
+          path: ./unsigned-app
+
+      - name: Import Apple Developer Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
+          CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
+          echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
+          echo "Certificate imported. ID: $CERT_ID"
+
+      - name: Extract app version
+        shell: bash
+        run: |
+          APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+      - name: Create directory for signed app
+        run: mkdir -p ./signed-app
+
+      - name: Sign Application
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cd macos-app
+          # Sign the .app bundle
+          codesign --force --options runtime --sign "$CERT_ID" --deep "./unsigned-app/Balatro Mod Manager.app"
           
-          # Submit the app for notarization
-          echo "Submitting app for notarization..."
-          xcrun notarytool submit "Balatro Mod Manager.app" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          # Copy the signed app to the signed directory
+          cp -R "./unsigned-app/Balatro Mod Manager.app" "./signed-app/"
+          
+          # Create DMG with signed app
+          hdiutil create -volname "Balatro Mod Manager" -srcfolder "./signed-app/Balatro Mod Manager.app" -ov -format UDZO "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+          
+          # Sign the DMG
+          codesign --force --options runtime --sign "$CERT_ID" "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+
+      - name: Notarize Application
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Notarize the DMG
+          xcrun notarytool submit "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
           
           # Staple the notarization ticket
-          echo "Stapling notarization ticket to app..."
-          xcrun stapler staple "Balatro Mod Manager.app"
-          
-          # Create a new tarball of the notarized app
-          tar -czf "Balatro_Mod_Manager_${{ needs.prepare-release-notes.outputs.app_version }}_notarized.app.tar.gz" "Balatro Mod Manager.app"
-          
-      - name: Upload notarized macOS app
+          xcrun stapler staple "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+
+      - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: notarized-macos-app
-          path: macos-app/Balatro_Mod_Manager_${{ needs.prepare-release-notes.outputs.app_version }}_notarized.app.tar.gz
-          
-  create-release:
-    needs: [notarize, prepare-release-notes]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ needs.prepare-release-notes.outputs.app_version }}
-          name: Balatro Mod Manager v${{ needs.prepare-release-notes.outputs.app_version }} (Alpha Build) Pre-release
-          body: ${{ needs.prepare-release-notes.outputs.release_notes }}
-          draft: true
-          prerelease: true
-          files: |
-            artifacts/macos-app/*.dmg
-            artifacts/notarized-macos-app/*.tar.gz
-            artifacts/windows-app/*.msi
-            artifacts/windows-app/*.exe
-            artifacts/linux-app/*.deb
-            artifacts/linux-app/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: macos-app-signed
+          path: |
+            ./signed-app/Balatro Mod Manager_${{ env.APP_VERSION }}_universal.dmg
+          retention-days: 7
 
