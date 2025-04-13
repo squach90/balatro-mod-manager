@@ -50,9 +50,18 @@
 	} from "../../stores/modCache";
 	import { updateAvailableStore } from "../../stores/modStore";
 
+	// Add this import for the enabled/disabled mod store
+	const modEnabledStore = writable<Record<string, boolean>>({});
+
 	const loadingDots = writable(0);
 
 	let installedMods: InstalledMod[] = [];
+
+	// Add these variables to track enabled/disabled mods
+	let enabledMods: Mod[] = [];
+	let disabledMods: Mod[] = [];
+	let enabledLocalMods: LocalMod[] = [];
+	let disabledLocalMods: LocalMod[] = [];
 
 	// Animate the dots
 	let dotInterval: number;
@@ -75,11 +84,95 @@
 	let localMods: LocalMod[] = [];
 	let isLoadingLocalMods = false;
 
+	async function handleModToggled(): Promise<void> {
+		if ($currentCategory === "Installed Mods") {
+			// First check catalog mods
+			for (const mod of paginatedMods) {
+				if ($installationStatus[mod.title]) {
+					try {
+						const isEnabled = await invoke<boolean>(
+							"is_mod_enabled",
+							{
+								modName: mod.title,
+							},
+						);
+
+						modEnabledStore.update((s) => ({
+							...s,
+							[mod.title]: isEnabled,
+						}));
+					} catch (error) {
+						console.error(
+							`Failed to check catalog mod status: ${error}`,
+						);
+					}
+				}
+			}
+
+			// Then check local mods
+			for (const mod of localMods) {
+				try {
+					const isEnabled = await invoke<boolean>(
+						"is_mod_enabled_by_path",
+						{
+							modPath: mod.path,
+						},
+					);
+
+					modEnabledStore.update((s) => ({
+						...s,
+						[mod.name]: isEnabled,
+					}));
+				} catch (error) {
+					console.error(`Failed to check local mod status: ${error}`);
+				}
+			}
+
+			// Update filtered lists
+			updateEnabledDisabledLists();
+
+			// Force Svelte reactivity by creating new array references
+			enabledMods = [...enabledMods];
+			disabledMods = [...disabledMods];
+			enabledLocalMods = [...enabledLocalMods];
+			disabledLocalMods = [...disabledLocalMods];
+		}
+	}
+
 	async function getLocalMods() {
 		if ($currentCategory === "Installed Mods") {
 			isLoadingLocalMods = true;
 			try {
 				localMods = await invoke("get_detected_local_mods");
+
+				// Check enabled status for each local mod
+				for (const mod of localMods) {
+					try {
+						const isEnabled = await invoke<boolean>(
+							"is_mod_enabled_by_path",
+							{
+								modPath: mod.path,
+							},
+						);
+
+						modEnabledStore.update((s) => ({
+							...s,
+							[mod.name]: isEnabled,
+						}));
+					} catch (error) {
+						console.error(
+							`Failed to check if local mod ${mod.name} is enabled:`,
+							error,
+						);
+						modEnabledStore.update((s) => ({
+							...s,
+							[mod.name]: true, // Default to enabled
+						}));
+					}
+				}
+
+				// Filter local mods by enabled status
+				updateEnabledDisabledLists();
 			} catch (error) {
 				console.error("Failed to load local mods:", error);
 				addMessage(`Failed to load local mods: ${error}`, "error");
@@ -163,6 +256,36 @@
 			});
 		}
 		setTimeout(() => {}, 500); // Delay to prevent scroll handler triggering during animated scroll
+	}
+
+	function updateEnabledDisabledLists() {
+		// Filter catalog mods - explicitly check for boolean values
+		enabledMods = paginatedMods.filter(
+			(mod) =>
+				$installationStatus[mod.title] &&
+				$modEnabledStore[mod.title] === true,
+		);
+
+		disabledMods = paginatedMods.filter(
+			(mod) =>
+				$installationStatus[mod.title] &&
+				$modEnabledStore[mod.title] === false,
+		);
+
+		// Filter local mods - explicitly check for boolean values
+		enabledLocalMods = localMods.filter(
+			(mod) => $modEnabledStore[mod.name] === true,
+		);
+		disabledLocalMods = localMods.filter(
+			(mod) => $modEnabledStore[mod.name] === false,
+		);
+	}
+
+	// Update the lists whenever the stores change
+	$: {
+		if ($currentCategory === "Installed Mods") {
+			updateEnabledDisabledLists();
+		}
 	}
 
 	onMount(() => {
@@ -657,11 +780,37 @@
 	}
 
 	// Add sort handler
+
 	function handleSortChange(event: Event) {
 		const select = event.target as HTMLSelectElement;
 		currentSort.set(select.value as SortOption);
+
+		// Force a UI update by creating a new array reference
+		sortedAndFilteredMods = [
+			...sortMods(filteredMods, select.value as SortOption),
+		];
+
+		// Reset to first page when sort changes to prevent out-of-bounds issues
+		if ($currentPage > 1) {
+			currentPage.set(1);
+			startPage = 1;
+		}
 	}
 	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+	$: {
+		if (sortedAndFilteredMods) {
+			// Ensure pagination is updated
+			paginatedMods = sortedAndFilteredMods.slice(
+				($currentPage - 1) * $itemsPerPage,
+				$currentPage * $itemsPerPage,
+			);
+
+			// Update enabled/disabled lists if on the Installed Mods page
+			if ($currentCategory === "Installed Mods") {
+				updateEnabledDisabledLists();
+			}
+		}
+	}
 
 	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
 	$: paginatedMods = sortedAndFilteredMods.slice(
@@ -717,9 +866,19 @@
 							[mod.title]: hasUpdate,
 						}));
 
-						// console.log(
-						// 	`Update check for ${mod.title}: ${hasUpdate ? "Update available" : "No update"}`,
-						// );
+						// Check if mod is enabled
+						const isEnabled = await invoke<boolean>(
+							"is_mod_enabled",
+							{
+								modName: mod.title,
+							},
+						);
+
+						// Update the enabled status
+						modEnabledStore.update((s) => ({
+							...s,
+							[mod.title]: isEnabled,
+						}));
 					} catch (error) {
 						console.error(
 							`Failed to check updates for ${mod.title}:`,
@@ -728,6 +887,9 @@
 					}
 				}
 			}
+
+			// Filter mods by enabled status
+			updateEnabledDisabledLists();
 		} catch (error) {
 			console.error("Failed to refresh installed mods:", error);
 		}
@@ -781,6 +943,16 @@
 
 	$: if ($currentModView === null && $currentCategory === "Installed Mods") {
 		refreshInstalledMods();
+	}
+
+	$: {
+		if (
+			$modEnabledStore &&
+			Object.keys($modEnabledStore).length > 0 &&
+			$currentCategory === "Installed Mods"
+		) {
+			updateEnabledDisabledLists();
+		}
 	}
 </script>
 
@@ -906,15 +1078,57 @@
 								</button>
 							</div>
 
-							<div class="mods-grid local-mods-grid">
-								{#each localMods as mod}
-									<LocalModCard
-										{mod}
-										onUninstall={handleModUninstalled}
-									/>
-								{/each}
-							</div>
+							<!-- Enabled Local Mods -->
+							{#if enabledLocalMods.length > 0}
+								<div
+									class="subsection-header enabled"
+									class:top-margin={localMods.length === 0}
+								>
+									<h4>Enabled Local Mods</h4>
+									<p>
+										{enabledLocalMods.length} mod{enabledLocalMods.length !==
+										1
+											? "s"
+											: ""} active
+									</p>
+								</div>
+								<div class="mods-grid local-mods-grid">
+									{#each enabledLocalMods as mod}
+										<LocalModCard
+											{mod}
+											onUninstall={handleModUninstalled}
+											onToggleEnabled={handleModToggled}
+										/>
+									{/each}
+								</div>
+							{/if}
 
+							<!-- Disabled Local Mods -->
+							{#if disabledLocalMods.length > 0}
+								<div
+									class="subsection-header disabled"
+									class:top-margin={localMods.length === 0}
+								>
+									<h4>Disabled Local Mods</h4>
+									<p>
+										{disabledLocalMods.length} mod{disabledLocalMods.length !==
+										1
+											? "s"
+											: ""} inactive
+									</p>
+								</div>
+								<div class="mods-grid local-mods-grid">
+									{#each disabledLocalMods as mod}
+										<LocalModCard
+											{mod}
+											onUninstall={handleModUninstalled}
+											onToggleEnabled={handleModToggled}
+										/>
+									{/each}
+								</div>
+							{/if}
+
+							<!-- Mod Manager Catalog Section Header -->
 							<div class="section-header">
 								<h3>Mod Manager Catalog</h3>
 								<p>
@@ -935,22 +1149,76 @@
 								</button>
 							</div>
 						{/if}
-					{/if}
 
-					<div
-						class="mods-grid"
-						class:has-local-mods={$currentCategory ===
-							"Installed Mods" && localMods.length > 0}
-					>
-						{#each paginatedMods as mod}
-							<ModCard
-								{mod}
-								onmodclick={handleModClick}
-								oninstallclick={installMod}
-								onuninstallclick={uninstallMod}
-							/>
-						{/each}
-					</div>
+						<!-- Only proceed with catalog enabled/disabled sections if there are mods to show -->
+						{#if paginatedMods.length > 0}
+							<!-- Enabled Catalog Mods -->
+							{#if enabledMods.length > 0}
+								<div class="subsection-header enabled">
+									<h4>Enabled Catalog Mods</h4>
+									<p>
+										{enabledMods.length} mod{enabledMods.length !==
+										1
+											? "s"
+											: ""} active
+									</p>
+								</div>
+								<div
+									class="mods-grid"
+									class:has-local-mods={localMods.length > 0}
+								>
+									{#each enabledMods as mod}
+										<ModCard
+											{mod}
+											onmodclick={handleModClick}
+											oninstallclick={installMod}
+											onuninstallclick={uninstallMod}
+											onToggleEnabled={handleModToggled}
+										/>
+									{/each}
+								</div>
+							{/if}
+
+							<!-- Disabled Catalog Mods -->
+							{#if disabledMods.length > 0}
+								<div class="subsection-header disabled">
+									<h4>Disabled Catalog Mods</h4>
+									<p>
+										{disabledMods.length} mod{disabledMods.length !==
+										1
+											? "s"
+											: ""} inactive
+									</p>
+								</div>
+								<div
+									class="mods-grid"
+									class:has-local-mods={localMods.length > 0}
+								>
+									{#each disabledMods as mod}
+										<ModCard
+											{mod}
+											onmodclick={handleModClick}
+											oninstallclick={installMod}
+											onuninstallclick={uninstallMod}
+											onToggleEnabled={handleModToggled}
+										/>
+									{/each}
+								</div>
+							{/if}
+						{/if}
+					{:else}
+						<!-- Original non-Installed Mods categories -->
+						<div class="mods-grid">
+							{#each paginatedMods as mod}
+								<ModCard
+									{mod}
+									onmodclick={handleModClick}
+									oninstallclick={installMod}
+									onuninstallclick={uninstallMod}
+								/>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -965,6 +1233,50 @@
 </div>
 
 <style>
+	.subsection-header {
+		display: flex;
+		flex-direction: column;
+		background: #4f6367;
+		border: 2px solid #f4eee0; /* Full white border like section header */
+		padding: 0.7rem 1.5rem;
+		margin: 0 2rem 1rem 2rem;
+		border-radius: 8px; /* Matching border-radius */
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* Matching box-shadow */
+	}
+
+	.subsection-header.enabled {
+		background: #27ae60;
+		border: 2px solid #f4eee0;
+	}
+
+	.subsection-header.disabled {
+		background: #7f8c8d;
+		border: 2px solid #f4eee0;
+	}
+
+	.subsection-header h4 {
+		margin: 0;
+		font-size: 1.3rem;
+		color: #f4eee0;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	.subsection-header p {
+		margin: 0.2rem 0 0 0;
+		font-size: 1rem;
+		color: #f4eee0;
+		opacity: 0.9;
+	}
+
+	/* Adjustments for grid spacing when using subsections */
+	.mods-grid {
+		padding-top: 0.5rem;
+	}
+
+	.mods-grid:last-child {
+		padding-bottom: 2rem;
+	}
+
 	.folder-icon-button {
 		position: absolute;
 		top: 50%;
@@ -1225,6 +1537,15 @@
 		height: 100%;
 	}
 
+	.mods-scroll-container:not(:has(.local-mods-grid))
+		.subsection-header:first-of-type {
+		margin-top: 3rem; /* Add spacing at the top when there are no local mods */
+	}
+
+	.top-margin {
+		margin-top: 3rem !important;
+	}
+
 	.mods-grid {
 		padding: 1rem 2rem 2rem 2rem;
 		flex: 1;
@@ -1236,11 +1557,6 @@
 	.local-mods-grid {
 		padding-top: 0.5rem;
 		padding-bottom: 1rem;
-	}
-
-	/* Catalog section gets proper top padding */
-	.local-mods-grid + .section-header + .mods-grid {
-		padding-top: 1rem;
 	}
 
 	.sort-controls {

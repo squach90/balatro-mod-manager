@@ -46,6 +46,9 @@ export const currentSort = writable<SortOption>(SortOption.NameAsc);
 
 export const updateAvailableStore = writable<{ [key: string]: boolean }>({});
 
+export const modEnabledStore = writable<Record<string, boolean>>({});
+
+
 
 export interface UninstallDialogState {
 	show: boolean;
