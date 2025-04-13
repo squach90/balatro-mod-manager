@@ -8,13 +8,91 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
 	import { modsStore } from "../../stores/modStore";
+	import { modEnabledStore } from "../../stores/modStore";
 
 	export let mod: any;
 	export let onUninstall: (mod: any) => void;
+	export let onToggleEnabled: (() => Promise<void>) | undefined = undefined;
 
-	// Local state for loading
+	// Local state for loading and enabled status
 	let isInstalling = false;
+	let isEnabled = true; // Default to enabled if not yet checked
 
+	// Check mod enabled status when component mounts
+	import { onMount } from "svelte";
+
+	onMount(() => {
+		checkModEnabled(mod.name);
+	});
+
+	async function checkModEnabled(modName: string) {
+		try {
+			// Use the full path for local mods
+			const enabled = await invoke<boolean>("is_mod_enabled_by_path", {
+				modPath: mod.path,
+			});
+
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: enabled,
+			}));
+
+			// Also update local variable for reactive binding
+			isEnabled = enabled;
+		} catch (error) {
+			console.error(
+				`Failed to check if mod ${modName} is enabled:`,
+				error,
+			);
+			// Default to enabled on error
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: true,
+			}));
+			isEnabled = true;
+		}
+	}
+
+	async function toggleModEnabled(e: Event) {
+		e.stopPropagation();
+		try {
+			console.log(
+				`Toggling local mod ${mod.name} from ${isEnabled ? "enabled" : "disabled"} to ${!isEnabled ? "enabled" : "disabled"}`,
+			);
+
+			const currentState = $modEnabledStore[mod.name] ?? isEnabled;
+			const newState = !currentState;
+
+			// Use the full path for local mods instead of just the name
+			await invoke("toggle_mod_enabled_by_path", {
+				modPath: mod.path,
+				enabled: newState,
+			});
+
+			console.log(
+				`Backend toggle completed for ${mod.name}, updating store...`,
+			);
+
+			// Update both the store and local variable
+			modEnabledStore.update((enabledMods) => ({
+				...enabledMods,
+				[mod.name]: newState,
+			}));
+			isEnabled = newState;
+
+			// Call the parent callback to update the filtered lists
+			if (onToggleEnabled) {
+				console.log(`Calling parent callback for ${mod.name}`);
+				await onToggleEnabled();
+				console.log(`Parent callback completed for ${mod.name}`);
+			}
+		} catch (error) {
+			console.error(
+				`Failed to toggle mod ${mod.name} enabled state:`,
+				error,
+			);
+		}
+	}
 	// Function to open the mod's directory
 	async function openModDirectory(e: Event) {
 		e.stopPropagation();
@@ -252,6 +330,22 @@
 			>
 				<Folder size={18} />
 			</button>
+			<!-- Enable/Disable toggle button -->
+			<button
+				class="toggle-button"
+				class:enabled={$modEnabledStore[mod.name] ?? isEnabled}
+				class:disabled={!($modEnabledStore[mod.name] ?? isEnabled)}
+				title={($modEnabledStore[mod.name] ?? isEnabled)
+					? "Disable Mod"
+					: "Enable Mod"}
+				on:click={toggleModEnabled}
+			>
+				{#if $modEnabledStore[mod.name] ?? isEnabled}
+					ON
+				{:else}
+					OFF
+				{/if}
+			</button>
 			<button
 				class="install-button"
 				title="Install official version"
@@ -261,8 +355,8 @@
 				{#if isInstalling}
 					<div class="spinner"></div>
 				{:else}
-					<ArrowDownToLine size={16} />
-					<span class="smaller-text">Get Official Version</span>
+					<ArrowDownToLine size={15} />
+					<span class="smaller-text">Get Official</span>
 				{/if}
 			</button>
 			<button
@@ -510,6 +604,51 @@
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
+	/* Toggle button styles */
+	.toggle-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 42px;
+		height: 42px;
+		padding: 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		color: white;
+		border: none;
+		flex-shrink: 0;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
+	}
+
+	.toggle-button.enabled {
+		background: #27ae60; /* Bright green when enabled */
+		outline: #219653 solid 2px;
+	}
+
+	.toggle-button.disabled {
+		background: #7f8c8d; /* Gray when disabled, instead of red */
+		outline: #636e72 solid 2px;
+	}
+
+	.toggle-button:hover.enabled {
+		background: #2ecc71; /* Lighter green on hover */
+		transform: translateY(-2px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.toggle-button:hover.disabled {
+		background: #95a5a6; /* Lighter gray on hover */
+		transform: translateY(-2px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.toggle-button:active {
+		transform: translateY(1px);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
 	.trash-button {
 		display: flex;
 		align-items: center;
@@ -545,7 +684,7 @@
 	}
 
 	.smaller-text {
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		font-weight: 500;
 	}
 

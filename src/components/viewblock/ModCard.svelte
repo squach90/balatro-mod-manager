@@ -4,26 +4,40 @@
 	import {
 		installationStatus,
 		loadingStates2 as loadingStates,
+		modEnabledStore,
 		updateAvailableStore,
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
-
-	// Store to track which mods have updates available
-	// const updateAvailable = writable<Record<string, boolean>>({});
 
 	interface Props {
 		mod: Mod;
 		onmodclick?: (mod: Mod) => void;
 		oninstallclick?: (mod: Mod) => void;
 		onuninstallclick?: (mod: Mod) => void;
+		onToggleEnabled?: () => Promise<void>;
 	}
 
-	let { mod, oninstallclick, onuninstallclick, onmodclick }: Props = $props();
+	let {
+		mod,
+		oninstallclick,
+		onuninstallclick,
+		onmodclick,
+		onToggleEnabled,
+	}: Props = $props();
 
 	// Check if an update is available when component mounts
 	let updateChecked = false;
+	let isEnabled = $state(true); // Default to enabled if not yet checked
 
+	// Load the enabled state whenever the mod changes or when installationStatus changes
+	$effect(() => {
+		if ($installationStatus[mod.title]) {
+			checkModEnabled(mod.title);
+		}
+	});
+
+	// Initial load of update status
 	$effect(() => {
 		if (!updateChecked) {
 			updateChecked = true;
@@ -46,6 +60,62 @@
 		}
 	}
 
+	async function checkModEnabled(modName: string) {
+		try {
+			const enabled = await invoke<boolean>("is_mod_enabled", {
+				modName,
+			});
+
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: enabled,
+			}));
+
+			// Also update local variable for reactive binding
+			isEnabled = enabled;
+		} catch (error) {
+			console.error(
+				`Failed to check if mod ${modName} is enabled:`,
+				error,
+			);
+			// Default to enabled on error
+			modEnabledStore.update((enabledMods: Record<string, boolean>) => ({
+				...enabledMods,
+				[modName]: true,
+			}));
+			isEnabled = true;
+		}
+	}
+
+	async function toggleModEnabled(e: Event) {
+		e.stopPropagation();
+		try {
+			const currentState = $modEnabledStore[mod.title] ?? isEnabled;
+			const newState = !currentState;
+
+			await invoke("toggle_mod_enabled", {
+				modName: mod.title,
+				enabled: newState,
+			});
+
+			// Update both the store and local variable
+			modEnabledStore.update((enabledMods) => ({
+				...enabledMods,
+				[mod.title]: newState,
+			}));
+			isEnabled = newState;
+
+			// Call the parent callback to update the filtered lists
+			if (onToggleEnabled) {
+				await onToggleEnabled();
+			}
+		} catch (error) {
+			console.error(
+				`Failed to toggle mod ${mod.title} enabled state:`,
+				error,
+			);
+		}
+	}
 	function installMod(e: Event) {
 		e.stopPropagation();
 		if (mod.title.toLowerCase() === "steamodded") {
@@ -116,6 +186,16 @@
 				...updates,
 				[mod.title]: false,
 			}));
+
+			// Set newly installed mod as enabled by default
+			modEnabledStore.update((enabledMods) => ({
+				...enabledMods,
+				[mod.title]: true,
+			}));
+			isEnabled = true;
+
+			// Manually check mod enabled status after installation
+			setTimeout(() => checkModEnabled(mod.title), 500);
 		} catch (error) {
 			console.error("Failed to install mod:", error);
 		} finally {
@@ -156,6 +236,25 @@
 	</div>
 
 	<div class="button-container">
+		{#if $installationStatus[mod.title]}
+			<!-- Enable/Disable button (only shown when mod is installed) -->
+			<button
+				class="toggle-button"
+				class:enabled={$modEnabledStore[mod.title] ?? isEnabled}
+				class:disabled={!($modEnabledStore[mod.title] ?? isEnabled)}
+				title={($modEnabledStore[mod.title] ?? isEnabled)
+					? "Disable Mod"
+					: "Enable Mod"}
+				onclick={toggleModEnabled}
+			>
+				{#if $modEnabledStore[mod.title] ?? isEnabled}
+					ON
+				{:else}
+					OFF
+				{/if}
+			</button>
+		{/if}
+
 		{#if $installationStatus[mod.title] && $updateAvailableStore[mod.title]}
 			<!-- Update button (when installed and update available) -->
 			<button
@@ -376,6 +475,51 @@
 
 	.delete-button:active {
 		transform: translateY(1px);
+	}
+
+	/* Enable/Disable toggle button styles */
+	.toggle-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 42px;
+		height: 42px;
+		padding: 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		color: white;
+		border: none;
+		flex-shrink: 0;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
+	}
+
+	.toggle-button.enabled {
+		background: #27ae60; /* Bright green when enabled */
+		outline: #219653 solid 2px;
+	}
+
+	.toggle-button.disabled {
+		background: #7f8c8d; /* Gray when disabled, instead of red */
+		outline: #636e72 solid 2px;
+	}
+
+	.toggle-button:hover.enabled {
+		background: #2ecc71; /* Lighter green on hover */
+		transform: translateY(-2px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.toggle-button:hover.disabled {
+		background: #95a5a6; /* Lighter gray on hover */
+		transform: translateY(-2px);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.toggle-button:active {
+		transform: translateY(1px);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.download-button:disabled,

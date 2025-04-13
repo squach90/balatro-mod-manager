@@ -361,6 +361,95 @@ async fn get_mods_folder() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn is_mod_enabled(mod_name: String) -> Result<bool, String> {
+    let mods_dir_str = get_mods_folder().await?;
+    let mods_dir = PathBuf::from(mods_dir_str);
+
+    // Get the mod's directory
+    let mod_dir = mods_dir.join(&mod_name);
+
+    // Check if .lovelyignore file exists in the mod directory
+    let ignore_file_path = mod_dir.join(".lovelyignore");
+
+    // If the file exists, the mod is disabled
+    Ok(!ignore_file_path.exists())
+}
+
+#[tauri::command]
+async fn toggle_mod_enabled(mod_name: String, enabled: bool) -> Result<(), String> {
+    let mods_dir_str = get_mods_folder().await?;
+    let mods_dir = PathBuf::from(mods_dir_str);
+
+    // Get the mod's directory
+    let mod_dir = mods_dir.join(&mod_name);
+
+    // Check if the mod directory exists
+    if !mod_dir.exists() {
+        return Err(format!("Mod directory not found: {}", mod_name));
+    }
+
+    // The .lovelyignore file path in this mod's directory
+    let ignore_file_path = mod_dir.join(".lovelyignore");
+
+    if enabled {
+        // If enabling the mod, remove the .lovelyignore file if it exists
+        if ignore_file_path.exists() {
+            fs::remove_file(&ignore_file_path)
+                .map_err(|e| format!("Failed to remove .lovelyignore file: {}", e))?;
+        }
+    } else {
+        // If disabling the mod, create an empty .lovelyignore file
+        fs::write(&ignore_file_path, "")
+            .map_err(|e| format!("Failed to create .lovelyignore file: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_mod_enabled_by_path(mod_path: String) -> Result<bool, String> {
+    let path = PathBuf::from(&mod_path);
+
+    // Check if the path exists
+    if !path.exists() {
+        return Err(format!("Mod path does not exist: {}", mod_path));
+    }
+
+    // Check if .lovelyignore file exists in the mod directory
+    let ignore_file_path = path.join(".lovelyignore");
+
+    // If the file exists, the mod is disabled
+    Ok(!ignore_file_path.exists())
+}
+
+#[tauri::command]
+async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Result<(), String> {
+    let path = PathBuf::from(&mod_path);
+
+    // Check if the mod directory exists
+    if !path.exists() {
+        return Err(format!("Mod path does not exist: {}", mod_path));
+    }
+
+    // The .lovelyignore file path in this mod's directory
+    let ignore_file_path = path.join(".lovelyignore");
+
+    if enabled {
+        // If enabling the mod, remove the .lovelyignore file if it exists
+        if ignore_file_path.exists() {
+            fs::remove_file(&ignore_file_path)
+                .map_err(|e| format!("Failed to remove .lovelyignore file: {}", e))?;
+        }
+    } else {
+        // If disabling the mod, create an empty .lovelyignore file
+        fs::write(&ignore_file_path, "")
+            .map_err(|e| format!("Failed to create .lovelyignore file: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn process_dropped_file(path: String) -> Result<String, String> {
     // Get the mods directory path
     let config_dir =
@@ -1748,7 +1837,11 @@ pub fn run() {
             open_directory,
             get_mods_folder,
             process_dropped_file,
-            process_mod_archive
+            process_mod_archive,
+            is_mod_enabled,
+            toggle_mod_enabled,
+            is_mod_enabled_by_path,
+            toggle_mod_enabled_by_path,
         ])
         .run(tauri::generate_context!());
 
