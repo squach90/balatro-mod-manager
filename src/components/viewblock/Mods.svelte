@@ -1054,7 +1054,10 @@
 
 							<!-- Enabled Local Mods -->
 							{#if enabledLocalMods.length > 0}
-								<div class="subsection-header enabled">
+								<div
+									class="subsection-header enabled"
+									class:top-margin={localMods.length === 0}
+								>
 									<h4>Enabled Local Mods</h4>
 									<p>
 										{enabledLocalMods.length} mod{enabledLocalMods.length !==
@@ -1076,7 +1079,10 @@
 
 							<!-- Disabled Local Mods -->
 							{#if disabledLocalMods.length > 0}
-								<div class="subsection-header disabled">
+								<div
+									class="subsection-header disabled"
+									class:top-margin={localMods.length === 0}
+								>
 									<h4>Disabled Local Mods</h4>
 									<p>
 										{disabledLocalMods.length} mod{disabledLocalMods.length !==
@@ -1503,6 +1509,15 @@
 	.mods-scroll-container {
 		overflow-y: auto;
 		height: 100%;
+	}
+
+	.mods-scroll-container:not(:has(.local-mods-grid))
+		.subsection-header:first-of-type {
+		margin-top: 3rem; /* Add spacing at the top when there are no local mods */
+	}
+
+	.top-margin {
+		margin-top: 3rem !important;
 	}
 
 	.mods-grid {
