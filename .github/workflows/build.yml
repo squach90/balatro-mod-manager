@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1  # Reduced from 0 to 1 for faster checkouts
 
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
@@ -72,6 +72,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          key: ${{ runner.os }}-${{ matrix.platform == 'macos-latest' && 'universal' || 'standard' }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: install frontend dependencies
         run: bun install
@@ -100,7 +101,11 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           MACOSX_DEPLOYMENT_TARGET: 11.0
-          TAURI_SKIP_APPLE_NOTARIZATION: true # Skip notarization during build
+          # Optimize Rust compilation
+          CARGO_BUILD_JOBS: 4
+          CARGO_INCREMENTAL: true
+          # Speed up macOS build
+          MACOS_TARGETS_OPTIMIZED: true
         with:
           args: ${{ matrix.args }}
           
