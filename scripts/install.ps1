@@ -65,6 +65,32 @@ foreach ($dep in $deps) {
     }
 }
 
+# Check cargo-tauri version
+Write-Host "Checking Tauri CLI version..." -ForegroundColor $YELLOW
+try {
+    $tauriVersionOutput = (cargo tauri --version) -join ""
+    if ($tauriVersionOutput -match '(\d+\.\d+\.\d+)') {
+        $TAURI_VERSION = $matches[1]
+        $REQUIRED_VERSION = "2.3.1"
+        
+        # Convert versions to System.Version for proper comparison
+        $currentVersion = [System.Version]$TAURI_VERSION
+        $requiredVersion = [System.Version]$REQUIRED_VERSION
+        
+        if ($currentVersion -lt $requiredVersion) {
+            Write-Host "Error: cargo-tauri version $TAURI_VERSION is too old. Please update to at least version $REQUIRED_VERSION" -ForegroundColor $RED
+            exit 1
+        }
+        Write-Host "cargo-tauri version $TAURI_VERSION ✓" -ForegroundColor $GREEN
+    } else {
+        Write-Host "Error: Unable to determine cargo-tauri version" -ForegroundColor $RED
+        exit 1
+    }
+} catch {
+    Write-Host "Error checking cargo-tauri version: $_" -ForegroundColor $RED
+    exit 1
+}
+
 # Create temp directory
 $BUILD_DIR = Join-Path $env:TEMP "balatro-mod-manager-$(Get-Date -Format 'yyyyMMddHHmmss')"
 Write-Host "Creating temporary build directory: ${BUILD_DIR}" -ForegroundColor $YELLOW
