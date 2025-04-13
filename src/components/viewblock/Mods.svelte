@@ -1201,31 +1201,32 @@
 </div>
 
 <style>
-	/* Add these styles for the subsection headers */
 	.subsection-header {
+		display: flex;
+		flex-direction: column;
 		background: #4f6367;
-		border-left: 5px solid #f4eee0;
+		border: 2px solid #f4eee0; /* Full white border like section header */
 		padding: 0.7rem 1.5rem;
 		margin: 0 2rem 1rem 2rem;
-		border-radius: 0 8px 8px 0;
-		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+		border-radius: 8px; /* Matching border-radius */
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* Matching box-shadow */
 	}
 
 	.subsection-header.enabled {
 		background: #27ae60;
-		border-left-color: #f4eee0;
+		border: 2px solid #f4eee0;
 	}
 
 	.subsection-header.disabled {
 		background: #7f8c8d;
-		border-left-color: #f4eee0;
+		border: 2px solid #f4eee0;
 	}
 
 	.subsection-header h4 {
 		margin: 0;
 		font-size: 1.3rem;
 		color: #f4eee0;
-		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 	}
 
 	.subsection-header p {
