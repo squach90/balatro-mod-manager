@@ -780,11 +780,37 @@
 	}
 
 	// Add sort handler
+
 	function handleSortChange(event: Event) {
 		const select = event.target as HTMLSelectElement;
 		currentSort.set(select.value as SortOption);
+
+		// Force a UI update by creating a new array reference
+		sortedAndFilteredMods = [
+			...sortMods(filteredMods, select.value as SortOption),
+		];
+
+		// Reset to first page when sort changes to prevent out-of-bounds issues
+		if ($currentPage > 1) {
+			currentPage.set(1);
+			startPage = 1;
+		}
 	}
 	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+	$: {
+		if (sortedAndFilteredMods) {
+			// Ensure pagination is updated
+			paginatedMods = sortedAndFilteredMods.slice(
+				($currentPage - 1) * $itemsPerPage,
+				$currentPage * $itemsPerPage,
+			);
+
+			// Update enabled/disabled lists if on the Installed Mods page
+			if ($currentCategory === "Installed Mods") {
+				updateEnabledDisabledLists();
+			}
+		}
+	}
 
 	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
 	$: paginatedMods = sortedAndFilteredMods.slice(
