@@ -1237,7 +1237,7 @@
 
 	.subsection-header p {
 		margin: 0.2rem 0 0 0;
-		font-size: 0.9rem;
+		font-size: 1rem;
 		color: #f4eee0;
 		opacity: 0.9;
 	}
