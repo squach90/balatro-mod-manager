@@ -97,19 +97,33 @@ jobs:
     needs: prepare-release-notes
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # This is crucial for creating releases
+      contents: write
+      actions: read  # Required to download artifacts from other workflows
     steps:
-      # Download artifacts from the triggering workflow (build-sign)
-      - name: Download artifacts from build-sign workflow
+      # Download macos-app artifact
+      - name: Download macOS artifact
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: build-sign
           workflow_conclusion: success
-          path: artifacts
+          name: macos-app
+          path: artifacts/macos-app
+          if_no_artifact_found: warn
+      
+      # Download windows-app artifact
+      - name: Download Windows artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-sign
+          workflow_conclusion: success
+          name: windows-app
+          path: artifacts/windows-app
+          if_no_artifact_found: warn
           
       # Debug step to see what files were downloaded
       - name: List downloaded artifacts
         run: |
+          echo "Artifacts directory content:"
           find artifacts -type f | sort
           
       - name: Create GitHub Release
