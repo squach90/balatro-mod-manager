@@ -99,10 +99,18 @@ jobs:
     permissions:
       contents: write  # This is crucial for creating releases
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      # Download artifacts from the triggering workflow (build-sign)
+      - name: Download artifacts from build-sign workflow
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: build-sign
+          workflow_conclusion: success
           path: artifacts
+          
+      # Debug step to see what files were downloaded
+      - name: List downloaded artifacts
+        run: |
+          find artifacts -type f | sort
           
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -113,9 +121,9 @@ jobs:
           draft: true
           prerelease: true
           files: |
-            artifacts/macos-app/*.dmg
-            artifacts/windows-app/*.msi
-            artifacts/windows-app/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.msi
+            artifacts/**/*.exe
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
