@@ -10,6 +10,9 @@ on:
 jobs:
   prepare-release-notes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
     outputs:
       release_notes: ${{ steps.notes.outputs.RELEASE_NOTES }}
       app_version: ${{ steps.version.outputs.APP_VERSION }}
@@ -81,6 +84,8 @@ jobs:
   create-release:
     needs: prepare-release-notes
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # This is crucial for creating releases
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -99,6 +104,7 @@ jobs:
             artifacts/macos-app/*.dmg
             artifacts/windows-app/*.msi
             artifacts/windows-app/*.exe
+          token: ${{ secrets.GITHUB_TOKEN }}  # Explicitly set the token
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
