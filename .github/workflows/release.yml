@@ -107,6 +107,20 @@ jobs:
           echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
           echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
       
+      # Checkout the code for creating the source archive
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history to ensure correct source code version
+          
+      # Create source code archive
+      - name: Create source code archive
+        run: |
+          # Remove node_modules and other build artifacts first
+          rm -rf node_modules target src-tauri/target .git
+          # Create a zip archive of the source code
+          zip -r "balatro-mod-manager-v${{ needs.prepare-release-notes.outputs.app_version }}-source.zip" .
+      
       # Download all artifacts from the triggering workflow
       - name: Download all artifacts from triggering workflow
         uses: dawidd6/action-download-artifact@v2
@@ -137,6 +151,7 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.msi
             artifacts/**/*.exe
+            balatro-mod-manager-v${{ needs.prepare-release-notes.outputs.app_version }}-source.zip
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
