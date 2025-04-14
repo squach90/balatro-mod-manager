@@ -98,33 +98,32 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: read  # Required to download artifacts from other workflows
+      actions: read
     steps:
-      # Download macos-app artifact
-      - name: Download macOS artifact
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: build-sign
-          workflow_conclusion: success
-          name: macos-app
-          path: artifacts/macos-app
-          if_no_artifact_found: warn
+      # Print info about the triggering workflow run
+      - name: Get workflow run info
+        run: |
+          echo "Triggering workflow run ID: ${{ github.event.workflow_run.id }}"
+          echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
+          echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
       
-      # Download windows-app artifact
-      - name: Download Windows artifact
+      # Download all artifacts from the triggering workflow
+      - name: Download all artifacts from triggering workflow
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: build-sign
-          workflow_conclusion: success
-          name: windows-app
-          path: artifacts/windows-app
+          run_id: ${{ github.event.workflow_run.id }}
+          path: artifacts
+          search_artifacts: true
+          check_artifacts: false
           if_no_artifact_found: warn
           
       # Debug step to see what files were downloaded
       - name: List downloaded artifacts
         run: |
           echo "Artifacts directory content:"
-          find artifacts -type f | sort
+          ls -la artifacts || echo "No artifacts directory found"
+          find artifacts -type f 2>/dev/null || echo "No files found in artifacts"
           
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
