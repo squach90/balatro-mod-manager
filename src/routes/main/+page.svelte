@@ -232,7 +232,7 @@
 		{onError}
 	/>
 
-	<div class="version-text">v0.2.5</div>
+	<div class="version-text">v0.2.6</div>
 </div>
 
 <style>
