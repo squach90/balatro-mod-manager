@@ -1,4 +1,4 @@
-name: 'build'
+name: 'build-and-sign'
 
 on:
   workflow_dispatch:
@@ -22,8 +22,9 @@ jobs:
           #   args: ''
           - platform: 'windows-latest'
             args: ''
-
     runs-on: ${{ matrix.platform }}
+    outputs:
+      app_version: ${{ steps.extract_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,8 +36,6 @@ jobs:
       #   run: |
       #     sudo apt-get update
       #     sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      # Remove certificate steps for build workflow - we'll sign in a separate workflow
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -56,11 +55,13 @@ jobs:
       - name: install frontend dependencies
         run: bun install
         
-      - name: Extract app version on Unix systems
-        if: matrix.platform == 'macos-latest' # || matrix.platform == 'ubuntu-22.04'
+      - name: Extract app version
+        id: extract_version
+        if: matrix.platform == 'macos-latest'
         shell: bash
         run: |
           APP_VERSION=$(grep -m1 'version =' src-tauri/Cargo.toml | cut -d '"' -f2)
+          echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
       - name: Extract app version on Windows
@@ -75,7 +76,7 @@ jobs:
         env:
           CI: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Remove Apple signing variables for macOS build
+          # No signing credentials for the build step
           MACOSX_DEPLOYMENT_TARGET: 11.0
           # Optimize Rust compilation
           CARGO_BUILD_JOBS: 4
@@ -85,16 +86,7 @@ jobs:
         with:
           args: ${{ matrix.args }}
           
-      # Upload artifacts by platform
-      - name: Upload macOS artifacts
-        if: matrix.platform == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-app-unsigned
-          path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/Balatro Mod Manager.app/**
-          retention-days: 2
-          
+      # Upload Windows artifacts directly from build job
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
@@ -103,5 +95,91 @@ jobs:
           path: |
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 7
+          
+      # For macOS, we'll just upload the unsigned app for the signing job
+      - name: Upload macOS unsigned artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app-unsigned
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/
           retention-days: 1
+
+  # Separate job for signing macOS app
+  sign-macos:
+    needs: build-tauri
+    if: success() && contains(needs.*.result, 'success')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download macOS unsigned artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-app-unsigned
+          path: ./unsigned-app
+
+      - name: Import Apple Developer Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
+          CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
+          echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
+          echo "Certificate imported. ID: $CERT_ID"
+
+      - name: Create directory for signed app
+        run: mkdir -p ./signed-app
+
+      - name: Sign Application
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_VERSION: ${{ needs.build-tauri.outputs.app_version }}
+        run: |
+          # Sign the .app bundle
+          codesign --force --options runtime --sign "$CERT_ID" --deep "./unsigned-app/Balatro Mod Manager.app"
+          
+          # Copy the signed app to the signed directory
+          cp -R "./unsigned-app/Balatro Mod Manager.app" "./signed-app/"
+          
+          # Create DMG with signed app
+          hdiutil create -volname "Balatro Mod Manager" -srcfolder "./signed-app/Balatro Mod Manager.app" -ov -format UDZO "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+          
+          # Sign the DMG
+          codesign --force --options runtime --sign "$CERT_ID" "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+
+      - name: Notarize Application
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_VERSION: ${{ needs.build-tauri.outputs.app_version }}
+        run: |
+          # Notarize the DMG
+          xcrun notarytool submit "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          
+          # Staple the notarization ticket
+          xcrun stapler staple "./signed-app/Balatro Mod Manager_${APP_VERSION}_universal.dmg"
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app-signed
+          path: |
+            ./signed-app/Balatro Mod Manager_${{ needs.build-tauri.outputs.app_version }}_universal.dmg
+          retention-days: 7
 
