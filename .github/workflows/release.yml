@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
       
       - name: Extract app version
         id: version
@@ -31,14 +32,25 @@ jobs:
         id: notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_VERSION: ${{ steps.version.outputs.APP_VERSION }}
         run: |
           # Get repository details
           REPO_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 1)
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d '/' -f 2)
           
-          # Get the latest and previous tags
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude=$LATEST_TAG 2>/dev/null || echo "none")
+          # Get all tags sorted by version number
+          ALL_TAGS=$(git tag -l 'v*' | sort -V)
+          echo "All tags in repository: $ALL_TAGS"
+          
+          # Get the current version with 'v' prefix
+          CURRENT_TAG="v$APP_VERSION"
+          
+          # Find the previous tag based on version sorting
+          PREVIOUS_TAG=$(echo "$ALL_TAGS" | grep -v "^$CURRENT_TAG$" | sort -V | tail -n 1)
+          
+          # Debug output
+          echo "Previous tag: $PREVIOUS_TAG"
+          echo "Current version: $CURRENT_TAG"
           
           # Start release notes
           echo "## What's Changed" > RELEASE_NOTES.md
@@ -46,10 +58,10 @@ jobs:
           # Get merged PRs
           gh pr list --repo $GITHUB_REPOSITORY --state merged --base main --json number,title,author,url --limit 10 | jq -r '.[] | "* \(.title) by @\(.author.login) in \(.url)"' >> RELEASE_NOTES.md
           
-          # Add full changelog link
-          if [ "$PREVIOUS_TAG" != "none" ]; then
+          # Add full changelog link with explicit version
+          if [ -n "$PREVIOUS_TAG" ]; then
             echo "" >> RELEASE_NOTES.md
-            echo "**Full Changelog**: https://github.com/$REPO_OWNER/$REPO_NAME/compare/$PREVIOUS_TAG...v$APP_VERSION" >> RELEASE_NOTES.md
+            echo "**Full Changelog**: https://github.com/$REPO_OWNER/$REPO_NAME/compare/$PREVIOUS_TAG...$CURRENT_TAG" >> RELEASE_NOTES.md
           fi
           
           # Add the security warning template
@@ -104,7 +116,7 @@ jobs:
             artifacts/macos-app/*.dmg
             artifacts/windows-app/*.msi
             artifacts/windows-app/*.exe
-          token: ${{ secrets.GITHUB_TOKEN }}  # Explicitly set the token
+          token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
