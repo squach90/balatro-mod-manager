@@ -129,16 +129,16 @@ jobs:
           # Find the specific executable - adjust path if needed
           find artifacts -type f -name '*.exe' -print -quit 
 
-      # Upload only the specific file(s) intended for signing
-      # Adjust the path pattern carefully to match your build output structure within artifacts/
-      - name: Upload unsigned executable for signing
-        id: upload-unsigned-exe 
+      - name: Upload unsigned files for signing
+        id: upload-unsigned-files
         uses: actions/upload-artifact@v4
         with:
-          name: unsigned-executable-${{ github.run_id }} # Unique name to avoid conflicts
-          path: artifacts/**/*.exe # Double-check this pattern matches your .exe location
-          if-no-files-found: error # Fail if the executable isn't found
-          retention-days: 1 
+          name: unsigned-files-${{ github.run_id }}
+          path: |
+            artifacts/**/*.exe
+            artifacts/**/*.msi
+          if-no-files-found: error
+          retention-days: 1
 
       # Submit the uploaded artifact to SignPath for signing
       - name: Submit SignPath Signing Request
@@ -150,10 +150,11 @@ jobs:
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }} 
           project-slug: 'balatro-mod-manager' # Replace with your SignPath Project Slug
           signing-policy-slug: 'test-signing' # Replace with your SignPath Policy Slug
-          artifact-configuration-slug: 'zipped_exe'
+          artifact-configuration-slug: 'zipped_exe_msi'
           
           # Link to the artifact uploaded in the previous step
-          github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }} 
+          github-artifact-id: ${{ steps.upload-unsigned-files.outputs.artifact-id }}
+
           
           # Action Configuration
           wait-for-completion: true # Wait for signing to finish before proceeding
@@ -180,8 +181,8 @@ jobs:
           # Upload original non-Windows artifacts AND the newly signed Windows executable
           files: |
             artifacts/**/*.dmg
-            artifacts/**/*.msi 
             signed-artifact/**/*.exe
+            signed-artifact/**/*.msi 
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
