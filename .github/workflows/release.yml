@@ -150,6 +150,7 @@ jobs:
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }} 
           project-slug: 'balatro-mod-manager' # Replace with your SignPath Project Slug
           signing-policy-slug: 'test-signing' # Replace with your SignPath Policy Slug
+          artifact-configuration-slug: 'zipped_exe'
           
           # Link to the artifact uploaded in the previous step
           github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }} 
@@ -180,8 +181,7 @@ jobs:
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.msi 
-            signed-artifact/**/*.exe # Upload the signed executable from SignPath output dir
-          fail_on_unmatched_files: false
+            signed-artifact/**/*.exe
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
