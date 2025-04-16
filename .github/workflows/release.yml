@@ -169,7 +169,7 @@ jobs:
           ls -R signed-artifact || echo "No signed-artifact directory found"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare-release-notes.outputs.app_version }}
           name: Balatro Mod Manager v${{ needs.prepare-release-notes.outputs.app_version }} (Alpha Build) Pre-release
@@ -181,6 +181,7 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.msi 
             signed-artifact/**/*.exe # Upload the signed executable from SignPath output dir
+          fail_on_unmatched_files: false
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
