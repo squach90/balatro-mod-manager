@@ -2,7 +2,7 @@
 	import {
 		Download,
 		Flame,
-		// Clock,
+		//Clock,
 		Star,
 		Spade,
 		Gamepad2,
@@ -11,6 +11,7 @@
 		Search,
 		BookOpen,
 		Folder,
+		RefreshCw,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { fly } from "svelte/transition";
@@ -18,9 +19,9 @@
 		SortOption,
 		backgroundEnabled,
 		currentSort,
+		loadingStates2,
 	} from "../../stores/modStore";
 	import { ArrowUpDown } from "lucide-svelte";
-
 	import {
 		currentModView,
 		currentCategory,
@@ -28,11 +29,7 @@
 	} from "../../stores/modStore";
 	import type { LocalMod, Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
-	import {
-		modsStore,
-		installationStatus,
-		loadingStates2 as loadingStates,
-	} from "../../stores/modStore";
+	import { modsStore, installationStatus } from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -52,9 +49,7 @@
 
 	// Add this import for the enabled/disabled mod store
 	const modEnabledStore = writable<Record<string, boolean>>({});
-
 	const loadingDots = writable(0);
-
 	let installedMods: InstalledMod[] = [];
 
 	// Add these variables to track enabled/disabled mods
@@ -69,13 +64,13 @@
 	async function handleModUninstalled() {
 		// Refresh the local mods list
 		getLocalMods();
-
 		// Also refresh installed mods for consistency
 		refreshInstalledMods();
 	}
 
 	// let mods: Mod[] = [];
 	let isLoading = true;
+
 	interface DependencyCheck {
 		steamodded: boolean;
 		talisman: boolean;
@@ -85,7 +80,7 @@
 	let isLoadingLocalMods = false;
 
 	async function handleModToggled(): Promise<void> {
-		if ($currentCategory === "Installed Mods") {
+		if ($currentCategory === "InstalledMods") {
 			// First check catalog mods
 			for (const mod of paginatedMods) {
 				if ($installationStatus[mod.title]) {
@@ -96,7 +91,6 @@
 								modName: mod.title,
 							},
 						);
-
 						modEnabledStore.update((s) => ({
 							...s,
 							[mod.title]: isEnabled,
@@ -118,7 +112,6 @@
 							modPath: mod.path,
 						},
 					);
-
 					modEnabledStore.update((s) => ({
 						...s,
 						[mod.name]: isEnabled,
@@ -154,7 +147,6 @@
 								modPath: mod.path,
 							},
 						);
-
 						modEnabledStore.update((s) => ({
 							...s,
 							[mod.name]: isEnabled,
@@ -192,7 +184,10 @@
 		if (!mod?.title) return false;
 		// Use checkModInCache (from modCache.ts) which takes a string title
 		const status = await checkModInCache(mod.title);
-		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
+		installationStatus.update((s) => ({
+			...s,
+			[mod.title]: status,
+		}));
 		return status;
 	}
 
@@ -200,11 +195,10 @@
 		requirements: DependencyCheck,
 		downloadAction?: () => Promise<void>,
 	) => void;
-
 	// function onDependencyCheck(
-	// 	event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
+	//   event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
 	// ) {
-	// 	handleDependencyCheck(event.detail);
+	//   handleDependencyCheck(event.detail);
 	// }
 
 	export let mod: Mod | null;
@@ -265,7 +259,6 @@
 				$installationStatus[mod.title] &&
 				$modEnabledStore[mod.title] === true,
 		);
-
 		disabledMods = paginatedMods.filter(
 			(mod) =>
 				$installationStatus[mod.title] &&
@@ -370,21 +363,17 @@
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
-
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
-
 			if (!installedMod) return;
-
 			if (isCoreMod) {
 				// Get dependents
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
-
 				// Set the dialog properties directly
 				uninstallDialogStore.set({
 					show: true,
@@ -409,13 +398,173 @@
 		}
 	};
 
+	$: hasUpdatesAvailable = Object.values($updateAvailableStore).some(
+		(value) => value === true,
+	);
+
+	async function updateAllMods(e?: Event) {
+		if (e) e.preventDefault();
+
+		try {
+			// Get all installed mods with available updates
+			const modsToUpdate = $modsStore.filter(
+				(mod) =>
+					$installationStatus[mod.title] &&
+					$updateAvailableStore[mod.title],
+			);
+
+			if (modsToUpdate.length === 0) {
+				addMessage("No updates available.", "info");
+				return;
+			}
+
+			// Set loading state for all mods simultaneously
+			for (const mod of modsToUpdate) {
+				loadingStates2.update((s) => ({ ...s, [mod.title]: true }));
+			}
+
+			// Run all updates in parallel
+			const updateResults = await Promise.allSettled(
+				modsToUpdate.map(async (mod) => {
+					try {
+						if (mod.title.toLowerCase() === "steamodded") {
+							const latestReleaseURL = await invoke<string>(
+								"get_latest_steamodded_release",
+							);
+							await installModFromURL(mod, latestReleaseURL);
+						} else if (mod.downloadURL) {
+							const folderName =
+								mod.folderName || mod.title.replace(/\s+/g, "");
+							const installedPath = await invoke<string>(
+								"install_mod",
+								{
+									url: mod.downloadURL,
+									folderName,
+								},
+							);
+
+							await invoke("add_installed_mod", {
+								name: mod.title,
+								path: installedPath,
+								dependencies: mod.requires_steamodded
+									? ["Steamodded"]
+									: mod.requires_talisman
+										? ["Talisman"]
+										: [],
+								currentVersion: mod.version || "",
+							});
+						} else {
+							throw new Error("No download URL available");
+						}
+
+						// Update was successful
+						return mod.title;
+					} catch (error) {
+						console.error(
+							`Failed to update mod ${mod.title}:`,
+							error,
+						);
+						throw new Error(
+							`Failed to update ${mod.title}: ${error instanceof Error ? error.message : String(error)}`,
+						);
+					}
+				}),
+			);
+
+			// Process results
+			const successful: string[] = [];
+			const failed: string[] = [];
+
+			updateResults.forEach((result, index) => {
+				const modTitle = modsToUpdate[index].title;
+
+				// Clear loading state
+				loadingStates2.update((s) => ({ ...s, [modTitle]: false }));
+
+				if (result.status === "fulfilled") {
+					successful.push(modTitle);
+					// Mark as updated
+					updateAvailableStore.update((s) => ({
+						...s,
+						[modTitle]: false,
+					}));
+					// Ensure it stays enabled
+					modEnabledStore.update((s) => ({ ...s, [modTitle]: true }));
+				} else {
+					failed.push(modTitle);
+					// Show error message
+					addMessage(result.reason.message, "error");
+				}
+			});
+
+			// Refresh the installed mods list
+			await refreshInstalledMods();
+
+			// Show success message
+			if (successful.length > 0) {
+				addMessage(
+					`Successfully updated ${successful.length} mod(s).`,
+					"success",
+				);
+			}
+		} catch (error) {
+			console.error("Failed to update mods:", error);
+			addMessage(
+				`Update all failed: ${error instanceof Error ? error.message : String(error)}`,
+				"error",
+			);
+		}
+	}
+
+	// Helper function for Steamodded installation (matching ModCard.svelte pattern)
+	async function installModFromURL(
+		mod: Mod,
+		url: string,
+		folder_name: string = "",
+	) {
+		try {
+			if (!url.startsWith("http")) {
+				console.error("Invalid URL format:", url);
+				throw new Error(`Invalid URL format: ${url}`);
+			}
+
+			// Use mod title as fallback if folder_name is empty
+			const folderName =
+				folder_name || mod.folderName || mod.title.replace(/\s+/g, "");
+
+			const installedPath = await invoke<string>("install_mod", {
+				url,
+				folderName,
+			});
+
+			await invoke("add_installed_mod", {
+				name: mod.title,
+				path: installedPath,
+				dependencies: mod.requires_steamodded ? ["Steamodded"] : [],
+				currentVersion: mod.version || "",
+			});
+
+			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+			updateAvailableStore.update((s) => ({ ...s, [mod.title]: false }));
+
+			// Set as enabled by default
+			modEnabledStore.update((s) => ({ ...s, [mod.title]: true }));
+		} catch (error) {
+			console.error("Failed to install mod:", error);
+			throw error; // Rethrow to be handled by the caller
+		}
+	}
+
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
 
 		// Define the actual download function that will be stored and executed later if needed
 		const performDownload = async () => {
 			try {
-				loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+				loadingStates2.update((s: Record<string, boolean>) => ({
+					...s,
+					[mod.title]: true,
+				}));
 
 				// Create dependencies array for the database
 				const dependencies = [];
@@ -447,7 +596,10 @@
 					"error",
 				);
 			} finally {
-				loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+				loadingStates2.update((s: Record<string, boolean>) => ({
+					...s,
+					[mod.title]: false,
+				}));
 			}
 		};
 
@@ -468,7 +620,7 @@
 						})
 					: true;
 
-				// If any dependency is missing, show the RequiresPopup
+				// If any dependency is missing, show the Requires Popup
 				if (
 					(mod.requires_steamodded && !steamoddedInstalled) ||
 					(mod.requires_talisman && !talismanInstalled)
@@ -527,7 +679,6 @@
 				"load_mods_cache",
 			);
 			if (!cached) return null;
-
 			const [mods, timestamp] = cached;
 			return { mods, timestamp };
 		} catch (error) {
@@ -565,10 +716,9 @@
 								});
 
 							// const lastUpdated =
-							// 	timestamps[dirName] || Date.now();
+							// timestamps[dirName] || Date.now();
 
 							// Log category mapping for debugging
-
 							// Ensure categories are properly mapped
 							const mappedCategories = meta.categories
 								.map((cat) => {
@@ -620,7 +770,6 @@
 			const exists = await invoke<boolean>("path_exists", {
 				path: repoPath,
 			});
-
 			if (!exists) {
 				await invoke("clone_repo", {
 					url: "https://github.com/skyline69/balatro-mod-index.git",
@@ -630,7 +779,9 @@
 				const lastFetched = await invoke<number>("get_last_fetched");
 				if (Date.now() - lastFetched > 3600 * 1000) {
 					// 1 hour
-					await invoke("pull_repo", { path: repoPath });
+					await invoke("pull_repo", {
+						path: repoPath,
+					});
 					await invoke("update_last_fetched");
 				}
 			}
@@ -640,6 +791,7 @@
 			return null;
 		}
 	}
+
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
@@ -755,7 +907,6 @@
 	document.addEventListener("click", (e) => {
 		const target = e.target as HTMLElement;
 		const anchor = target.closest("a");
-
 		if (anchor && anchor.href.startsWith("https://") && anchor.href) {
 			e.preventDefault();
 			open(anchor.href);
@@ -770,9 +921,9 @@
 				case SortOption.NameDesc:
 					return b.title.localeCompare(a.title);
 				// case SortOption.LastUpdatedAsc:
-				// 	return a.lastUpdated.localeCompare(b.lastUpdated);
+				//   return a.lastUpdated.localeCompare(b.lastUpdated);
 				// case SortOption.LastUpdatedDesc:
-				// 	return b.lastUpdated.localeCompare(a.lastUpdated);
+				//   return b.lastUpdated.localeCompare(a.lastUpdated);
 				default:
 					return 0;
 			}
@@ -780,23 +931,22 @@
 	}
 
 	// Add sort handler
-
 	function handleSortChange(event: Event) {
 		const select = event.target as HTMLSelectElement;
 		currentSort.set(select.value as SortOption);
-
 		// Force a UI update by creating a new array reference
 		sortedAndFilteredMods = [
 			...sortMods(filteredMods, select.value as SortOption),
 		];
-
 		// Reset to first page when sort changes to prevent out-of-bounds issues
 		if ($currentPage > 1) {
 			currentPage.set(1);
 			startPage = 1;
 		}
 	}
+
 	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+
 	$: {
 		if (sortedAndFilteredMods) {
 			// Ensure pagination is updated
@@ -804,8 +954,7 @@
 				($currentPage - 1) * $itemsPerPage,
 				$currentPage * $itemsPerPage,
 			);
-
-			// Update enabled/disabled lists if on the Installed Mods page
+			// Update enabled/disabled lists if on the InstalledMods page
 			if ($currentCategory === "Installed Mods") {
 				updateEnabledDisabledLists();
 			}
@@ -921,7 +1070,6 @@
 
 			// Check if the path exists
 			const pathExists = await invoke("path_exists", { path: modsPath });
-
 			if (!pathExists) {
 				addMessage(
 					"Mods directory not found. It might not have been created yet.",
@@ -983,7 +1131,7 @@
 		{:else}
 			<div class="mods-wrapper">
 				<div class="controls-container">
-					{#if $currentCategory === "Installed Mods" && paginatedMods.length > 0 && !$currentModView}
+					{#if $currentCategory === "Installed Mods" && !$currentModView}
 						<button
 							class="folder-icon-button"
 							onclick={openModsFolder}
@@ -992,18 +1140,27 @@
 						>
 							<Folder size={20} />
 						</button>
+
+						{#if hasUpdatesAvailable}
+							<button
+								class="update-all-button-top"
+								onclick={updateAllMods}
+								title="Update all mods with available updates"
+								in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+							>
+								<RefreshCw size={18} /> <span>Update All</span>
+							</button>
+						{/if}
 					{/if}
+
 					<div
 						class="pagination-controls"
 						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
 					>
 						<button
 							onclick={previousPage}
-							disabled={$currentPage === 1}
+							disabled={$currentPage === 1}>Previous</button
 						>
-							Previous
-						</button>
-
 						{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
 							{#if startPage + i <= totalPages}
 								<button
@@ -1017,10 +1174,8 @@
 						{/each}
 						<button
 							onclick={nextPage}
-							disabled={$currentPage === totalPages}
+							disabled={$currentPage === totalPages}>Next</button
 						>
-							Next
-						</button>
 					</div>
 
 					<div
@@ -1039,12 +1194,10 @@
 								<option value={SortOption.NameDesc}
 									>Name (Z-A)</option
 								>
-								<!-- <option value={SortOption.LastUpdatedDesc} -->
-								<!-- 	>Latest Updated</option -->
-								<!-- > -->
-								<!-- <option value={SortOption.LastUpdatedAsc} -->
-								<!-- 	>Oldest Updated</option -->
-								<!-- > -->
+								<!--<option value={SortOption.LastUpdatedDesc}-->
+								<!-->Latest Updated</option--><!---->
+								<!--<option value={SortOption.LastUpdatedAsc}-->
+								<!-->Oldest Updated</option--><!---->
 							</select>
 						</div>
 					</div>
@@ -1073,8 +1226,7 @@
 									onclick={openModsFolder}
 									title="Open mods folder"
 								>
-									<Folder size={20} />
-									Open Mods Folder
+									<Folder size={20} /> Open Mods Folder
 								</button>
 							</div>
 
@@ -1130,23 +1282,33 @@
 
 							<!-- Mod Manager Catalog Section Header -->
 							<div class="section-header">
-								<h3>Mod Manager Catalog</h3>
-								<p>
-									These mods are available from the online
-									catalog
-								</p>
-							</div>
-						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
-							<div class="no-mods-message">
-								<p>No installed mods.</p>
+								<div class="section-header-content">
+									<h3>Mod Manager Catalog</h3>
+									<p>
+										These mods are available from the online
+										catalog
+									</p>
+								</div>
 								<button
 									class="open-folder-button"
 									onclick={openModsFolder}
 									title="Open mods folder"
 								>
-									<Folder size={20} />
-									Open Mods Folder
+									<Folder size={20} /> Open Mods Folder
 								</button>
+							</div>
+						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
+							<div class="no-mods-message">
+								<p>No installed mods.</p>
+								<div class="no-mods-buttons">
+									<button
+										class="open-folder-button"
+										onclick={openModsFolder}
+										title="Open mods folder"
+									>
+										<Folder size={20} /> Open Mods Folder
+									</button>
+								</div>
 							</div>
 						{/if}
 
@@ -1207,7 +1369,7 @@
 							{/if}
 						{/if}
 					{:else}
-						<!-- Original non-Installed Mods categories -->
+						<!-- Original non-InstalledMods categories -->
 						<div class="mods-grid">
 							{#each paginatedMods as mod}
 								<ModCard
@@ -1233,15 +1395,75 @@
 </div>
 
 <style>
+	.update-all-button-top {
+		position: absolute;
+		top: 50%;
+		left: 2.5rem; /* Position it next to the folder button */
+		transform: translateY(-50%);
+		z-index: 3000;
+		background: #3498db;
+		color: #f4eee0;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		height: 47px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+		padding: 0 1rem;
+		font-family: "M6X11", sans-serif;
+		font-size: 0.9rem;
+		white-space: nowrap;
+		gap: 0.5rem;
+	}
+
+	.update-all-button-top:hover {
+		background: #2980b9;
+		transform: translateY(-50%) scale(1.1);
+	}
+
+	.update-all-button-top:active {
+		transform: translateY(-50%) scale(0.95);
+	}
+
+	/* Adjust position for smaller screens */
+	@media (max-width: 1160px) {
+		.update-all-button-top {
+			left: 2.2rem;
+		}
+	}
+
+	.no-mods-buttons {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: center;
+		flex-wrap: wrap;
+	}
+
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.section-header-content {
+		flex: 1;
+		min-width: 200px;
+	}
+
 	.subsection-header {
 		display: flex;
 		flex-direction: column;
 		background: #4f6367;
-		border: 2px solid #f4eee0; /* Full white border like section header */
+		border: 2px solid #f4eee0; /*Full white border like section header*/
 		padding: 0.7rem 1.5rem;
 		margin: 0 2rem 1rem 2rem;
-		border-radius: 8px; /* Matching border-radius */
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* Matching box-shadow */
+		border-radius: 8px; /*Matching border-radius*/
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /*Matching box-shadow*/
 	}
 
 	.subsection-header.enabled {
@@ -1268,7 +1490,7 @@
 		opacity: 0.9;
 	}
 
-	/* Adjustments for grid spacing when using subsections */
+	/*Adjustments for grid spacing when using subsections*/
 	.mods-grid {
 		padding-top: 0.5rem;
 	}
@@ -1280,7 +1502,7 @@
 	.folder-icon-button {
 		position: absolute;
 		top: 50%;
-		left: -1.2rem; /* Position on the left side */
+		left: -1.2rem; /*Position on the left side*/
 		transform: translateY(-50%);
 		z-index: 3000;
 		background: #4caf50;
@@ -1307,7 +1529,7 @@
 		transform: translateY(-50%) scale(0.95);
 	}
 
-	/* Adjust position for smaller screens */
+	/*Adjust position for smaller screens*/
 	@media (max-width: 1160px) {
 		.folder-icon-button {
 			left: -1.6rem;
@@ -1373,12 +1595,12 @@
 		font-size: 1.1rem;
 		color: #f4eee0;
 	}
+
 	.mods-container {
 		display: flex;
 		gap: 1rem;
 		padding: 0 2rem;
 		overflow: hidden;
-
 		height: 100%;
 	}
 
@@ -1395,7 +1617,7 @@
 		right: 0;
 		bottom: 0;
 		margin: auto;
-		padding-top: 3rem; /* Add space for the controls at the top */
+		padding-top: 3rem; /*Add space for the controls at the top*/
 	}
 
 	.no-mods-message p {
@@ -1403,9 +1625,9 @@
 		font-size: 1.8rem;
 		color: #f4eee0;
 		text-align: center;
-		/* Add black stroke with two methods for better browser compatibility */
+		/*Add black stroke with two methods for better browser compatibility*/
 		-webkit-text-stroke: 0.1px black;
-		/* Fallback using text-shadow for browsers that don't support text-stroke */
+		/*Fallback using text-shadow for browsers that don't support text-stroke*/
 		text-shadow:
 			-1px -1px 0 #000,
 			1px -1px 0 #000,
@@ -1422,7 +1644,7 @@
 
 	.pagination-controls {
 		position: absolute;
-		/* top: 0.05rem; */
+		/*top: 0.05rem;*/
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 1000;
@@ -1479,16 +1701,13 @@
 		gap: 0.5rem;
 		overflow-y: auto;
 		padding: 2rem 0;
-
 		&::-webkit-scrollbar {
 			width: 10px;
 		}
-
 		&::-webkit-scrollbar-track {
 			background: transparent;
 			border-radius: 15px;
 		}
-
 		&::-webkit-scrollbar-thumb {
 			background: #f4eee0;
 			border: 2px solid rgba(193, 65, 57, 0.8);
@@ -1500,7 +1719,6 @@
 		&::-webkit-scrollbar-corner {
 			background-color: transparent;
 		}
-
 		scrollbar-width: 0;
 		scrollbar-color: transparent transparent;
 	}
@@ -1539,7 +1757,7 @@
 
 	.mods-scroll-container:not(:has(.local-mods-grid))
 		.subsection-header:first-of-type {
-		margin-top: 3rem; /* Add spacing at the top when there are no local mods */
+		margin-top: 3rem; /*Add spacing at the top when there are no local mods*/
 	}
 
 	.top-margin {
@@ -1561,23 +1779,23 @@
 
 	.sort-controls {
 		position: absolute;
-		/* top: 0.25rem; Increased from 2rem */
-		right: 4rem; /* Increased from 2.5rem */
+		/*top: 0.25rem; Increased from 2rem*/
+		right: 4rem; /*Increased from 2.5rem*/
 		z-index: 1000;
 		margin: 0;
 		background: transparent;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-		/* transform: translateY(0); /* Reset any transforms */
+		/*transform: translateY(0); /*Reset any transforms*/
 	}
 	/**/
-	/* 	.sort-controls { */
-	/*     position: absolute; */
-	/*     top: 1rem; */
-	/*     right: 3rem; */
-	/*     z-index: 1000; */
-	/*     margin: 0; */
-	/*     background: transparent; */
-	/* } */
+	/*.sort-controls {*/
+	/*position: absolute;*/
+	/*top: 1rem;*/
+	/*right: 3rem;*/
+	/*z-index: 1000;*/
+	/*margin: 0;*/
+	/*background: transparent;*/
+	/*}*/
 
 	.sort-wrapper {
 		background: #ea9600;
@@ -1593,7 +1811,7 @@
 
 	.mods-wrapper {
 		position: relative;
-		/* 192px being the width of the catagories + seperator */
+		/*192px being the width of the catagories + seperator*/
 		width: calc(100% - 192px);
 		padding: 0 1rem;
 	}
@@ -1663,7 +1881,7 @@
 		}
 
 		.pagination-controls {
-			left: 13.6rem;
+			left: 20rem;
 		}
 
 		.controls-container {
