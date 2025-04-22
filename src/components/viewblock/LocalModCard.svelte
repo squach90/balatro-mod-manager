@@ -56,10 +56,6 @@
 	async function toggleModEnabled(e: Event) {
 		e.stopPropagation();
 		try {
-			console.log(
-				`Toggling local mod ${mod.name} from ${isEnabled ? "enabled" : "disabled"} to ${!isEnabled ? "enabled" : "disabled"}`,
-			);
-
 			const currentState = $modEnabledStore[mod.name] ?? isEnabled;
 			const newState = !currentState;
 
@@ -68,10 +64,6 @@
 				modPath: mod.path,
 				enabled: newState,
 			});
-
-			console.log(
-				`Backend toggle completed for ${mod.name}, updating store...`,
-			);
 
 			// Update both the store and local variable
 			modEnabledStore.update((enabledMods) => ({
@@ -82,9 +74,7 @@
 
 			// Call the parent callback to update the filtered lists
 			if (onToggleEnabled) {
-				console.log(`Calling parent callback for ${mod.name}`);
 				await onToggleEnabled();
-				console.log(`Parent callback completed for ${mod.name}`);
 			}
 		} catch (error) {
 			console.error(
@@ -373,6 +363,22 @@
 				on:click={openModDirectory}
 			>
 				<Folder size={18} />
+			</button>
+			<!-- Added toggle button here -->
+			<button
+				class="toggle-button"
+				class:enabled={$modEnabledStore[mod.name] ?? isEnabled}
+				class:disabled={!($modEnabledStore[mod.name] ?? isEnabled)}
+				title={($modEnabledStore[mod.name] ?? isEnabled)
+					? "Disable Mod"
+					: "Enable Mod"}
+				on:click={toggleModEnabled}
+			>
+				{#if $modEnabledStore[mod.name] ?? isEnabled}
+					ON
+				{:else}
+					OFF
+				{/if}
 			</button>
 			<button
 				class="delete-button"
