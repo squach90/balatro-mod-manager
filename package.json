@@ -13,30 +13,30 @@
 	},
 	"license": "GPL-3.0",
 	"dependencies": {
-		"@tauri-apps/api": "^2.4.1",
+		"@tauri-apps/api": "^2.5.0",
 		"@tauri-apps/plugin-dialog": "^2.2.1",
 		"@tauri-apps/plugin-fs": "^2.2.1",
 		"@tauri-apps/plugin-shell": "^2.2.1",
 		"@tauri-apps/plugin-window-state": "~2.2.2",
 		"@types/flexsearch": "^0.7.42",
 		"@types/lodash": "4.17.16",
-		"axios": "^1.8.4",
-		"flexsearch": "^0.8.154",
+		"axios": "^1.9.0",
+		"flexsearch": "^0.8.158",
 		"lodash": "^4.17.21"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "^3.0.8",
-		"@sveltejs/kit": "^2.20.5",
+		"@sveltejs/kit": "^2.20.8",
 		"@sveltejs/vite-plugin-svelte": "^5.0.3",
-		"@tauri-apps/cli": "^2.4.1",
+		"@tauri-apps/cli": "^2.5.0",
 		"lucide-svelte": "^0.483.0",
-		"marked": "^15.0.8",
-		"svelte": "^5.26.3",
-		"svelte-check": "^4.1.6",
+		"marked": "^15.0.11",
+		"svelte": "^5.28.2",
+		"svelte-check": "^4.1.7",
 		"svelte-confetti": "^2.3.1",
 		"tslib": "^2.8.1",
 		"typescript": "^5.8.3",
-		"vite": "^6.2.6"
+		"vite": "^6.3.5"
 	},
 	"packageManager": "bun@1.2.5"
 }
