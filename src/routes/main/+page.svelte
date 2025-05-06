@@ -6,6 +6,7 @@
 	import Settings from "../../components/viewblock/Settings.svelte";
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
+	import SecurityPopup from "../../components/SecurityPopup.svelte";
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
 	import { currentModView, modsStore } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
@@ -20,11 +21,7 @@
 	import { onMount } from "svelte";
 
 	let currentSection = $state("mods");
-	// window.addEventListener("resize", () => {
-	//     console.log(
-	//         `Window size: ${window.innerWidth} x ${window.innerHeight}`,
-	//     );
-	// });
+	let showSecurityPopup = $state(false); // Control visibility of the security popup
 
 	$effect(() => {
 		// Cleanup
@@ -37,6 +34,68 @@
 	let showRequiresPopup = $state(false);
 
 	let storedDownloadAction: (() => Promise<void>) | null = $state(null);
+	let originalDownloadAction: (() => Promise<void>) | null = $state(null);
+
+	// Function to check if security warning needs to be shown
+	async function checkSecurityAcknowledgment(): Promise<boolean> {
+		try {
+			const isAcknowledged = await invoke<boolean>(
+				"is_security_warning_acknowledged",
+			);
+			return isAcknowledged;
+		} catch (error) {
+			console.error("Failed to check security acknowledgment:", error);
+			return false; // If there's an error, show the popup anyway
+		}
+	}
+
+	// Modified to include security check
+	async function handleDependencyCheck(
+		requirements: DependencyCheck,
+		downloadAction?: () => Promise<void>,
+	) {
+		modRequirements = requirements;
+		if (downloadAction) {
+			originalDownloadAction = downloadAction;
+
+			// Check if we need to show the security popup first
+			const isSecurityAcknowledged = await checkSecurityAcknowledgment();
+
+			if (!isSecurityAcknowledged) {
+				// Store the action but don't execute it yet - show security popup first
+				storedDownloadAction = null;
+				showSecurityPopup = true;
+			} else {
+				// Security already acknowledged, proceed with dependency check
+				storedDownloadAction = downloadAction;
+				showRequiresPopup = true;
+			}
+		} else {
+			console.warn(
+				"handleDependencyCheck called without a download action",
+			);
+			storedDownloadAction = null;
+			originalDownloadAction = null;
+		}
+	}
+
+	// Handle security acknowledgment
+	async function handleSecurityAcknowledge() {
+		showSecurityPopup = false;
+
+		// Now proceed with dependency check if there was an action
+		if (originalDownloadAction) {
+			storedDownloadAction = originalDownloadAction;
+			showRequiresPopup = true;
+		}
+	}
+
+	// Handle security cancellation
+	function handleSecurityCancel() {
+		showSecurityPopup = false;
+		storedDownloadAction = null;
+		originalDownloadAction = null;
+	}
 
 	function handleProceedDownload() {
 		if (storedDownloadAction) {
@@ -50,6 +109,7 @@
 			);
 		}
 		storedDownloadAction = null; // Clear the stored action
+		originalDownloadAction = null; // Clear the original action too
 	}
 
 	let contentElement: HTMLDivElement;
@@ -108,22 +168,6 @@
 		}
 	}
 
-	function handleDependencyCheck(
-		requirements: DependencyCheck,
-		downloadAction?: () => Promise<void>,
-	) {
-		modRequirements = requirements;
-		if (downloadAction) {
-			storedDownloadAction = downloadAction;
-		} else {
-			console.warn(
-				"handleDependencyCheck called without a download action",
-			);
-			storedDownloadAction = null;
-		}
-		showRequiresPopup = true;
-	}
-
 	function handleRequestUninstall(
 		event: CustomEvent<{ mod: InstalledMod; dependents: string[] }>,
 	) {
@@ -132,26 +176,23 @@
 		showUninstallDialog = true;
 	}
 
-	onMount(() => {
+	onMount(async () => {
 		handleRefresh();
-	});
 
-	// $effect(() => {
-	// 	if ($currentModView) {
-	// 		// Scroll both window and content container to top
-	// 		window.scrollTo({ top: 0, behavior: "instant" });
-	// 		if (contentElement) {
-	// 			contentElement.scrollTop = 0;
-	// 		}
-	// 		// Lock scrolling at multiple levels
-	// 		document.body.style.overflow = "hidden";
-	// 		document.documentElement.style.overflow = "hidden";
-	// 	} else {
-	// 		// Restore scrolling
-	// 		document.body.style.overflow = "auto";
-	// 		document.documentElement.style.overflow = "auto";
-	// 	}
-	// });
+		// Check if we need to show the security popup on first launch
+		const isFirstLaunch = await invoke<boolean>(
+			"is_security_warning_acknowledged",
+		);
+		if (!isFirstLaunch) {
+			// It's the first launch, check if security is already acknowledged
+			const isSecurityAcknowledged = await checkSecurityAcknowledgment();
+			if (!isSecurityAcknowledged) {
+				showSecurityPopup = true;
+			}
+			// Mark as launched
+			await invoke("set_launched_first_time", { launched: true });
+		}
+	});
 </script>
 
 {#if $backgroundEnabled}
@@ -221,6 +262,13 @@
 		message={$showWarningPopup.message}
 		onConfirm={$showWarningPopup.onConfirm}
 		onCancel={$showWarningPopup.onCancel}
+	/>
+
+	<!-- Add the SecurityPopup component -->
+	<SecurityPopup
+		visible={showSecurityPopup}
+		onAcknowledge={handleSecurityAcknowledge}
+		onCancel={handleSecurityCancel}
 	/>
 
 	<UninstallDialog

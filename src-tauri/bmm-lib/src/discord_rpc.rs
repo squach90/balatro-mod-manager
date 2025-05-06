@@ -91,7 +91,7 @@ impl DiscordRpcManager {
 
                 // Update activity for existing client
                 if let Some(client) = client_guard.as_mut() {
-                    log::debug!("Updating Discord activity");
+                    // log::debug!("Updating Discord activity");
                     let activity = activity::Activity::new()
                         .state("Managing Balatro mods")
                         .details("Using Balatro Mod Manager")
@@ -110,7 +110,7 @@ impl DiscordRpcManager {
                         }
                         *client_guard = None;
                     } else {
-                        log::debug!("Activity updated successfully");
+                        // log::debug!("Activity updated successfully");
                     }
                 }
             }
@@ -156,7 +156,7 @@ impl DiscordRpcManager {
         };
 
         if let Some(client) = client_guard.as_mut() {
-            log::info!("Updating Discord activity: {} - {}", state, details);
+            // log::info!("Updating Discord activity: {} - {}", state, details);
             let activity = activity::Activity::new()
                 .state(state)
                 .details(details)

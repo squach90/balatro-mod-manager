@@ -17,7 +17,7 @@ pub struct InstalledMod {
 }
 
 impl Database {
-    const CURRENT_DB_VERSION: &'static str = "1.0"; // Update this when schema changes
+    const CURRENT_DB_VERSION: &'static str = "1.1"; // Update this when schema changes
 
     pub fn new() -> Result<Self, AppError> {
         let config_dir = dirs::config_dir()
@@ -241,6 +241,17 @@ impl Database {
             )?;
         }
 
+        if let Ok(value) = old_conn.query_row(
+            "SELECT value FROM settings WHERE setting = 'security_warning_acknowledged'",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            new_conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('security_warning_acknowledged', ?1)",
+            [&value],
+        )?;
+        }
+
         Ok(())
     }
     // Migrate installed mods from old database to new one
@@ -315,6 +326,12 @@ impl Database {
         conn.execute(
             "INSERT OR REPLACE INTO settings (setting, value) VALUES ('db_version', ?1)",
             [Self::CURRENT_DB_VERSION],
+        )
+        .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('security_warning_acknowledged', ?1)",
+            ["no"],
         )
         .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
 
@@ -558,6 +575,29 @@ impl Database {
         if let Some(row) = rows.next()? {
             Ok(row.get::<_, String>(0)? == "enabled")
         } else {
+            Ok(false)
+        }
+    }
+
+    pub fn set_security_warning_acknowledged(&self, acknowledged: bool) -> Result<(), AppError> {
+        let value = if acknowledged { "yes" } else { "no" };
+        self.conn.execute(
+        "INSERT OR REPLACE INTO settings (setting, value) VALUES ('security_warning_acknowledged', ?1)",
+        [value],
+    )?;
+        Ok(())
+    }
+
+    pub fn is_security_warning_acknowledged(&self) -> Result<bool, AppError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT value FROM settings WHERE setting = 'security_warning_acknowledged'",
+        )?;
+
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            Ok(row.get::<_, String>(0)? == "yes")
+        } else {
+            // Default to not acknowledged
             Ok(false)
         }
     }
