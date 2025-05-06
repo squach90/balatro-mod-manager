@@ -189,8 +189,6 @@
 			if (!isSecurityAcknowledged) {
 				showSecurityPopup = true;
 			}
-			// Mark as launched
-			await invoke("set_launched_first_time", { launched: true });
 		}
 	});
 </script>
