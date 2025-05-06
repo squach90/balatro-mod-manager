@@ -1727,6 +1727,27 @@ async fn check_custom_balatro(
     Ok(is_valid)
 }
 
+#[tauri::command]
+async fn is_security_warning_acknowledged(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    map_error(db.is_security_warning_acknowledged())
+}
+
+#[tauri::command]
+async fn set_security_warning_acknowledged(
+    state: tauri::State<'_, AppState>,
+    acknowledged: bool,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    map_error(db.set_security_warning_acknowledged(acknowledged))
+}
+
+#[tauri::command]
+fn exit_application(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
+}
+
+
 // #[tauri::command]
 // async fn get_installed_mods() -> Vec<String> {
 //     bmm_lib::finder::get_installed_mods()
@@ -1842,6 +1863,9 @@ pub fn run() {
             toggle_mod_enabled,
             is_mod_enabled_by_path,
             toggle_mod_enabled_by_path,
+            set_security_warning_acknowledged,
+            is_security_warning_acknowledged,
+            exit_application
         ])
         .run(tauri::generate_context!());
 
