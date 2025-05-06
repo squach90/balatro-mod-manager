@@ -2,6 +2,7 @@ mod github_repo;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use flate2::read::GzDecoder;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tar::Archive;
@@ -361,12 +362,26 @@ async fn get_mods_folder() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn is_mod_enabled(mod_name: String) -> Result<bool, String> {
-    let mods_dir_str = get_mods_folder().await?;
-    let mods_dir = PathBuf::from(mods_dir_str);
+async fn is_mod_enabled(
+    state: tauri::State<'_, AppState>,
+    mod_name: String,
+) -> Result<bool, String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    let installed_mods = db.get_installed_mods()?;
+    let mod_dir = &installed_mods
+        .iter()
+        .find(|m| m.name == mod_name)
+        .ok_or_else(|| format!("Mod not found: {}", mod_name))?
+        .path
+        .clone();
+    let mod_dir: &Path = Path::new(mod_dir);
 
-    // Get the mod's directory
-    let mod_dir = mods_dir.join(&mod_name);
+    if !mod_dir.exists() {
+        return Err(format!("Mod directory not found: {}", mod_name));
+    }
 
     // Check if .lovelyignore file exists in the mod directory
     let ignore_file_path = mod_dir.join(".lovelyignore");
@@ -376,31 +391,80 @@ async fn is_mod_enabled(mod_name: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-async fn toggle_mod_enabled(mod_name: String, enabled: bool) -> Result<(), String> {
-    let mods_dir_str = get_mods_folder().await?;
-    let mods_dir = PathBuf::from(mods_dir_str);
+async fn toggle_mod_enabled(
+    state: tauri::State<'_, AppState>,
+    mod_name: String,
+    enabled: bool,
+) -> Result<(), String> {
+    // Database lock and mod lookup remain the same
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    let installed_mods = db.get_installed_mods()?;
+    let mod_dir = &installed_mods
+        .iter()
+        .find(|m| m.name == mod_name)
+        .ok_or_else(|| format!("Mod not found: {}", mod_name))?
+        .path
+        .clone();
+    let mod_dir: &Path = Path::new(mod_dir);
 
-    // Get the mod's directory
-    let mod_dir = mods_dir.join(&mod_name);
-
-    // Check if the mod directory exists
     if !mod_dir.exists() {
         return Err(format!("Mod directory not found: {}", mod_name));
     }
 
-    // The .lovelyignore file path in this mod's directory
+    // Collect entries first - this prevents the borrow of mod_dir from being split across threads
+    let entries: Vec<_> = fs::read_dir(mod_dir)
+        .map_err(|e| format!("Failed to read mod directory: {}", e))?
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("Failed to read entry: {}", e))?;
+
     let ignore_file_path = mod_dir.join(".lovelyignore");
 
     if enabled {
-        // If enabling the mod, remove the .lovelyignore file if it exists
+        // Process directories in parallel
+        entries
+            .par_iter()
+            .filter(|entry| entry.path().is_dir())
+            .try_for_each(|entry| {
+                let ignore_path = entry.path().join(".lovelyignore");
+                if ignore_path.exists() {
+                    fs::remove_file(&ignore_path).map_err(|e| {
+                        format!(
+                            "Failed to remove .lovelyignore in {}: {}",
+                            entry.path().display(),
+                            e
+                        )
+                    })
+                } else {
+                    Ok(())
+                }
+            })?;
+
+        // Handle the top-level ignore file
         if ignore_file_path.exists() {
             fs::remove_file(&ignore_file_path)
-                .map_err(|e| format!("Failed to remove .lovelyignore file: {}", e))?;
+                .map_err(|e| format!("Failed to remove top-level .lovelyignore: {}", e))?;
         }
     } else {
-        // If disabling the mod, create an empty .lovelyignore file
+        // Process directories in parallel for disabling
+        entries
+            .par_iter()
+            .filter(|entry| entry.path().is_dir())
+            .try_for_each(|entry| {
+                fs::write(entry.path().join(".lovelyignore"), "").map_err(|e| {
+                    format!(
+                        "Failed to create .lovelyignore in {}: {}",
+                        entry.path().display(),
+                        e
+                    )
+                })
+            })?;
+
+        // Handle the top-level ignore file
         fs::write(&ignore_file_path, "")
-            .map_err(|e| format!("Failed to create .lovelyignore file: {}", e))?;
+            .map_err(|e| format!("Failed to create top-level .lovelyignore: {}", e))?;
     }
 
     Ok(())
@@ -431,17 +495,58 @@ async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Result<(
         return Err(format!("Mod path does not exist: {}", mod_path));
     }
 
-    // The .lovelyignore file path in this mod's directory
+    // Read directory entries to find subdirectories
+    let entries = fs::read_dir(&path)
+        .map_err(|e| format!("Failed to read mod directory: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect directory entries: {}", e))?;
+
+    // The .lovelyignore file path in this mod's root directory
     let ignore_file_path = path.join(".lovelyignore");
 
     if enabled {
-        // If enabling the mod, remove the .lovelyignore file if it exists
+        // Process subdirectories in parallel using Rayon
+        entries
+            .par_iter()
+            .filter(|entry| entry.path().is_dir())
+            .try_for_each(|entry| {
+                // Check for .lovelyignore in each subdirectory
+                let subdir_ignore = entry.path().join(".lovelyignore");
+                if subdir_ignore.exists() {
+                    fs::remove_file(&subdir_ignore).map_err(|e| {
+                        format!(
+                            "Failed to remove .lovelyignore in {}: {}",
+                            entry.path().display(),
+                            e
+                        )
+                    })
+                } else {
+                    Ok(())
+                }
+            })?;
+
+        // If enabling the mod, remove the root .lovelyignore file if it exists
         if ignore_file_path.exists() {
             fs::remove_file(&ignore_file_path)
                 .map_err(|e| format!("Failed to remove .lovelyignore file: {}", e))?;
         }
     } else {
-        // If disabling the mod, create an empty .lovelyignore file
+        // Process subdirectories in parallel using Rayon
+        entries
+            .par_iter()
+            .filter(|entry| entry.path().is_dir())
+            .try_for_each(|entry| {
+                // Create .lovelyignore in each subdirectory
+                fs::write(entry.path().join(".lovelyignore"), "").map_err(|e| {
+                    format!(
+                        "Failed to create .lovelyignore in {}: {}",
+                        entry.path().display(),
+                        e
+                    )
+                })
+            })?;
+
+        // If disabling the mod, create an empty .lovelyignore file in the root
         fs::write(&ignore_file_path, "")
             .map_err(|e| format!("Failed to create .lovelyignore file: {}", e))?;
     }
@@ -1728,7 +1833,9 @@ async fn check_custom_balatro(
 }
 
 #[tauri::command]
-async fn is_security_warning_acknowledged(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+async fn is_security_warning_acknowledged(
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     map_error(db.is_security_warning_acknowledged())
 }
@@ -1746,7 +1853,6 @@ async fn set_security_warning_acknowledged(
 fn exit_application(app_handle: tauri::AppHandle) {
     app_handle.exit(0);
 }
-
 
 // #[tauri::command]
 // async fn get_installed_mods() -> Vec<String> {

@@ -80,7 +80,7 @@
 	let isLoadingLocalMods = false;
 
 	async function handleModToggled(): Promise<void> {
-		if ($currentCategory === "InstalledMods") {
+		if ($currentCategory === "Installed Mods") {
 			// First check catalog mods
 			for (const mod of paginatedMods) {
 				if ($installationStatus[mod.title]) {
