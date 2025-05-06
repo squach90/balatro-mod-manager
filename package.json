@@ -21,7 +21,7 @@
 		"@types/flexsearch": "^0.7.42",
 		"@types/lodash": "4.17.16",
 		"axios": "^1.9.0",
-		"flexsearch": "^0.8.158",
+		"flexsearch": "^0.8.160",
 		"lodash": "^4.17.21"
 	},
 	"devDependencies": {

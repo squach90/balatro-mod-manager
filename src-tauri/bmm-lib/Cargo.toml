@@ -26,14 +26,14 @@ serde_repr = "0.1.20"
 tar = "0.4.44"
 tauri = "2.5.1"
 tempfile = "3.19.1"
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.45.0", features = ["full"] }
 zip = "2.6.1"
 
 [dev-dependencies]
 tempfile = "3.19.1"
 scopeguard = "1.2.0"
 mockito = "1.7.0"
-tokio = { version = "1.44.2", features = ["full", "test-util"] }
+tokio = { version = "1.45.0", features = ["full", "test-util"] }
 rstest = "0.25.0"
 
 [target.'cfg(windows)'.dependencies]
