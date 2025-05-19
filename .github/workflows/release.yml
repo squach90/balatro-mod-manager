@@ -149,7 +149,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }} 
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }} 
           project-slug: 'balatro-mod-manager' # Replace with your SignPath Project Slug
-          signing-policy-slug: 'test-signing' # Replace with your SignPath Policy Slug
+          signing-policy-slug: 'release-signing' # Replace with your SignPath Policy Slug
           artifact-configuration-slug: 'zipped_exe_msi'
           
           # Link to the artifact uploaded in the previous step
