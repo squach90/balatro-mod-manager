@@ -923,7 +923,7 @@
 				return sortMods(mods, SortOption.NameAsc)
 						.toSorted((a, b) => b.last_updated - a.last_updated);
 			default:
-				return 0;
+				return mods;
 		}
 	};
 
