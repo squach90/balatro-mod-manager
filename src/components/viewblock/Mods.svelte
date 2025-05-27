@@ -722,7 +722,6 @@
 									return categoryMap[cat] ?? null;
 								})
 								.filter((cat): cat is Category => cat !== null);
-							console.log(meta['last-updated']);
 
 							return {
 								title: meta.title,
