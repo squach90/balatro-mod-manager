@@ -73,6 +73,8 @@ pub struct ModMeta {
     pub version: String,
     #[serde(rename = "automatic-version-check", default)]
     automatic_version_check: bool,
+    #[serde(rename = "last-updated", default)]
+    pub last_updated: u64,
 }
 
 #[tauri::command]

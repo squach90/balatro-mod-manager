@@ -715,9 +715,6 @@
 									modPath: dirName,
 								});
 
-							// const lastUpdated =
-							// timestamps[dirName] || Date.now();
-
 							// Log category mapping for debugging
 							// Ensure categories are properly mapped
 							const mappedCategories = meta.categories
@@ -730,7 +727,6 @@
 								title: meta.title,
 								description,
 								image: imageData || "images/cover.jpg",
-								// lastUpdated: lastUpdated.toString(),
 								colors: getRandomColorPair(),
 								categories: mappedCategories,
 								requires_steamodded:
@@ -742,6 +738,7 @@
 								folderName: meta.folderName,
 								version: meta.version,
 								installed: false,
+								last_updated: meta["last-updated"],
 							} as Mod;
 						} catch (error) {
 							console.error(
@@ -914,21 +911,21 @@
 	});
 
 	function sortMods(mods: Mod[], sortOption: SortOption): Mod[] {
-		return [...mods].sort((a, b) => {
-			switch (sortOption) {
-				case SortOption.NameAsc:
-					return a.title.localeCompare(b.title);
-				case SortOption.NameDesc:
-					return b.title.localeCompare(a.title);
-				// case SortOption.LastUpdatedAsc:
-				//   return a.lastUpdated.localeCompare(b.lastUpdated);
-				// case SortOption.LastUpdatedDesc:
-				//   return b.lastUpdated.localeCompare(a.lastUpdated);
-				default:
-					return 0;
-			}
-		});
-	}
+		switch (sortOption) {
+			case SortOption.NameAsc:
+				return mods.toSorted((a, b) => a.title.localeCompare(b.title));
+			case SortOption.NameDesc:
+				return mods.toSorted((a, b) => b.title.localeCompare(a.title));
+			case SortOption.LastUpdatedAsc:
+				return sortMods(mods, SortOption.NameAsc)
+						.toSorted((a, b) => a.last_updated - b.last_updated);
+			case SortOption.LastUpdatedDesc:
+				return sortMods(mods, SortOption.NameAsc)
+						.toSorted((a, b) => b.last_updated - a.last_updated);
+			default:
+				return mods;
+		}
+	};
 
 	// Add sort handler
 	function handleSortChange(event: Event) {
@@ -1194,10 +1191,12 @@
 								<option value={SortOption.NameDesc}
 									>Name (Z-A)</option
 								>
-								<!--<option value={SortOption.LastUpdatedDesc}-->
-								<!-->Latest Updated</option--><!---->
-								<!--<option value={SortOption.LastUpdatedAsc}-->
-								<!-->Oldest Updated</option--><!---->
+								<option value={SortOption.LastUpdatedDesc}
+									>Last Updated</option
+								>
+								<option value={SortOption.LastUpdatedAsc}
+									>Oldest Updated</option
+								>
 							</select>
 						</div>
 					</div>

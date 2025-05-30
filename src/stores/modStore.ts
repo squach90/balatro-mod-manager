@@ -4,7 +4,6 @@ export interface Mod {
 	title: string;
 	description: string;
 	image: string;
-	// lastUpdated: string;
 	categories: Category[];
 	colors: {
 		color1: string;
@@ -18,6 +17,7 @@ export interface Mod {
 	folderName: string;
 	version: string;
 	installed: boolean;
+	last_updated: number;
 }
 
 export interface LocalMod {
@@ -42,7 +42,7 @@ export enum SortOption {
 
 export const backgroundEnabled = writable(false);
 
-export const currentSort = writable<SortOption>(SortOption.NameAsc);
+export const currentSort = writable<SortOption>(SortOption.LastUpdatedDesc);
 
 export const updateAvailableStore = writable<{ [key: string]: boolean }>({});
 
