@@ -142,7 +142,7 @@ jobs:
 
       # Submit the uploaded artifact to SignPath for signing
       - name: Submit SignPath Signing Request
-        uses: signpath/github-action-submit-signing-request@v1.1 
+        uses: signpath/github-action-submit-signing-request@v1.2
         id: signpath 
         with:
           # Required SignPath Credentials and Configuration
@@ -151,15 +151,17 @@ jobs:
           project-slug: 'balatro-mod-manager' # Replace with your SignPath Project Slug
           signing-policy-slug: 'release-signing' # Replace with your SignPath Policy Slug
           artifact-configuration-slug: 'zipped_exe_msi'
-          
+
           # Link to the artifact uploaded in the previous step
           github-artifact-id: ${{ steps.upload-unsigned-files.outputs.artifact-id }}
 
-          
+
           # Action Configuration
           wait-for-completion: true # Wait for signing to finish before proceeding
           output-artifact-directory: './signed-artifact' # Where the signed file will be downloaded
-          
+
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
           # Optional: Pass parameters if required by your SignPath Artifact Configuration
           # parameters: |
           #   version: "${{ needs.prepare-release-notes.outputs.app_version }}"
