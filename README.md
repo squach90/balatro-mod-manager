@@ -113,3 +113,6 @@ To clean the build files, use the provided taskfile:
 Would like to contribute by adding a mod that you couldn't find on the manager?
 
 Feel free to check the [Balatro Mod Index](https://github.com/skyline69/balatro-mod-index) repo and look at the README to know how to process.
+
+## Code Signing
+Balatro Mod Manager releases are code-signed using [SignPath](https://signpath.io) to ensure authenticity and security. This helps verify that the downloaded software hasn't been tampered with and comes from a trusted source.
