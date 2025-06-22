@@ -164,120 +164,108 @@ impl ModInstaller {
         Ok(versions)
     }
 
+    async fn get_default_branch_download_url(&self) -> Result<String> {
+        use reqwest::header::{ACCEPT, USER_AGENT};
+
+        let response = self
+            .client
+            .get(format!(
+                "https://api.github.com/repos/{}",
+                self.mod_type.get_repo_url()
+            ))
+            .header(ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header(USER_AGENT, "Balatro-Mod-Manager/1.0")
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let body = response.json::<serde_json::Value>().await?;
+        body["default_branch"]
+            .as_str()
+            .map(|b| {
+                format!(
+                    "https://github.com/{}/archive/refs/heads/{b}.zip",
+                    self.mod_type.get_repo_url(),
+                )
+            })
+            .ok_or(anyhow::anyhow!(
+                "repo {} has no default branch",
+                self.mod_type.get_repo_url()
+            ))
+    }
+
     pub async fn install_version(&self, version: &str) -> Result<String> {
         let installation_path = self.get_installation_path()?;
+        let url = match version {
+            "newest" => self.get_default_branch_download_url().await?,
+            _ => format!(
+                "https://github.com/{}/archive/refs/tags/{}.zip",
+                self.mod_type.get_repo_url(),
+                version
+            ),
+        };
 
-        match self.mod_type {
-            ModType::Steamodded => {
-                info!(
-                    "Installing Steamodded version {} to {:?}",
-                    version, installation_path
-                );
+        info!(
+            "Installing {:?} version {} to {:?}",
+            self.mod_type, version, installation_path
+        );
 
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    USER_AGENT,
-                    HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
-                );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_static("Balatro-Mod-Manager/1.0"),
+        );
 
-                // Get release details
-                let url = format!(
-                    "https://api.github.com/repos/{}/releases/tags/{}",
-                    self.mod_type.get_repo_url(),
-                    version
-                );
-                let release: Release = self
-                    .client
-                    .get(url)
-                    .headers(headers.clone())
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
+        // Download the zip file
+        let response = self.client.get(&url).headers(headers).send().await?;
+        let bytes = response.bytes().await?;
 
-                info!("Downloading from {}", release.zipball_url);
-
-                // Download the zip file
-                let response = self
-                    .client
-                    .get(&release.zipball_url)
-                    .headers(headers)
-                    .send()
-                    .await?;
-                let bytes = response.bytes().await?;
-
-                // Create temp directory
-                let temp_dir = installation_path.join("temp_smods");
-                if temp_dir.exists() {
-                    fs::remove_dir_all(&temp_dir)?;
-                }
-                fs::create_dir_all(&temp_dir)?;
-
-                // Extract to temp directory
-                let cursor = Cursor::new(bytes);
-                let mut archive = ZipArchive::new(cursor)?;
-                archive.extract(&temp_dir)?;
-
-                // Find the root directory name (GitHub format: Steamodded-smods-commitHash)
-                let root_dir = fs::read_dir(&temp_dir)?
-                    .next()
-                    .ok_or(anyhow!("Empty archive"))??
-                    .file_name()
-                    .into_string()
-                    .map_err(|_| anyhow!("Invalid directory name"))?;
-
-                // Move to final location
-                let final_dir = installation_path.join(&root_dir);
-                if final_dir.exists() {
-                    fs::remove_dir_all(&final_dir)?;
-                }
-                fs::rename(temp_dir.join(&root_dir), &final_dir)?;
-
-                // Cleanup
-                fs::remove_dir_all(temp_dir)?;
-
-                info!(
-                    "Successfully installed Steamodded version {} to {:?}",
-                    version, final_dir
-                );
-                Ok(final_dir.to_string_lossy().to_string())
+        // Create temp directory
+        let temp_dir = installation_path.join(format!(
+            "temp_{}",
+            match self.mod_type {
+                ModType::Steamodded => "smods",
+                ModType::Talisman => "talisman",
             }
-            ModType::Talisman => {
-                let url = format!(
-                    "https://github.com/MathIsFun0/Talisman/releases/download/{}/Talisman.zip",
-                    version
-                );
-
-                info!("Downloading Talisman.zip from {}", url);
-
-                // Download and extract zip logic here
-                let response = self.client.get(&url).send().await?;
-                let bytes = response.bytes().await?;
-
-                // Create installation directory
-                tokio_fs::create_dir_all(&installation_path).await?;
-
-                // Extract directly to installation path
-                let cursor = Cursor::new(bytes);
-                let mut archive = ZipArchive::new(cursor)?;
-
-                for i in 0..archive.len() {
-                    let mut file = archive.by_index(i)?;
-                    let outpath = installation_path.join(file.name());
-
-                    if file.name().ends_with('/') {
-                        fs::create_dir_all(&outpath)?;
-                    } else {
-                        if let Some(p) = outpath.parent() {
-                            fs::create_dir_all(p)?;
-                        }
-                        let mut outfile = fs::File::create(&outpath)?;
-                        std::io::copy(&mut file, &mut outfile)?;
-                    }
-                }
-                Ok(installation_path.join("Talisman").to_string_lossy().to_string())
-            }
+        ));
+        if temp_dir.exists() {
+            fs::remove_dir_all(&temp_dir)?;
         }
+        fs::create_dir_all(&temp_dir)?;
+
+        // Extract to temp directory
+        let cursor = Cursor::new(bytes);
+        let mut archive = ZipArchive::new(cursor)?;
+        archive.extract(&temp_dir)?;
+
+        // Find the root directory name (GitHub format: Steamodded-smods-commitHash)
+        let root_dir = fs::read_dir(&temp_dir)?
+            .next()
+            .ok_or(anyhow!("Empty archive"))??
+            .file_name()
+            .into_string()
+            .map_err(|_| anyhow!("Invalid directory name"))?;
+
+        // Move to final location
+        let final_dir = match self.mod_type {
+            ModType::Steamodded => installation_path.join(&root_dir),
+            ModType::Talisman => installation_path.join("Talisman"),
+        };
+        if final_dir.exists() {
+            fs::remove_dir_all(&final_dir)?;
+        }
+        fs::rename(temp_dir.join(&root_dir), &final_dir)?;
+
+        // Cleanup
+        fs::remove_dir_all(temp_dir)?;
+
+        info!(
+            "Successfully installed {:?} version {} to {:?}",
+            self.mod_type, version, final_dir
+        );
+
+        Ok(final_dir.to_string_lossy().to_string())
     }
 
     pub async fn uninstall(&self) -> Result<()> {

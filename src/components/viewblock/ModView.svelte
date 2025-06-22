@@ -362,19 +362,10 @@
 				if (mod.requires_talisman) dependencies.push("Talisman");
 
 				if (mod.title.toLowerCase() === "steamodded") {
-					let installedPath;
-					if (selectedVersion === "newest") {
-						installedPath = await invoke<string>("install_mod", {
-							url: mod.downloadURL,
-							folderName:
-								mod.folderName || mod.title.replace(/\s+/g, ""),
-						});
-					} else {
-						installedPath = await invoke<string>(
-							"install_steamodded_version",
-							{ version: selectedVersion },
-						);
-					}
+					let installedPath = await invoke<string>(
+						"install_steamodded_version",
+						{ version: selectedVersion },
+					);
 					const pathExists = await invoke("verify_path_exists", {
 						path: installedPath,
 					});
@@ -400,19 +391,10 @@
 						[mod.title]: false,
 					}));
 				} else if (mod.title.toLowerCase() === "talisman") {
-					let installedPath;
-					if (selectedVersion === "newest") {
-						installedPath = await invoke<string>("install_mod", {
-							url: mod.downloadURL,
-							folderName:
-								mod.folderName || mod.title.replace(/\s+/g, ""),
-						});
-					} else {
-						installedPath = await invoke<string>(
-							"install_talisman_version",
-							{ version: selectedVersion },
-						);
-					}
+					let installedPath = await invoke<string>(
+						"install_talisman_version",
+						{ version: selectedVersion },
+					);
 					const pathExists = await invoke("verify_path_exists", {
 						path: installedPath,
 					});
