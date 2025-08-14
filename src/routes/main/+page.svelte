@@ -190,6 +190,34 @@
 				showSecurityPopup = true;
 			}
 		}
+
+		// Check for Lovely update on every launch
+		try {
+			const latest = await invoke<string | null>("check_lovely_update");
+			if (latest) {
+				showWarningPopup.set({
+					visible: true,
+					message: `An update for Lovely (v${latest}) is available. Do you want to update?`,
+					onConfirm: async () => {
+						try {
+							const updated = await invoke<string>("update_lovely_to_latest");
+							addMessage(`Lovely updated to v${updated}`, "success");
+						} catch (e) {
+							addMessage(
+								`Failed to update Lovely: ${e instanceof Error ? e.message : String(e)}`,
+								"error",
+							);
+						}
+						showWarningPopup.set((p) => ({ ...p, visible: false }));
+					},
+					onCancel: () => {
+						showWarningPopup.set((p) => ({ ...p, visible: false }));
+					},
+				});
+			}
+		} catch (e) {
+			console.warn("Lovely update check failed:", e);
+		}
 	});
 </script>
 

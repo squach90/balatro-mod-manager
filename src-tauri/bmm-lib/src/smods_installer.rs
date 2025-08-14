@@ -290,7 +290,7 @@ impl ModInstaller {
                         || dir_name.starts_with("Steamodded-smods-")
                     {
                         found = true;
-                        info!("Removing mod directory: {:?}", path);
+                        info!("Removing mod directory: {path:?}");
                         tokio_fs::remove_dir_all(&path).await?;
                     }
                 }

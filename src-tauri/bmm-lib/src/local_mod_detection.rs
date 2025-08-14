@@ -127,7 +127,7 @@ pub fn detect_manual_mods(
     // Get tracked mods from the database for duplicate detection
     let managed_mods = db
         .get_installed_mods()
-        .map_err(|e| format!("Failed to get installed mods: {}", e))?;
+        .map_err(|e| format!("Failed to get installed mods: {e}"))?;
 
     // Create a set of normalized managed mod paths for quick lookup
     let managed_paths: HashSet<String> = managed_mods
@@ -181,7 +181,7 @@ fn scan_for_json_files(dir_path: &Path) -> Result<Vec<PathBuf>, String> {
         .map_err(|e| format!("Failed to read directory {}: {}", dir_path.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("json") {
@@ -251,13 +251,12 @@ fn find_catalog_match(
 
         // 4. Try substring matching (check if one contains the other)
         // Avoid matching if one is very short to prevent too many false positives
-        if local_name_lower.len() > 3 && catalog_title_lower.len() > 3 {
-            if local_name_lower.contains(&catalog_title_lower)
-                || catalog_title_lower.contains(&local_name_lower)
+        if local_name_lower.len() > 3 && catalog_title_lower.len() > 3
+            && (local_name_lower.contains(&catalog_title_lower)
+                || catalog_title_lower.contains(&local_name_lower))
             {
                 return Some(create_match(catalog_mod));
             }
-        }
     }
 
     // 5. Try similarity matching (edit distance)
@@ -378,7 +377,7 @@ fn find_bundled_dependencies(dir: &Path, bundled_deps: &mut HashSet<String>) -> 
         .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if !path.is_dir() {
@@ -421,7 +420,7 @@ fn mark_bundled_dependencies(
         .map_err(|e| format!("Failed to read directory {}: {}", mods_dir.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if path.is_dir() {
@@ -447,7 +446,7 @@ fn detect_mods_recursive(
         .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if !path.is_dir() {
@@ -593,7 +592,7 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
     }
 
     // Look for any Lua file with the same name as the directory
-    let lua_path = mod_path.join(format!("{}.lua", dir_name));
+    let lua_path = mod_path.join(format!("{dir_name}.lua"));
     if lua_path.exists() {
         if let Some(detected_mod) = parse_mod_lua_header(&lua_path, mod_path)? {
             return Ok(Some(detected_mod));
@@ -603,7 +602,7 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
     // Special handling for mod packages that have a structure like:
     // ModName/Mods/ModName/ModName.lua
     let potential_mod_dir = mod_path.join("Mods").join(dir_name);
-    let potential_lua_path = potential_mod_dir.join(format!("{}.lua", dir_name));
+    let potential_lua_path = potential_mod_dir.join(format!("{dir_name}.lua"));
 
     if potential_lua_path.exists() {
         if let Some(detected_mod) = parse_mod_lua_header(&potential_lua_path, mod_path)? {
@@ -644,7 +643,7 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
     for entry in fs::read_dir(mod_path)
         .map_err(|e| format!("Failed to read mod directory {}: {}", mod_path.display(), e))?
     {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("lua") {
@@ -783,7 +782,7 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
     let lines: Vec<String> = reader
         .lines()
         .take(20) // Only check first 20 lines for efficiency
-        .map(|line| line.map_err(|e| format!("Failed to read line: {}", e)))
+        .map(|line| line.map_err(|e| format!("Failed to read line: {e}")))
         .collect::<Result<Vec<String>, String>>()?;
 
     if lines.is_empty() {

@@ -10,7 +10,7 @@ fn main() {
     // }
     let _ = fix_path_env::fix();
     if let Err(e) = bmm_lib::logging::init_logger() {
-        eprintln!("Failed to initialize logging: {}", e);
+        eprintln!("Failed to initialize logging: {e}");
     }
     balatro_mod_manager_lib::run();
     log::logger().flush();

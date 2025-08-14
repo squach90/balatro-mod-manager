@@ -43,6 +43,48 @@ fn map_error<T>(result: Result<T, AppError>) -> Result<T, String> {
     result.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn check_lovely_update(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    // Load latest from GitHub
+    let latest = lovely::get_latest_lovely_version()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Compare to DB-stored version
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    match db.get_lovely_version() {
+        Ok(Some(installed)) => {
+            if installed.trim() != latest {
+                Ok(Some(latest))
+            } else {
+                Ok(None)
+            }
+        }
+        Ok(None) => Ok(Some(latest)), // Missing setting implies update/reinstall needed
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_lovely_to_latest(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let latest = lovely::get_latest_lovely_version()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Remove current install and reinstall
+    lovely::remove_installed_lovely().map_err(|e| e.to_string())?;
+    lovely::ensure_lovely_exists()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Persist version
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.set_lovely_version(&latest)
+        .map_err(|e| e.to_string())?;
+
+    Ok(latest)
+}
+
 // Create a state structure to hold the database
 struct AppState {
     db: Mutex<Database>,
@@ -171,7 +213,7 @@ async fn get_mod_thumbnail(modPath: String) -> Result<Option<String>, String> {
 
     // Convert to base64
     let base64 = STANDARD.encode(image_data);
-    Ok(Some(format!("data:image/jpeg;base64,{}", base64)))
+    Ok(Some(format!("data:image/jpeg;base64,{base64}")))
 }
 
 // #[allow(non_snake_case)]
@@ -185,7 +227,7 @@ async fn pull_repo(path: &str) -> Result<(), String> {
     // Check if directory exists
     let path_buf = PathBuf::from(path);
     if !path_buf.exists() {
-        return Err(format!("Directory '{}' does not exist", path));
+        return Err(format!("Directory '{path}' does not exist"));
     }
 
     // Check if it's a repository
@@ -291,7 +333,7 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
                     match SystemTime::now().duration_since(UNIX_EPOCH) {
                         Ok(dur) => dur,
                         Err(e) => {
-                            log::error!("Failed to get current time: {}", e);
+                            log::error!("Failed to get current time: {e}");
                             std::process::exit(1);
                         }
                     }
@@ -316,7 +358,7 @@ async fn clear_cache() -> Result<(), String> {
 fn open_directory(path: String) -> Result<(), String> {
     match open::that(path) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("Failed to open directory: {}", e)),
+        Err(e) => Err(format!("Failed to open directory: {e}")),
     }
 }
 
@@ -376,13 +418,13 @@ async fn is_mod_enabled(
     let mod_dir = &installed_mods
         .iter()
         .find(|m| m.name == mod_name)
-        .ok_or_else(|| format!("Mod not found: {}", mod_name))?
+        .ok_or_else(|| format!("Mod not found: {mod_name}"))?
         .path
         .clone();
     let mod_dir: &Path = Path::new(mod_dir);
 
     if !mod_dir.exists() {
-        return Err(format!("Mod directory not found: {}", mod_name));
+        return Err(format!("Mod directory not found: {mod_name}"));
     }
 
     // Check if .lovelyignore file exists in the mod directory
@@ -407,20 +449,20 @@ async fn toggle_mod_enabled(
     let mod_dir = &installed_mods
         .iter()
         .find(|m| m.name == mod_name)
-        .ok_or_else(|| format!("Mod not found: {}", mod_name))?
+        .ok_or_else(|| format!("Mod not found: {mod_name}"))?
         .path
         .clone();
     let mod_dir: &Path = Path::new(mod_dir);
 
     if !mod_dir.exists() {
-        return Err(format!("Mod directory not found: {}", mod_name));
+        return Err(format!("Mod directory not found: {mod_name}"));
     }
 
     // Collect entries first - this prevents the borrow of mod_dir from being split across threads
     let entries: Vec<_> = fs::read_dir(mod_dir)
-        .map_err(|e| format!("Failed to read mod directory: {}", e))?
+        .map_err(|e| format!("Failed to read mod directory: {e}"))?
         .collect::<Result<_, _>>()
-        .map_err(|e| format!("Failed to read entry: {}", e))?;
+        .map_err(|e| format!("Failed to read entry: {e}"))?;
 
     let ignore_file_path = mod_dir.join(".lovelyignore");
 
@@ -447,7 +489,7 @@ async fn toggle_mod_enabled(
         // Handle the top-level ignore file
         if ignore_file_path.exists() {
             fs::remove_file(&ignore_file_path)
-                .map_err(|e| format!("Failed to remove top-level .lovelyignore: {}", e))?;
+                .map_err(|e| format!("Failed to remove top-level .lovelyignore: {e}"))?;
         }
     } else {
         // Process directories in parallel for disabling
@@ -466,7 +508,7 @@ async fn toggle_mod_enabled(
 
         // Handle the top-level ignore file
         fs::write(&ignore_file_path, "")
-            .map_err(|e| format!("Failed to create top-level .lovelyignore: {}", e))?;
+            .map_err(|e| format!("Failed to create top-level .lovelyignore: {e}"))?;
     }
 
     Ok(())
@@ -478,7 +520,7 @@ async fn is_mod_enabled_by_path(mod_path: String) -> Result<bool, String> {
 
     // Check if the path exists
     if !path.exists() {
-        return Err(format!("Mod path does not exist: {}", mod_path));
+        return Err(format!("Mod path does not exist: {mod_path}"));
     }
 
     // Check if .lovelyignore file exists in the mod directory
@@ -494,14 +536,14 @@ async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Result<(
 
     // Check if the mod directory exists
     if !path.exists() {
-        return Err(format!("Mod path does not exist: {}", mod_path));
+        return Err(format!("Mod path does not exist: {mod_path}"));
     }
 
     // Read directory entries to find subdirectories
     let entries = fs::read_dir(&path)
-        .map_err(|e| format!("Failed to read mod directory: {}", e))?
+        .map_err(|e| format!("Failed to read mod directory: {e}"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect directory entries: {}", e))?;
+        .map_err(|e| format!("Failed to collect directory entries: {e}"))?;
 
     // The .lovelyignore file path in this mod's root directory
     let ignore_file_path = path.join(".lovelyignore");
@@ -530,7 +572,7 @@ async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Result<(
         // If enabling the mod, remove the root .lovelyignore file if it exists
         if ignore_file_path.exists() {
             fs::remove_file(&ignore_file_path)
-                .map_err(|e| format!("Failed to remove .lovelyignore file: {}", e))?;
+                .map_err(|e| format!("Failed to remove .lovelyignore file: {e}"))?;
         }
     } else {
         // Process subdirectories in parallel using Rayon
@@ -550,7 +592,7 @@ async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Result<(
 
         // If disabling the mod, create an empty .lovelyignore file in the root
         fs::write(&ignore_file_path, "")
-            .map_err(|e| format!("Failed to create .lovelyignore file: {}", e))?;
+            .map_err(|e| format!("Failed to create .lovelyignore file: {e}"))?;
     }
 
     Ok(())
@@ -564,7 +606,7 @@ async fn process_dropped_file(path: String) -> Result<String, String> {
     let mods_dir = config_dir.join("Balatro").join("Mods");
 
     // Create the mods directory if it doesn't exist
-    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
+    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {e}"))?;
 
     // Get the filename from the path
     let file_path = Path::new(&path);
@@ -587,7 +629,7 @@ async fn process_dropped_file(path: String) -> Result<String, String> {
     // If the mod directory already exists, remove it first
     if mod_dir.exists() {
         fs::remove_dir_all(&mod_dir)
-            .map_err(|e| format!("Failed to remove existing mod directory: {}", e))?;
+            .map_err(|e| format!("Failed to remove existing mod directory: {e}"))?;
     }
 
     // Process based on file extension
@@ -617,27 +659,27 @@ async fn process_dropped_file(path: String) -> Result<String, String> {
 
             // Move all contents from the nested directory up one level
             for entry in fs::read_dir(&nested_dir)
-                .map_err(|e| format!("Failed to read nested directory: {}", e))?
+                .map_err(|e| format!("Failed to read nested directory: {e}"))?
             {
-                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
                 let target_path = mod_dir.join(entry.file_name());
 
                 if entry
                     .file_type()
-                    .map_err(|e| format!("Failed to get file type: {}", e))?
+                    .map_err(|e| format!("Failed to get file type: {e}"))?
                     .is_dir()
                 {
                     fs::rename(entry.path(), &target_path)
-                        .map_err(|e| format!("Failed to move directory: {}", e))?;
+                        .map_err(|e| format!("Failed to move directory: {e}"))?;
                 } else {
                     fs::rename(entry.path(), &target_path)
-                        .map_err(|e| format!("Failed to move file: {}", e))?;
+                        .map_err(|e| format!("Failed to move file: {e}"))?;
                 }
             }
 
             // Remove the now-empty nested directory
             fs::remove_dir_all(&nested_dir)
-                .map_err(|e| format!("Failed to remove nested directory: {}", e))?;
+                .map_err(|e| format!("Failed to remove nested directory: {e}"))?;
         }
     }
 
@@ -646,7 +688,7 @@ async fn process_dropped_file(path: String) -> Result<String, String> {
     if !has_lua_files {
         // Clean up invalid mod directory
         fs::remove_dir_all(&mod_dir)
-            .map_err(|e| format!("Failed to remove invalid mod directory: {}", e))?;
+            .map_err(|e| format!("Failed to remove invalid mod directory: {e}"))?;
 
         return Err(
             "No Lua files found in the archive. This doesn't appear to be a valid Balatro mod."
@@ -683,7 +725,7 @@ fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String
     let mods_dir = config_dir.join("Balatro").join("Mods");
 
     // Create the mods directory if it doesn't exist
-    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
+    fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {e}"))?;
 
     // Determine the name of the mod (without extension)
     let mod_name = filename
@@ -698,7 +740,7 @@ fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String
     // If the mod directory already exists, remove it first
     if mod_dir.exists() {
         fs::remove_dir_all(&mod_dir)
-            .map_err(|e| format!("Failed to remove existing mod directory: {}", e))?;
+            .map_err(|e| format!("Failed to remove existing mod directory: {e}"))?;
     }
 
     // Create a cursor for the data
@@ -728,26 +770,26 @@ fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String
             let nested_dir = dirs[0].path();
 
             for entry in fs::read_dir(&nested_dir)
-                .map_err(|e| format!("Failed to read nested directory: {}", e))?
+                .map_err(|e| format!("Failed to read nested directory: {e}"))?
             {
-                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
                 let target_path = mod_dir.join(entry.file_name());
 
                 if entry
                     .file_type()
-                    .map_err(|e| format!("Failed to get file type: {}", e))?
+                    .map_err(|e| format!("Failed to get file type: {e}"))?
                     .is_dir()
                 {
                     fs::rename(entry.path(), &target_path)
-                        .map_err(|e| format!("Failed to move directory: {}", e))?;
+                        .map_err(|e| format!("Failed to move directory: {e}"))?;
                 } else {
                     fs::rename(entry.path(), &target_path)
-                        .map_err(|e| format!("Failed to move file: {}", e))?;
+                        .map_err(|e| format!("Failed to move file: {e}"))?;
                 }
             }
 
             fs::remove_dir_all(&nested_dir)
-                .map_err(|e| format!("Failed to remove nested directory: {}", e))?;
+                .map_err(|e| format!("Failed to remove nested directory: {e}"))?;
         }
     }
 
@@ -759,20 +801,20 @@ fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String
 fn extract_zip(path: &str, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Open the ZIP file
-    let file = fs::File::open(path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open ZIP file: {e}"))?;
 
     // Open the ZIP archive
     let mut archive =
-        ZipArchive::new(file).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+        ZipArchive::new(file).map_err(|e| format!("Failed to open ZIP archive: {e}"))?;
 
     // Extract all files
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
-            .map_err(|e| format!("Failed to access file in archive: {}", e))?;
+            .map_err(|e| format!("Failed to access file in archive: {e}"))?;
 
         if file.name().starts_with("__MACOSX/") {
             continue;
@@ -786,19 +828,19 @@ fn extract_zip(path: &str, target_dir: &PathBuf) -> Result<(), String> {
 
         if file.is_dir() {
             fs::create_dir_all(&output_path)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+                .map_err(|e| format!("Failed to create directory: {e}"))?;
         } else {
             // Ensure the parent directory exists
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                    .map_err(|e| format!("Failed to create parent directory: {e}"))?;
             }
 
             let mut outfile = fs::File::create(&output_path)
-                .map_err(|e| format!("Failed to create file {}: {}", output_path.display(), e))?;
+                .map_err(|e| format!("Failed to create file {}: {e}", output_path.display()))?;
 
             std::io::copy(&mut file, &mut outfile)
-                .map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
+                .map_err(|e| format!("Failed to write file {}: {e}", output_path.display()))?;
         }
     }
 
@@ -809,17 +851,17 @@ fn extract_zip(path: &str, target_dir: &PathBuf) -> Result<(), String> {
 fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Open the ZIP archive
     let mut archive =
-        ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {e}"))?;
 
     // Extract all files
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
-            .map_err(|e| format!("Failed to access file in archive: {}", e))?;
+            .map_err(|e| format!("Failed to access file in archive: {e}"))?;
 
         if file.name().starts_with("__MACOSX/") {
             continue;
@@ -834,19 +876,19 @@ fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
 
         if file.is_dir() {
             fs::create_dir_all(&output_path)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+                .map_err(|e| format!("Failed to create directory: {e}"))?;
         } else {
             // Ensure the parent directory exists
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                    .map_err(|e| format!("Failed to create parent directory: {e}"))?;
             }
 
             let mut outfile = fs::File::create(&output_path)
-                .map_err(|e| format!("Failed to create file {}: {}", output_path.display(), e))?;
+                .map_err(|e| format!("Failed to create file {}: {e}", output_path.display()))?;
 
             std::io::copy(&mut file, &mut outfile)
-                .map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
+                .map_err(|e| format!("Failed to write file {}: {e}", output_path.display()))?;
         }
     }
 
@@ -857,10 +899,10 @@ fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
 fn extract_tar(path: &str, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Open the TAR file
-    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR file: {}", e))?;
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR file: {e}"))?;
 
     // Open the TAR archive
     let mut archive = Archive::new(file);
@@ -868,24 +910,24 @@ fn extract_tar(path: &str, target_dir: &PathBuf) -> Result<(), String> {
     // Extract all files
     for entry in archive
         .entries()
-        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+        .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
-        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
 
         let path = entry
             .path()
-            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
 
         // Ensure the parent directory exists
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                .map_err(|e| format!("Failed to create parent directory: {e}"))?;
         }
 
         entry
             .unpack(&output_path)
-            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+            .map_err(|e| format!("Failed to unpack file {}: {e}", output_path.display()))?;
     }
 
     Ok(())
@@ -895,7 +937,7 @@ fn extract_tar(path: &str, target_dir: &PathBuf) -> Result<(), String> {
 fn extract_tar_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Open the TAR archive
     let mut archive = Archive::new(cursor);
@@ -903,24 +945,24 @@ fn extract_tar_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
     // Extract all files
     for entry in archive
         .entries()
-        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+        .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
-        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
 
         let path = entry
             .path()
-            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
 
         // Ensure the parent directory exists
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                .map_err(|e| format!("Failed to create parent directory: {e}"))?;
         }
 
         entry
             .unpack(&output_path)
-            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+            .map_err(|e| format!("Failed to unpack file {}: {e}", output_path.display()))?;
     }
 
     Ok(())
@@ -930,10 +972,10 @@ fn extract_tar_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
 fn extract_tar_gz(path: &str, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Open the TAR.GZ file
-    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR.GZ file: {}", e))?;
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open TAR.GZ file: {e}"))?;
 
     // Create a GzDecoder to decompress the data
     let gz = GzDecoder::new(file);
@@ -944,24 +986,24 @@ fn extract_tar_gz(path: &str, target_dir: &PathBuf) -> Result<(), String> {
     // Extract all files
     for entry in archive
         .entries()
-        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+        .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
-        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
 
         let path = entry
             .path()
-            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
 
         // Ensure the parent directory exists
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                .map_err(|e| format!("Failed to create parent directory: {e}"))?;
         }
 
         entry
             .unpack(&output_path)
-            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+            .map_err(|e| format!("Failed to unpack file {}: {e}", output_path.display()))?;
     }
 
     Ok(())
@@ -971,7 +1013,7 @@ fn extract_tar_gz(path: &str, target_dir: &PathBuf) -> Result<(), String> {
 fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
     // Create the directory if it doesn't exist
     fs::create_dir_all(target_dir)
-        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
     // Create a GzDecoder to decompress the data
     let gz = GzDecoder::new(cursor);
@@ -982,24 +1024,24 @@ fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> 
     // Extract all files
     for entry in archive
         .entries()
-        .map_err(|e| format!("Failed to read TAR entries: {}", e))?
+        .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
-        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {}", e))?;
+        let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
 
         let path = entry
             .path()
-            .map_err(|e| format!("Failed to get entry path: {}", e))?;
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
 
         // Ensure the parent directory exists
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                .map_err(|e| format!("Failed to create parent directory: {e}"))?;
         }
 
         entry
             .unpack(&output_path)
-            .map_err(|e| format!("Failed to unpack file {}: {}", output_path.display(), e))?;
+            .map_err(|e| format!("Failed to unpack file {}: {e}", output_path.display()))?;
     }
 
     Ok(())
@@ -1141,8 +1183,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
             // Construct the AppleScript command to run the command_line in Terminal.
             let applescript = format!(
-                "tell application \"Terminal\" to do script \"{}\"",
-                command_line
+                "tell application \"Terminal\" to do script \"{command_line}\"",
             );
 
             Command::new("osascript")
@@ -1179,13 +1220,13 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
             Command::new(&exe_path)
                 .current_dir(&path)
                 .spawn()
-                .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
+                .map_err(|e| format!("Failed to launch {}: {e}", exe_path.display()))?;
         } else {
             Command::new(&exe_path)
                 .current_dir(&path)
                 .arg("--disable-console")
                 .spawn()
-                .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
+                .map_err(|e| format!("Failed to launch {}: {e}", exe_path.display()))?;
         }
 
         log::debug!("Launched game from {}", exe_path.display());
@@ -1328,7 +1369,7 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
     let db = state
         .db
         .lock()
-        .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {}", e)))?;
+        .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {e}")))?;
 
     // Database cleanup only - don't touch the filesystem
     let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
@@ -1381,7 +1422,7 @@ async fn delete_manual_mod(path: String) -> Result<(), String> {
 
     let canonicalized_mods_dir = match mods_dir.canonicalize() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to canonicalize mods directory: {}", e)),
+        Err(e) => return Err(format!("Failed to canonicalize mods directory: {e}")),
     };
 
     if !canonicalized_path.starts_with(&canonicalized_mods_dir) {
@@ -1398,12 +1439,12 @@ async fn delete_manual_mod(path: String) -> Result<(), String> {
     if path.is_dir() {
         match std::fs::remove_dir_all(&path) {
             Ok(_) => log::info!("Successfully removed directory: {}", path.display()),
-            Err(e) => return Err(format!("Failed to remove directory: {}", e)),
+            Err(e) => return Err(format!("Failed to remove directory: {e}")),
         }
     } else {
         match std::fs::remove_file(&path) {
             Ok(_) => log::info!("Successfully removed file: {}", path.display()),
-            Err(e) => return Err(format!("Failed to remove file: {}", e)),
+            Err(e) => return Err(format!("Failed to remove file: {e}")),
         }
     }
 
@@ -1567,8 +1608,7 @@ async fn get_latest_steamodded_release() -> Result<String, String> {
             // We have cached versions, use the first one (most recent)
             let version = &versions[0];
             return Ok(format!(
-                "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
-                version
+                "https://github.com/Steamodded/smods/archive/refs/tags/{version}.zip"
             ));
         }
     }
@@ -1583,14 +1623,12 @@ async fn get_latest_steamodded_release() -> Result<String, String> {
             match installer.mod_type {
                 ModType::Steamodded => {
                     format!(
-                        "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
-                        version
+                        "https://github.com/Steamodded/smods/archive/refs/tags/{version}.zip"
                     )
                 }
                 // Fallback for other types if needed
                 _ => format!(
-                    "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
-                    version
+                    "https://github.com/Steamodded/smods/archive/refs/tags/{version}.zip"
                 ),
             }
         })
@@ -1620,7 +1658,7 @@ async fn backup_local_mod(path: String) -> Result<(), String> {
         "backup_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| format!("Failed to get timestamp: {}", e))?
+            .map_err(|e| format!("Failed to get timestamp: {e}"))?
             .as_millis()
     );
 
@@ -1628,15 +1666,15 @@ async fn backup_local_mod(path: String) -> Result<(), String> {
 
     // Create the backup directory
     std::fs::create_dir_all(&backup_path)
-        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+        .map_err(|e| format!("Failed to create backup directory: {e}"))?;
 
     // Copy the mod to the backup
     if path.is_dir() {
         copy_dir_all(&path, &backup_path.join(path.file_name().unwrap()))
-            .map_err(|e| format!("Failed to copy mod to backup: {}", e))?;
+            .map_err(|e| format!("Failed to copy mod to backup: {e}"))?;
     } else {
         std::fs::copy(&path, backup_path.join(path.file_name().unwrap()))
-            .map_err(|e| format!("Failed to copy mod file to backup: {}", e))?;
+            .map_err(|e| format!("Failed to copy mod file to backup: {e}"))?;
     }
 
     // Store the original path in a metadata file for restoration
@@ -1651,9 +1689,9 @@ async fn backup_local_mod(path: String) -> Result<(), String> {
     std::fs::write(
         backup_path.join("metadata.json"),
         serde_json::to_string_pretty(&metadata)
-            .map_err(|e| format!("Failed to serialize metadata: {}", e))?,
+            .map_err(|e| format!("Failed to serialize metadata: {e}"))?,
     )
-    .map_err(|e| format!("Failed to write metadata: {}", e))?;
+    .map_err(|e| format!("Failed to write metadata: {e}"))?;
 
     Ok(())
 }
@@ -1668,17 +1706,17 @@ async fn restore_from_backup(path: String) -> Result<(), String> {
     let mut latest_time = 0;
 
     for entry in std::fs::read_dir(&backup_dir)
-        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+        .map_err(|e| format!("Failed to read backup directory: {e}"))?
     {
-        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {e}"))?;
         let metadata_path = entry.path().join("metadata.json");
 
         if metadata_path.exists() {
             let metadata: serde_json::Value = serde_json::from_str(
                 &std::fs::read_to_string(&metadata_path)
-                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+                    .map_err(|e| format!("Failed to read metadata file: {e}"))?,
             )
-            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+            .map_err(|e| format!("Failed to parse metadata: {e}"))?;
 
             if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
                 if original_path == path.to_string_lossy() {
@@ -1699,14 +1737,14 @@ async fn restore_from_backup(path: String) -> Result<(), String> {
     // Ensure the parent directory exists
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
 
     // Restore the mod from backup
     for entry in std::fs::read_dir(&backup_path)
-        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+        .map_err(|e| format!("Failed to read backup directory: {e}"))?
     {
-        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {e}"))?;
         let file_name = entry.file_name();
 
         // Skip metadata file
@@ -1718,10 +1756,10 @@ async fn restore_from_backup(path: String) -> Result<(), String> {
 
         if entry.path().is_dir() {
             copy_dir_all(&entry.path(), &dest_path)
-                .map_err(|e| format!("Failed to restore directory from backup: {}", e))?;
+                .map_err(|e| format!("Failed to restore directory from backup: {e}"))?;
         } else {
             std::fs::copy(entry.path(), &dest_path)
-                .map_err(|e| format!("Failed to restore file from backup: {}", e))?;
+                .map_err(|e| format!("Failed to restore file from backup: {e}"))?;
         }
     }
 
@@ -1735,23 +1773,23 @@ async fn remove_backup(path: String) -> Result<(), String> {
 
     // Find all backups for this path
     for entry in std::fs::read_dir(&backup_dir)
-        .map_err(|e| format!("Failed to read backup directory: {}", e))?
+        .map_err(|e| format!("Failed to read backup directory: {e}"))?
     {
-        let entry = entry.map_err(|e| format!("Failed to read backup entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read backup entry: {e}"))?;
         let metadata_path = entry.path().join("metadata.json");
 
         if metadata_path.exists() {
             let metadata: serde_json::Value = serde_json::from_str(
                 &std::fs::read_to_string(&metadata_path)
-                    .map_err(|e| format!("Failed to read metadata file: {}", e))?,
+                    .map_err(|e| format!("Failed to read metadata file: {e}"))?,
             )
-            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+            .map_err(|e| format!("Failed to parse metadata: {e}"))?;
 
             if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
                 if original_path == path.to_string_lossy() {
                     // Remove this backup
                     std::fs::remove_dir_all(entry.path())
-                        .map_err(|e| format!("Failed to remove backup: {}", e))?;
+                        .map_err(|e| format!("Failed to remove backup: {e}"))?;
                 }
             }
         }
@@ -1763,7 +1801,7 @@ async fn remove_backup(path: String) -> Result<(), String> {
 fn get_backup_dir() -> Result<PathBuf, String> {
     let temp_dir = std::env::temp_dir().join("balatro_mod_manager_backups");
     std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+        .map_err(|e| format!("Failed to create backup directory: {e}"))?;
     Ok(temp_dir)
 }
 
@@ -1803,7 +1841,7 @@ async fn verify_path_exists(path: String) -> bool {
     match std::fs::exists(PathBuf::from(path)) {
         Ok(exists) => exists,
         Err(e) => {
-            log::error!("Failed to check path existence: {}", e);
+            log::error!("Failed to check path existence: {e}");
             false
         }
     }
@@ -1884,9 +1922,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_prevent_default::init())
-        .setup(|app| {
-            // Initialize database with error handling
-            let db = map_error(Database::new())?;
+            .setup(|app| {
+                // Initialize database with error handling
+                let db = map_error(Database::new())?;
 
             let discord_rpc = DiscordRpcManager::new();
 
@@ -1897,6 +1935,44 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 discord_rpc: Mutex::new(discord_rpc),
+            });
+
+            // Background task: ensure lovely_version setting exists; if missing, reinstall Lovely and set it.
+            tauri::async_runtime::spawn(async move {
+                // Re-open DB in task to avoid lifetime issues
+                let db = match Database::new() {
+                    Ok(db) => db,
+                    Err(e) => {
+                        log::warn!("Lovely check: failed to open DB: {e}");
+                        return;
+                    }
+                };
+
+                match db.get_lovely_version() {
+                    Ok(Some(_)) => {
+                        // Already present; nothing to do
+                    }
+                    Ok(None) | Err(_) => {
+                        // Missing or inaccessible: reinstall Lovely and set version
+                        if let Ok(latest) = lovely::get_latest_lovely_version().await {
+                            if let Err(e) = lovely::remove_installed_lovely() {
+                                log::warn!("Lovely reinstall: failed to remove existing: {e}");
+                            }
+                            match lovely::ensure_lovely_exists().await {
+                                Ok(_) => {
+                                    if let Err(e) = db.set_lovely_version(&latest) {
+                                        log::warn!("Lovely reinstall: failed to persist version {latest}: {e}");
+                                    }
+                                }
+                                Err(e) => {
+                                    log::warn!("Lovely reinstall: failed to install latest: {e}");
+                                }
+                            }
+                        } else {
+                            log::warn!("Lovely reinstall: failed to resolve latest tag");
+                        }
+                    }
+                }
             });
 
             let app_dir = app
@@ -1965,6 +2041,8 @@ pub fn run() {
             get_latest_steamodded_release,
             set_discord_rpc_status,
             mod_update_available,
+            check_lovely_update,
+            update_lovely_to_latest,
             get_detected_local_mods,
             delete_manual_mod,
             backup_local_mod,
@@ -1985,7 +2063,7 @@ pub fn run() {
         .run(tauri::generate_context!());
 
     if let Err(e) = result {
-        log::error!("Failed to run application: {}", e);
+        log::error!("Failed to run application: {e}");
         log::logger().flush();
         std::process::exit(1);
     }

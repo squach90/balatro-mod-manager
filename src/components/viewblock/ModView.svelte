@@ -155,10 +155,8 @@
 		}
 
 		// Common patterns for mod links
-		const githubModPattern1 =
-			/github\.com\/([^\/]+)\/([^\/\?#]+)(?:$|\?|\#)/;
-		const githubModPattern2 =
-			/github\.com\/([^\/]+)\/([^\/\?#]+)(?:\/|\/tree\/|\/blob\/)/;
+		const githubModPattern1 = /github\.com\/([^/]+)\/([^/?#]+)(?:$|[?#])/;
+		const githubModPattern2 = /github\.com\/([^/]+)\/([^/?#]+)(?:\/|\/tree\/|\/blob\/)/;
 
 		// Check if URL matches any pattern
 		let match =
@@ -1026,6 +1024,7 @@
 						}
 					}}
 				>
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html renderedDescription}
 				</div>
 			</div>
