@@ -172,6 +172,8 @@ export const showWarningPopup = writable<WarningPopupState>({
 // Popup state to warn users when Lovely is not detected
 export interface LovelyPopupState {
     visible: boolean;
+    source?: 'launch' | 'other';
+    onLaunchAnyway?: () => void | Promise<void>;
 }
 
 export const lovelyPopupStore = writable<LovelyPopupState>({

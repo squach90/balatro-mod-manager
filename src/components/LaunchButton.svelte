@@ -1,45 +1,52 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
 	import LaunchAlertBox from "./LaunchAlertBox.svelte";
-	import { addMessage } from "../lib/stores";
-	import { lovelyPopupStore } from "../stores/modStore";
+import { addMessage } from "../lib/stores";
+import { lovelyPopupStore } from "../stores/modStore";
 
-	let showAlert = false;
+let showAlert = false;
+
+async function doLaunch() {
+  const path = await invoke("get_balatro_path");
+  if (path && path.toString().includes("Steam")) {
+    let is_balatro_running: boolean = await invoke(
+      "check_balatro_running",
+    );
+    if (is_balatro_running) {
+      addMessage("Balatro is already running", "error");
+      return;
+    }
+    let is_steam_running: boolean = await invoke("check_steam_running");
+    if (!is_steam_running) {
+      showAlert = true;
+      return;
+    } else {
+      await invoke("launch_balatro");
+      return;
+    }
+  } else {
+    await invoke("launch_balatro");
+    return;
+  }
+}
 
 	const handleLaunch = async () => {
 		// Warn if Lovely injector is missing before any launch
-		try {
-			const present = await invoke<boolean>("is_lovely_installed");
-			if (!present) {
-				lovelyPopupStore.set({ visible: true });
-				return;
-			}
-		} catch (_) {
-			// ignore detection errors, proceed with normal checks
-		}
-
-		const path = await invoke("get_balatro_path");
-		if (path && path.toString().includes("Steam")) {
-			let is_balatro_running: boolean = await invoke(
-				"check_balatro_running",
-			);
-			if (is_balatro_running) {
-				addMessage("Balatro is already running", "error");
-				return;
-			}
-			let is_steam_running: boolean = await invoke("check_steam_running");
-			if (!is_steam_running) {
-				showAlert = true;
-				return;
-			} else {
-				await invoke("launch_balatro");
-				return;
-			}
-		} else {
-			await invoke("launch_balatro");
-			return;
-		}
-	};
+  try {
+    const present = await invoke<boolean>("is_lovely_installed");
+    if (!present) {
+      lovelyPopupStore.set({
+        visible: true,
+        source: 'launch',
+        onLaunchAnyway: async () => { await doLaunch(); },
+      });
+      return;
+    }
+  } catch (_) {
+    // ignore detection errors, proceed
+  }
+  await doLaunch();
+};
 
 	const handleAlertClose = () => {
 		showAlert = false;

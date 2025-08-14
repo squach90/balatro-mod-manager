@@ -6,6 +6,8 @@
 
   let isWindows = $state<boolean>(false);
   let balatroPath = $state<string | null>(null);
+  let installing = $state(false);
+  let installError: string | null = $state(null);
 
   async function init() {
     // Simple OS check for showing Windows instructions
@@ -42,6 +44,37 @@
   function close() {
     lovelyPopupStore.update((s) => ({ ...s, visible: false }));
   }
+
+  async function installLovely() {
+    installError = null;
+    installing = true;
+    try {
+      // Install/Update Lovely to latest which also sets DB version
+      await invoke<string>("update_lovely_to_latest");
+      addMessage("Lovely installed/updated to latest", "success");
+      // Verify installation
+      try {
+        const present = await invoke<boolean>("is_lovely_installed");
+        if (!present) {
+          installError = "Lovely still not detected. Add a Defender exclusion and try again.";
+          return;
+        }
+      } catch (_) {
+        // ignore post-check errors
+      }
+      close();
+      // If this popup was from a launch attempt, offer to continue via callback
+      const cb = $lovelyPopupStore.onLaunchAnyway;
+      if ($lovelyPopupStore.source === 'launch' && cb) {
+        await cb();
+      }
+    } catch (e) {
+      installError = e instanceof Error ? e.message : String(e);
+      addMessage(`Failed to install Lovely: ${installError}`, "error");
+    } finally {
+      installing = false;
+    }
+  }
 </script>
 
 {#if $lovelyPopupStore.visible}
@@ -72,7 +105,19 @@
         </div>
       {/if}
 
+      {#if installError}
+        <p class="error">{installError}</p>
+      {/if}
+
       <div class="buttons">
+        <button class="install-button" onclick={installLovely} disabled={installing}>
+          {#if installing}Installing...{:else}Install Lovely{/if}
+        </button>
+        {#if $lovelyPopupStore.source === 'launch' && $lovelyPopupStore.onLaunchAnyway}
+          <button class="launch-anyway" onclick={() => { const cb = $lovelyPopupStore.onLaunchAnyway; close(); cb && cb(); }}>
+            Launch Anyway
+          </button>
+        {/if}
         <button class="close-button" onclick={close}>Close</button>
       </div>
     </div>
@@ -137,6 +182,7 @@
   }
   .copy-button:hover { transform: translateY(-2px); }
   .buttons { display: flex; justify-content: flex-end; margin-top: 1rem; }
+  .buttons { gap: 0.5rem; flex-wrap: wrap; }
   .close-button {
     background: #56a786;
     outline: #74cca8 solid 2px;
@@ -147,6 +193,27 @@
     cursor: pointer;
     font-family: "M6X11", sans-serif;
   }
+  .install-button {
+    background: #3498db;
+    outline: #2980b9 solid 2px;
+    color: #f4eee0;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "M6X11", sans-serif;
+  }
+  .launch-anyway {
+    background: #c14139;
+    outline: #a13029 solid 2px;
+    color: #f4eee0;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "M6X11", sans-serif;
+  }
+  .error { color: #f87171; font-family: "M6X11", sans-serif; margin-top: 0.5rem; }
   @media (max-width: 1160px) {
     .modal { max-width: 90%; padding: 1.5rem; }
   }
