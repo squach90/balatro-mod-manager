@@ -2,10 +2,22 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import LaunchAlertBox from "./LaunchAlertBox.svelte";
 	import { addMessage } from "../lib/stores";
+	import { lovelyPopupStore } from "../stores/modStore";
 
 	let showAlert = false;
 
 	const handleLaunch = async () => {
+		// Warn if Lovely injector is missing before any launch
+		try {
+			const present = await invoke<boolean>("is_lovely_installed");
+			if (!present) {
+				lovelyPopupStore.set({ visible: true });
+				return;
+			}
+		} catch (_) {
+			// ignore detection errors, proceed with normal checks
+		}
+
 		const path = await invoke("get_balatro_path");
 		if (path && path.toString().includes("Steam")) {
 			let is_balatro_running: boolean = await invoke(

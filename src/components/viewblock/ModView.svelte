@@ -26,6 +26,7 @@
 	import { marked } from "marked";
 	import { invoke } from "@tauri-apps/api/core";
 	import { cachedVersions } from "../../stores/modStore";
+	import { lovelyPopupStore } from "../../stores/modStore";
 	import { modsStore } from "../../stores/modStore";
 	import { untrack } from "svelte";
 	import {
@@ -177,6 +178,8 @@
 				if (mod.title.toLowerCase() === repoName) {
 					return true;
 				}
+
+                // (removed mistaken await here; Lovely check is performed after installs elsewhere)
 
 				// Match on repo URL
 				if (mod.repo && mod.repo.toLowerCase().includes(repoName)) {
@@ -353,6 +356,16 @@
 		const performDownload = async () => {
 			try {
 				loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Show a warning if Lovely injector is missing (do not block installation)
+				try {
+					const present = await invoke<boolean>("is_lovely_installed");
+					if (!present) {
+						lovelyPopupStore.set({ visible: true });
+					}
+				} catch (_) {
+					/* ignore */
+				}
 
 				// Build dependencies list for the database
 				const dependencies = [];

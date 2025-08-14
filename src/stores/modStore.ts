@@ -163,9 +163,17 @@ export interface WarningPopupState {
 }
 
 export const showWarningPopup = writable<WarningPopupState>({
-	visible: false,
-	message: "",
-	onConfirm: () => { },
-	onCancel: () => { }
+    visible: false,
+    message: "",
+    onConfirm: () => { },
+    onCancel: () => { }
 });
 
+// Popup state to warn users when Lovely is not detected
+export interface LovelyPopupState {
+    visible: boolean;
+}
+
+export const lovelyPopupStore = writable<LovelyPopupState>({
+    visible: false,
+});

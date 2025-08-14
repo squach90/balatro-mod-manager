@@ -9,6 +9,7 @@
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
+	import { lovelyPopupStore } from "../../stores/modStore";
 
 	interface Props {
 		mod: Mod;
@@ -159,6 +160,16 @@
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 
+			// Show a warning if Lovely injector is missing (do not block installation)
+			try {
+				const present = await invoke<boolean>("is_lovely_installed");
+				if (!present) {
+					lovelyPopupStore.set({ visible: true });
+				}
+			} catch (_) {
+				/* ignore */
+			}
+
 			if (!url.startsWith("http")) {
 				console.error("Invalid URL format:", url);
 				throw new Error(`Invalid URL format: ${url}`);
@@ -196,6 +207,16 @@
 
 			// Manually check mod enabled status after installation
 			setTimeout(() => checkModEnabled(mod.title), 500);
+
+			// After install, verify Lovely is still present
+			try {
+				const present = await invoke<boolean>("is_lovely_installed");
+				if (!present) {
+					lovelyPopupStore.set({ visible: true });
+				}
+			} catch (_) {
+				/* ignore */
+			}
 		} catch (error) {
 			console.error("Failed to install mod:", error);
 		} finally {

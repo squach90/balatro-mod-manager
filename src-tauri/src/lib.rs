@@ -43,6 +43,44 @@ fn map_error<T>(result: Result<T, AppError>) -> Result<T, String> {
     result.map_err(|e| e.to_string())
 }
 
+/// Check whether Lovely is currently installed/present on this system.
+/// - macOS: checks for `~/Library/Application Support/Balatro/bins/liblovely.dylib` (via config dir)
+/// - Windows: checks that a `version.dll` exists in the Balatro game directory
+#[tauri::command]
+async fn is_lovely_installed(_state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
+        let lovely_path = config_dir.join("Balatro").join("bins").join("liblovely.dylib");
+        Ok(lovely_path.exists())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Prefer database install path if present
+        let db = _state.db.lock().map_err(|e| e.to_string())?;
+        if let Some(path) = db.get_installation_path().map_err(|e| e.to_string())? {
+            let dll = PathBuf::from(path).join("version.dll");
+            return Ok(dll.exists());
+        }
+
+        // Fallback to first detected Balatro path
+        let candidates = bmm_lib::finder::get_balatro_paths();
+        if let Some(p) = candidates.first() {
+            let dll = p.join("version.dll");
+            return Ok(dll.exists());
+        }
+        return Ok(false);
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Linux or other targets: Lovely injector not managed; do not warn.
+        Ok(true)
+    }
+}
+
 #[tauri::command]
 async fn check_lovely_update(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
     // Load latest from GitHub
@@ -2043,6 +2081,7 @@ pub fn run() {
             mod_update_available,
             check_lovely_update,
             update_lovely_to_latest,
+            is_lovely_installed,
             get_detected_local_mods,
             delete_manual_mod,
             backup_local_mod,
