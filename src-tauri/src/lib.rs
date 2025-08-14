@@ -1975,7 +1975,7 @@ pub fn run() {
                 discord_rpc: Mutex::new(discord_rpc),
             });
 
-            // Background task: ensure lovely_version setting exists; if missing, reinstall Lovely and set it.
+            // Background task: ensure lovely_version setting exists; if missing, let UI prompt update.
             tauri::async_runtime::spawn(async move {
                 // Re-open DB in task to avoid lifetime issues
                 let db = match Database::new() {
@@ -1991,24 +1991,8 @@ pub fn run() {
                         // Already present; nothing to do
                     }
                     Ok(None) | Err(_) => {
-                        // Missing or inaccessible: reinstall Lovely and set version
-                        if let Ok(latest) = lovely::get_latest_lovely_version().await {
-                            if let Err(e) = lovely::remove_installed_lovely() {
-                                log::warn!("Lovely reinstall: failed to remove existing: {e}");
-                            }
-                            match lovely::ensure_lovely_exists().await {
-                                Ok(_) => {
-                                    if let Err(e) = db.set_lovely_version(&latest) {
-                                        log::warn!("Lovely reinstall: failed to persist version {latest}: {e}");
-                                    }
-                                }
-                                Err(e) => {
-                                    log::warn!("Lovely reinstall: failed to install latest: {e}");
-                                }
-                            }
-                        } else {
-                            log::warn!("Lovely reinstall: failed to resolve latest tag");
-                        }
+                        // Missing or inaccessible: do not auto-install; UI will show update prompt
+                        log::info!("lovely_version missing; UI will prompt to install/update Lovely");
                     }
                 }
             });
