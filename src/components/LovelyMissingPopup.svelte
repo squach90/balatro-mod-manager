@@ -6,6 +6,7 @@
 
   let isWindows = $state<boolean>(false);
   let balatroPath = $state<string | null>(null);
+  let normalizedPath = $state<string | null>(null);
   let installing = $state(false);
   let installError: string | null = $state(null);
 
@@ -20,6 +21,18 @@
     } catch (e) {
       balatroPath = null;
     }
+
+    // Normalize path for Windows Explorer address bar
+    if (isWindows && balatroPath) {
+      let p = balatroPath;
+      // Ensure backslashes
+      p = p.replace(/\//g, "\\");
+      // Collapse repeated backslashes to a single backslash
+      p = p.replace(/\\{2,}/g, "\\");
+      normalizedPath = p;
+    } else {
+      normalizedPath = balatroPath;
+    }
   }
 
   $effect(() => {
@@ -29,12 +42,12 @@
   });
 
   async function copyPath() {
-    if (!balatroPath) {
+    if (!normalizedPath) {
       addMessage("Game path not set; open Settings and set it first.", "warning");
       return;
     }
     try {
-      await navigator.clipboard.writeText(balatroPath);
+      await navigator.clipboard.writeText(normalizedPath);
       addMessage("Copied to clipboard", "success");
     } catch (e) {
       addMessage("Failed to copy path", "error");
@@ -98,8 +111,8 @@
             <button class="copy-button" onclick={copyPath}>
               Copy Balatro Path
             </button>
-            {#if balatroPath}
-              <span class="path">{balatroPath}</span>
+            {#if normalizedPath}
+              <span class="path">{normalizedPath}</span>
             {/if}
           </div>
         </div>
@@ -177,7 +190,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: "M6X11", sans-serif;
-    font-size: 1rem;
+    font-size: 1.15rem;
     transition: all 0.2s ease;
   }
   .copy-button:hover { transform: translateY(-2px); }
@@ -192,6 +205,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: "M6X11", sans-serif;
+    font-size: 1.15rem;
   }
   .install-button {
     background: #3498db;
@@ -202,6 +216,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: "M6X11", sans-serif;
+    font-size: 1.15rem;
   }
   .launch-anyway {
     background: #c14139;
@@ -212,6 +227,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: "M6X11", sans-serif;
+    font-size: 1.15rem;
   }
   .error { color: #f87171; font-family: "M6X11", sans-serif; margin-top: 0.5rem; }
   @media (max-width: 1160px) {
