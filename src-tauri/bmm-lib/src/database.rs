@@ -17,7 +17,7 @@ pub struct InstalledMod {
 }
 
 impl Database {
-    const CURRENT_DB_VERSION: &'static str = "1.1"; // Update this when schema changes
+    const CURRENT_DB_VERSION: &'static str = "1.2"; // Update this when schema changes
 
     pub fn new() -> Result<Self, AppError> {
         let config_dir = dirs::config_dir()
@@ -28,7 +28,7 @@ impl Database {
         // Create directory if it doesn't exist
         if !balatro_dir.exists() {
             std::fs::create_dir_all(&balatro_dir).map_err(|e| {
-                AppError::DirNotFound(format!("Failed to create config directory: {}", e).into())
+                AppError::DirNotFound(format!("Failed to create config directory: {e}").into())
             })?;
         }
 
@@ -69,8 +69,7 @@ impl Database {
                 Err(e) => {
                     if retry_count == max_retries - 1 {
                         return Err(AppError::DatabaseInit(format!(
-                            "Failed to open database after {} attempts: {}",
-                            max_retries, e
+                            "Failed to open database after {max_retries} attempts: {e}"
                         )));
                     }
 
@@ -144,8 +143,7 @@ impl Database {
             if let Err(e) = old_conn_result {
                 if retry_count == max_retries - 1 {
                     return Err(AppError::DatabaseInit(format!(
-                        "Failed to open old database after {} retries: {}",
-                        max_retries, e
+                        "Failed to open old database after {max_retries} retries: {e}"
                     )));
                 }
 
@@ -157,7 +155,7 @@ impl Database {
 
             let old_conn = old_conn_result.unwrap();
             let new_conn = Connection::open(&temp_db_path).map_err(|e| {
-                AppError::DatabaseInit(format!("Failed to create new database: {}", e))
+                AppError::DatabaseInit(format!("Failed to create new database: {e}"))
             })?;
 
             // Initialize the new database with current schema
@@ -181,10 +179,10 @@ impl Database {
             match std::fs::rename(db_path, &backup_path) {
                 Ok(_) => {}
                 Err(e) => {
-                    log::warn!("Failed to backup old database, continuing anyway: {}", e);
+                    log::warn!("Failed to backup old database, continuing anyway: {e}");
                     // Try to directly remove the old file if we can't rename it
                     if let Err(e) = std::fs::remove_file(db_path) {
-                        log::warn!("Failed to remove old database: {}", e);
+                        log::warn!("Failed to remove old database: {e}");
                     }
                 }
             }
@@ -194,8 +192,7 @@ impl Database {
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     return Err(AppError::DatabaseInit(format!(
-                        "Failed to install new database: {}",
-                        e
+                        "Failed to install new database: {e}"
                     )));
                 }
             }
@@ -354,8 +351,7 @@ impl Database {
             })
         } else {
             Err(AppError::InvalidState(format!(
-                "Mod {} not found",
-                mod_name
+                "Mod {mod_name} not found"
             )))
         }
     }
@@ -491,6 +487,27 @@ impl Database {
         self.conn.execute(
             "DELETE FROM settings WHERE setting = 'installation_path'",
             [],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_lovely_version(&self) -> Result<Option<String>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'lovely_version'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_lovely_version(&self, version: &str) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('lovely_version', ?1)",
+            [version],
         )?;
         Ok(())
     }

@@ -7,6 +7,7 @@
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
 	import SecurityPopup from "../../components/SecurityPopup.svelte";
+	import LovelyMissingPopup from "../../components/LovelyMissingPopup.svelte";
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
 	import { currentModView, modsStore } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
@@ -19,6 +20,7 @@
 	import { addMessage } from "$lib/stores";
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
+	import { lovelyPopupStore } from "../../stores/modStore";
 
 	let currentSection = $state("mods");
 	let showSecurityPopup = $state(false); // Control visibility of the security popup
@@ -190,6 +192,44 @@
 				showSecurityPopup = true;
 			}
 		}
+
+		// Check for Lovely update on every launch
+		try {
+			const latest = await invoke<string | null>("check_lovely_update");
+			if (latest) {
+				showWarningPopup.set({
+					visible: true,
+					message: `An update for Lovely (v${latest}) is available. Do you want to update?`,
+					onConfirm: async () => {
+						try {
+							const updated = await invoke<string>("update_lovely_to_latest");
+							addMessage(`Lovely updated to v${updated}`, "success");
+						} catch (e) {
+							addMessage(
+								`Failed to update Lovely: ${e instanceof Error ? e.message : String(e)}`,
+								"error",
+							);
+						}
+						showWarningPopup.set((p) => ({ ...p, visible: false }));
+					},
+					onCancel: () => {
+						showWarningPopup.set((p) => ({ ...p, visible: false }));
+					},
+				});
+			}
+		} catch (e) {
+			console.warn("Lovely update check failed:", e);
+		}
+
+		// Warn if Lovely is missing (e.g., Windows Defender removed version.dll)
+		try {
+			const present = await invoke<boolean>("is_lovely_installed");
+			if (!present) {
+				lovelyPopupStore.set({ visible: true });
+			}
+		} catch (_) {
+			// ignore detection errors
+		}
 	});
 </script>
 
@@ -283,6 +323,8 @@
 
 	<div class="version-text">v0.2.7</div>
 </div>
+
+<LovelyMissingPopup />
 
 <style>
 	.main-page {

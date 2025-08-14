@@ -115,6 +115,94 @@ pub async fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
     }
 }
 
+/// Query GitHub for the latest Lovely release tag (e.g., "0.8.0").
+pub async fn get_latest_lovely_version() -> Result<String, AppError> {
+    // We intentionally avoid downloading the artifact; just resolve the tag.
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| AppError::Network(e.to_string()))?;
+
+    let resp = client
+        .get("https://github.com/ethangreen-dev/lovely-injector/releases/latest")
+        .send()
+        .await
+        .map_err(|e| AppError::Network(e.to_string()))?;
+
+    // GitHub returns a 3xx with a Location header to /tag/vX.Y.Z
+    let location = resp
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+
+    // Fallback: if redirect policy changed or header empty, try final URL string
+    let url_str = if location.is_empty() {
+        resp.url().as_str().to_string()
+    } else {
+        location
+    };
+
+    // Extract the tag part after "/tag/" and strip leading 'v'
+    let version = url_str
+        .split('/')
+        .next_back()
+        .unwrap_or("")
+        .trim_start_matches('v')
+        .to_string();
+
+    if version.is_empty() {
+        return Err(AppError::InvalidState(
+            "Failed to resolve latest Lovely version tag".to_string(),
+        ));
+    }
+
+    Ok(version)
+}
+
+/// Remove currently installed Lovely artifacts so a clean reinstall can occur.
+pub fn remove_installed_lovely() -> Result<(), AppError> {
+    #[cfg(target_os = "macos")]
+    {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?;
+        let bins_dir = config_dir.join("Balatro/bins");
+        let lovely_path = bins_dir.join("liblovely.dylib");
+        if lovely_path.exists() {
+            std::fs::remove_file(&lovely_path).map_err(|e| AppError::FileWrite {
+                path: lovely_path.clone(),
+                source: e.to_string(),
+            })?;
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let balatro_paths = crate::finder::get_balatro_paths();
+        if balatro_paths.is_empty() {
+            return Ok(()); // Nothing to remove if we can't detect it
+        }
+        let game_path = &balatro_paths[0];
+        let dll_path = game_path.join("version.dll");
+        if dll_path.exists() {
+            std::fs::remove_file(&dll_path).map_err(|e| AppError::FileWrite {
+                path: dll_path.clone(),
+                source: e.to_string(),
+            })?;
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err(AppError::InvalidState(
+            "Lovely injection is not supported on this platform.".into(),
+        ))
+    }
+}
+
 #[cfg(target_os = "macos")]
 async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError> {
     let temp_dir = tempfile::tempdir().map_err(|e| AppError::FileWrite {
@@ -125,8 +213,7 @@ async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError>
     let arch = detect_architecture()?;
     let url = format!(
         "https://github.com/ethangreen-dev/lovely-injector/releases/latest/download/\
-    lovely-{}-apple-darwin.tar.gz",
-        arch
+    lovely-{arch}-apple-darwin.tar.gz"
     );
 
     // Download latest release
@@ -198,7 +285,7 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
         .get(url)
         .send()
         .await
-        .map_err(|e| AppError::Network(format!("Failed to download lovely injector: {}", e)))?;
+        .map_err(|e| AppError::Network(format!("Failed to download lovely injector: {e}")))?;
 
     // Save to temp zip file
     let temp_zip = temp_dir.path().join("lovely.zip");
@@ -210,7 +297,7 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
     let bytes = response
         .bytes()
         .await
-        .map_err(|e| AppError::Network(format!("Failed to read download response: {}", e)))?;
+        .map_err(|e| AppError::Network(format!("Failed to read download response: {e}")))?;
 
     std::io::copy(&mut bytes.as_ref(), &mut file).map_err(|e| AppError::FileWrite {
         path: temp_zip.clone(),

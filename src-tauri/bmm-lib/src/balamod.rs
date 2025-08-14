@@ -54,7 +54,7 @@ impl Balatro {
                 return Ok(contents);
             }
         }
-        error!("'{}' not found in the archive.", file_name);
+        error!("'{file_name}' not found in the archive.");
         Ok(Vec::new())
     }
 
@@ -234,10 +234,10 @@ pub fn get_save_dir(linux_native: bool) -> PathBuf {
     let mut save_dir = String::new();
     if cfg!(target_os = "macos") {
         let home_dir = format!("/Users/{}", std::env::var("USER").unwrap());
-        save_dir = format!("{}/Library/Application Support/Balatro", home_dir);
+        save_dir = format!("{home_dir}/Library/Application Support/Balatro");
     } else if cfg!(target_os = "windows") {
         let appdata = std::env::var("APPDATA").unwrap();
-        save_dir = format!("{}/Balatro", appdata);
+        save_dir = format!("{appdata}/Balatro");
     } else if cfg!(target_os = "linux") {
         if linux_native {
             let home = std::env::var("HOME").unwrap();

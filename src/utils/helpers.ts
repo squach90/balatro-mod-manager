@@ -9,8 +9,8 @@ export function stripMarkdown(text: string): string {
 			// --- Existing replacements ---
 			.replace(/#{1,6}\s/g, "") // Remove headers (#)
 			.replace(/[*_]{1,3}(.*?)[*_]{1,3}/g, "$1") // Remove bold/italic (*_)
-			.replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1") // Remove links ([text](url))
-			.replace(/!\[([^\]]+)\]\([^\)]+\)/g, "$1") // Remove images (![alt](url))
+			.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // Remove links ([text](url))
+			.replace(/!\[([^\]]+)\]\([^)]*\)/g, "$1") // Remove images (![alt](url))
 			.replace(/^\s*>\s/gm, "") // Remove blockquotes (>)
 			.replace(/```[\s\S]*?```/g, "") // Remove code blocks (```)
 			.replace(/`([^`]+)`/g, "$1") // Remove inline code (`)

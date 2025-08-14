@@ -74,7 +74,7 @@ impl From<std::string::String> for Category {
             "Miscellaneous" => Category::Miscellaneous,
             "Resource Packs" => Category::ResourcePacks,
             "API" => Category::API,
-            _ => panic!("Invalid category: {}", value),
+            _ => panic!("Invalid category: {value}"),
         }
     }
 }
@@ -89,7 +89,7 @@ impl From<i32> for Category {
             4 => Category::Miscellaneous,
             5 => Category::ResourcePacks,
             6 => Category::API,
-            _ => panic!("Invalid category index: {}", value),
+            _ => panic!("Invalid category index: {value}"),
         }
     }
 }
@@ -137,7 +137,7 @@ pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), Ap
         source: e.to_string(),
     })?;
 
-    path.push(format!("versions-{}.cache.bin.gz", mod_type));
+    path.push(format!("versions-{mod_type}.cache.bin.gz"));
 
     let file = File::create(&path).map_err(|e| AppError::FileWrite {
         path: path.clone(),
@@ -180,7 +180,7 @@ pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>, AppErr
     let path = dirs::cache_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager")
-        .join(format!("versions-{}.cache.bin.gz", mod_type));
+        .join(format!("versions-{mod_type}.cache.bin.gz"));
 
     let mut file = match File::open(&path) {
         Ok(f) => f,
