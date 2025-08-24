@@ -778,12 +778,37 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         }
     };
 
-    let reader = BufReader::new(file);
-    let lines: Vec<String> = reader
-        .lines()
-        .take(20) // Only check first 20 lines for efficiency
-        .map(|line| line.map_err(|e| format!("Failed to read line: {e}")))
-        .collect::<Result<Vec<String>, String>>()?;
+    // Read up to the first 20 lines using lossy UTF-8 decoding to
+    // tolerate files authored with non-UTF-8 encodings (e.g., CP-1252).
+    let mut reader = BufReader::new(file);
+    let mut lines: Vec<String> = Vec::new();
+    let mut buf: Vec<u8> = Vec::new();
+    for _ in 0..20 {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf) {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                // Convert bytes to string lossily and trim newline characters
+                let mut s = String::from_utf8_lossy(&buf).into_owned();
+                if s.ends_with('\n') {
+                    s.pop();
+                    if s.ends_with('\r') {
+                        s.pop();
+                    }
+                }
+                lines.push(s);
+            }
+            Err(e) => {
+                // Do not fail mod detection due to encoding/IO hiccup; log and stop scanning
+                log::warn!(
+                    "Failed to read line lossily from {}: {}",
+                    lua_path.display(),
+                    e
+                );
+                break;
+            }
+        }
+    }
 
     if lines.is_empty() {
         return Ok(None);
