@@ -162,7 +162,6 @@ pub fn get_installed_mods() -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::tempdir;
 
     #[test]
