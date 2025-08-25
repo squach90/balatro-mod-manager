@@ -160,6 +160,56 @@ pub fn get_installed_mods() -> Vec<String> {
         .collect()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_get_installed_mods_filters_lovely_dirs() {
+        let tmp = tempdir().unwrap();
+        // Redirect config dir to temp using XDG_CONFIG_HOME and HOME (for macOS)
+        let original_cfg = std::env::var_os("XDG_CONFIG_HOME");
+        let original_home = std::env::var_os("HOME");
+        std::env::set_var("XDG_CONFIG_HOME", tmp.path());
+        if cfg!(target_os = "macos") {
+            std::env::set_var("HOME", tmp.path());
+        }
+
+        let mods_root = dirs::config_dir().unwrap().join("Balatro").join("Mods");
+        std::fs::create_dir_all(&mods_root).unwrap();
+
+        // Create sample mod directories
+        let keep_a = mods_root.join("CoolMod");
+        let keep_b = mods_root.join("Another");
+        let ignore_a = mods_root.join(".lovely");
+        let ignore_b = mods_root.join("lovely");
+
+        std::fs::create_dir_all(&keep_a).unwrap();
+        std::fs::create_dir_all(&keep_b).unwrap();
+        std::fs::create_dir_all(&ignore_a).unwrap();
+        std::fs::create_dir_all(&ignore_b).unwrap();
+
+        let mut mods = super::get_installed_mods();
+        mods.sort();
+
+        // Should only include the two non-lovely directories
+        assert_eq!(mods.len(), 2);
+        assert!(mods.iter().any(|p| p.ends_with("CoolMod")));
+        assert!(mods.iter().any(|p| p.ends_with("Another")));
+
+        // restore environment
+        match original_cfg {
+            Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        match original_home {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+}
+
 pub fn is_balatro_running() -> bool {
     #[cfg(target_os = "windows")]
     {

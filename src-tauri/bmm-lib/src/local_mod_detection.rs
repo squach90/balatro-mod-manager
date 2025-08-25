@@ -971,3 +971,146 @@ pub fn get_untracked_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
 
     detect_manual_mods(db, &cached_mods)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::collections::HashSet;
+
+    fn write_file(path: &Path, contents: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn test_calculate_edit_distance_and_similarity() {
+        assert_eq!(super::calculate_edit_distance("kitten", "sitting"), 3);
+        assert_eq!(super::calculate_edit_distance("mod", "mod"), 0);
+        assert_eq!(super::calculate_edit_distance("mod", "mad"), 1);
+
+        // Similar short strings (<= 1 difference allowed)
+        assert!(super::is_similar("mod", "mad"));
+        assert!(!super::is_similar("mod", "maps"));
+
+        // Longer strings (<= 2 differences allowed)
+        assert!(super::is_similar("steamodded", "steamodddd"));
+        assert!(!super::is_similar("balatro_mod", "completely_different"));
+    }
+
+    #[test]
+    fn test_is_path_managed_direct_and_nested() {
+        let base = "/tmp/base".to_string();
+        let nested = format!("{}/child", base);
+        let cousin = "/tmp/other".to_string();
+
+        let mut managed = HashSet::new();
+        managed.insert(base.clone());
+
+        assert!(super::is_path_managed(&base, &managed));
+        assert!(super::is_path_managed(&nested, &managed)); // managed parent
+        assert!(!super::is_path_managed(&cousin, &managed));
+
+        // If the managed path is nested under the given path, also true
+        assert!(super::is_path_managed(&"/tmp".to_string(), &managed));
+    }
+
+    #[test]
+    fn test_find_catalog_match_including_steamodded_special_cases() {
+        let catalog = vec![cache::Mod {
+            title: "Steamodded".into(),
+            description: "Loader".into(),
+            image: "".into(),
+            categories: vec![],
+            colors: cache::ColorPair { color1: "".into(), color2: "".into() },
+            installed: false,
+            requires_steamodded: false,
+            requires_talisman: false,
+            publisher: "".into(),
+            repo: "".into(),
+            download_url: "https://example/steamodded.zip".into(),
+            folderName: None,
+            version: Some("1.0.0".into()),
+        }];
+
+        // Various local identifiers that should resolve to Steamodded
+        for (name, id, dir) in [
+            ("Steamodded", "Steamodded", "Steamodded"),
+            ("smods", "smods", "smods_main"),
+            ("My Steamodded", "my-steamodded", "has_steamodded_here"),
+        ] {
+            let local = DetectedMod {
+                name: name.into(),
+                id: id.into(),
+                author: vec![],
+                description: String::new(),
+                prefix: String::new(),
+                version: None,
+                path: format!("/mods/{dir}"),
+                dependencies: vec![],
+                conflicts: vec![],
+                catalog_match: None,
+                is_duplicate: false,
+            };
+
+            let m = super::find_catalog_match(&local, &catalog).expect("should match steamodded");
+            assert_eq!(m.title, "Steamodded");
+            assert_eq!(m.catalog_id, "Steamodded");
+            assert_eq!(m.download_url, "https://example/steamodded.zip");
+            assert_eq!(m.version.as_deref(), Some("1.0.0"));
+        }
+    }
+
+    #[test]
+    fn test_detect_mod_in_directory_from_json_and_lua() {
+        let td = tempdir().unwrap();
+        let mod_dir = td.path().join("Test Mod");
+        std::fs::create_dir_all(&mod_dir).unwrap();
+
+        // JSON-based mod
+        let json = r#"{
+            "id": "TestMod",
+            "name": "Test Mod",
+            "author": ["Alice", "Bob"],
+            "description": "Test description",
+            "prefix": "test",
+            "main_file": "Test Mod.lua",
+            "version": "0.1.0",
+            "dependencies": ["Steamodded"],
+            "conflicts": []
+        }"#;
+        write_file(&mod_dir.join("mod.json"), json);
+
+        let json_detected = super::detect_mod_in_directory(&mod_dir)
+            .unwrap()
+            .expect("JSON mod should be detected");
+        assert_eq!(json_detected.name, "Test Mod");
+        assert_eq!(json_detected.id, "TestMod");
+        assert_eq!(json_detected.author, vec!["Alice", "Bob"]);
+        assert_eq!(json_detected.prefix, "test");
+        assert_eq!(json_detected.version.as_deref(), Some("0.1.0"));
+        assert_eq!(json_detected.dependencies, vec!["Steamodded"]);
+
+        // Lua-header-based mod (in a new dir)
+        let lua_mod_dir = td.path().join("LuaBased");
+        std::fs::create_dir_all(&lua_mod_dir).unwrap();
+        let lua = "\
+--- STEAMODDED HEADER\n\
+--- MOD_NAME: LuaBased\n\
+--- MOD_ID: LuaBased\n\
+--- MOD_AUTHOR: [Charlie]\n\
+--- MOD_DESCRIPTION: Simple\n\
+--- PREFIX: lua\n\
+--- VERSION: 1.2.3\n";
+        write_file(&lua_mod_dir.join("LuaBased.lua"), lua);
+
+        let lua_detected = super::detect_mod_in_directory(&lua_mod_dir)
+            .unwrap()
+            .expect("Lua header mod should be detected");
+        assert_eq!(lua_detected.name, "LuaBased");
+        assert_eq!(lua_detected.id, "LuaBased");
+        assert_eq!(lua_detected.author, vec!["Charlie"]);
+        assert_eq!(lua_detected.prefix, "lua");
+        assert_eq!(lua_detected.version.as_deref(), Some("1.2.3"));
+    }
+}
