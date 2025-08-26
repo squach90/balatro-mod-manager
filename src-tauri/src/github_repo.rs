@@ -54,9 +54,8 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
     };
 
     // Download the repository as a zip file from the chosen branch
-    let mut download_url = format!(
-        "https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-    );
+    let mut download_url =
+        format!("https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip");
 
     let mut response = reqwest::get(&download_url).await;
 
@@ -67,9 +66,7 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
         && url != "https://github.com/skyline69/balatro-mod-index"
     {
         branch = "master"; // Update the branch variable
-        download_url = format!(
-            "https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-        );
+        download_url = format!("https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip");
         response = reqwest::get(&download_url).await;
     }
 
@@ -133,8 +130,7 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
         // Extract files
         let mut outfile =
             File::create(&target).map_err(|e| format!("Failed to create file: {e}"))?;
-        std::io::copy(&mut file, &mut outfile)
-            .map_err(|e| format!("Failed to write file: {e}"))?;
+        std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to write file: {e}"))?;
     }
 
     // Clean up temp zip file
@@ -287,8 +283,7 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
             std::fs::remove_dir_all(&entry_path)
                 .map_err(|e| format!("Failed to remove directory: {e}"))?;
         } else {
-            std::fs::remove_file(&entry_path)
-                .map_err(|e| format!("Failed to remove file: {e}"))?;
+            std::fs::remove_file(&entry_path).map_err(|e| format!("Failed to remove file: {e}"))?;
         }
     }
 
@@ -317,9 +312,7 @@ pub async fn clone_repository_with_branch(
         parse_github_url(url).ok_or_else(|| "Invalid GitHub URL format".to_string())?;
 
     // Download the repository as a zip file from the specified branch
-    let download_url = format!(
-        "https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-    );
+    let download_url = format!("https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip");
 
     log::info!("Downloading from URL: {download_url}"); // Debug print
 
@@ -401,8 +394,7 @@ pub async fn clone_repository_with_branch(
         // Extract files
         let mut outfile =
             File::create(&target).map_err(|e| format!("Failed to create file: {e}"))?;
-        std::io::copy(&mut file, &mut outfile)
-            .map_err(|e| format!("Failed to write file: {e}"))?;
+        std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to write file: {e}"))?;
     }
 
     // Clean up temp zip file

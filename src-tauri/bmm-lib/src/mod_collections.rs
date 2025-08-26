@@ -127,4 +127,3 @@ impl ModCollectionManager {
         Ok(result)
     }
 }
-

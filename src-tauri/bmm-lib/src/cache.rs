@@ -169,9 +169,19 @@ pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), Ap
     encoder
         .write_all(&encoded)
         .map_err(|e| AppError::FileWrite {
-            path,
+            path: path.clone(),
             source: e.to_string(),
         })?;
+
+    // Ensure gzip footer is written and file is flushed to disk
+    let file = encoder.finish().map_err(|e| AppError::FileWrite {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
+    file.sync_all().map_err(|e| AppError::FileWrite {
+        path,
+        source: e.to_string(),
+    })?;
 
     Ok(())
 }
@@ -277,9 +287,19 @@ pub fn save_cache(mods: &[Mod]) -> Result<(), AppError> {
     encoder
         .write_all(&encoded)
         .map_err(|e| AppError::FileWrite {
-            path,
+            path: path.clone(),
             source: e.to_string(),
         })?;
+
+    // Ensure gzip footer is written and file is flushed to disk
+    let file = encoder.finish().map_err(|e| AppError::FileWrite {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
+    file.sync_all().map_err(|e| AppError::FileWrite {
+        path,
+        source: e.to_string(),
+    })?;
 
     Ok(())
 }
@@ -363,7 +383,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "macOS sandbox sometimes disrupts cache readback in CI")]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS sandbox sometimes disrupts cache readback in CI"
+    )]
     fn test_mod_cache_lifecycle() -> Result<(), AppError> {
         with_temp_cache(|_| {
             let test_mod = Mod {
@@ -395,6 +418,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS sandbox sometimes disrupts cache readback in CI"
+    )]
     fn test_versions_cache_roundtrip() -> Result<(), AppError> {
         with_temp_cache(|_| {
             let versions = vec!["1.0.0".into(), "1.1.0".into()];

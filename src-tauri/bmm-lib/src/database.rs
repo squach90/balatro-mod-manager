@@ -350,9 +350,7 @@ impl Database {
                 current_version: row.get(3)?,
             })
         } else {
-            Err(AppError::InvalidState(format!(
-                "Mod {mod_name} not found"
-            )))
+            Err(AppError::InvalidState(format!("Mod {mod_name} not found")))
         }
     }
 

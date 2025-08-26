@@ -34,7 +34,7 @@ pub fn init_logger() -> Result<(), AppError> {
     // Open log file
     let file = fs::OpenOptions::new()
         .create(true)
-        .append(true)  // removed .write(true)
+        .append(true) // removed .write(true)
         .open(&log_file)
         .map_err(|e| AppError::FileWrite {
             path: log_file.clone(),
@@ -136,4 +136,3 @@ fn cleanup_old_logs(log_dir: &PathBuf) -> Result<(), AppError> {
 
     Ok(())
 }
-
