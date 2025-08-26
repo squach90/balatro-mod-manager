@@ -131,32 +131,39 @@ pub fn is_steam_running() -> bool {
 
 pub fn get_installed_mods() -> Vec<String> {
     let mut installed_mods_paths: Vec<PathBuf> = vec![];
-    // let game_path = get_balatro_paths();
-    // let game_name: PathBuf = game_path
-    //     .first()
-    //     .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
-    //     .to_path_buf();
 
-    let mod_dir = dirs::config_dir().unwrap().join("Balatro").join("Mods");
+    let Some(config_dir) = dirs::config_dir() else {
+        return vec![];
+    };
+    let mod_dir = config_dir.join("Balatro").join("Mods");
 
-    // dbg!(&mod_dir);
+    if !mod_dir.exists() {
+        return vec![];
+    }
 
-    for entry in mod_dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        if entry.file_type().unwrap().is_dir() {
-            installed_mods_paths.push(entry.path());
+    match mod_dir.read_dir() {
+        Ok(read_dir) => {
+            for entry in read_dir.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    installed_mods_paths.push(entry.path());
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to read mods directory {}: {}", mod_dir.display(), e);
+            return vec![];
         }
     }
-    // dbg!(&installed_mods_paths);
+
     let res: Vec<String> = installed_mods_paths
         .iter()
-        .map(|p| p.to_str().unwrap().to_string())
+        .filter_map(|p| p.to_str().map(|s| s.to_string()))
         .collect();
 
-    // ignore .lovely and lovely directory
-    res.iter()
+    res
+        .iter()
         .filter(|p| !p.contains(".lovely") && !p.contains("lovely"))
-        .map(|p| p.to_string())
+        .cloned()
         .collect()
 }
 
