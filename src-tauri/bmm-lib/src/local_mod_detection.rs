@@ -1,11 +1,106 @@
 use crate::cache;
 use crate::database::Database;
+use crate::finder;
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
+
+// Simple cache of detected local mods keyed by a lightweight fingerprint of the Mods directory
+lazy_static! {
+    static ref DETECTION_CACHE: Mutex<Option<(ScanFingerprint, Vec<DetectedMod>)>> =
+        Mutex::new(None);
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ScanFingerprint {
+    mods_dir: String,
+    // checksum that changes when top-level items change (names or mtimes)
+    checksum: u64,
+}
+
+fn get_dir_mtime(path: &Path) -> u64 {
+    path.metadata()
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn compute_fingerprint(mods_dir: &Path) -> ScanFingerprint {
+    let mut sum: u64 = 1469598103934665603; // FNV offset basis
+    let dir_iter = fs::read_dir(mods_dir);
+    if let Ok(entries) = dir_iter {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            // only consider dirs; files like .lovelyignore don't dramatically affect list
+            if !p.is_dir() {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                let name_lower = name.to_lowercase();
+                if name_lower.contains("lovely")
+                    || name_lower.starts_with('.')
+                    || name_lower == ".git"
+                    || name_lower == "node_modules"
+                    || name_lower == "__macosx"
+                {
+                    continue;
+                }
+                // mix in name hash
+                for b in name_lower.as_bytes() {
+                    sum = sum.wrapping_mul(1099511628211).wrapping_add(*b as u64);
+                }
+                // and mtime
+                sum = sum
+                    .wrapping_mul(1099511628211)
+                    .wrapping_add(get_dir_mtime(&p));
+            }
+        }
+    }
+    ScanFingerprint {
+        mods_dir: normalize_path(&canonicalize_best_effort(mods_dir)),
+        checksum: sum,
+    }
+}
+
+pub fn detect_manual_mods_cached(
+    db: &Database,
+    cached_catalog_mods: &[cache::Mod],
+) -> Result<Vec<DetectedMod>, String> {
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
+    let mods_dir = config_dir.join("Balatro").join("Mods");
+
+    let fp = compute_fingerprint(&mods_dir);
+    if let Ok(mut guard) = DETECTION_CACHE.lock() {
+        if let Some((cached_fp, cached_mods)) = &*guard {
+            if cached_fp == &fp {
+                return Ok(cached_mods.clone());
+            }
+        }
+        // Miss: compute fresh
+        let fresh = detect_manual_mods(db, cached_catalog_mods)?;
+        *guard = Some((fp, fresh.clone()));
+        Ok(fresh)
+    } else {
+        // In the unlikely event of a poisoned mutex, fall back to direct scan
+        detect_manual_mods(db, cached_catalog_mods)
+    }
+}
+
+/// Clears the in-process detection cache so next call re-scans the filesystem.
+pub fn clear_detection_cache() {
+    if let Ok(mut guard) = DETECTION_CACHE.lock() {
+        *guard = None;
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DetectedMod {
@@ -49,7 +144,7 @@ fn parse_thunderstore_manifest(
     let file = match File::open(manifest_path) {
         Ok(file) => file,
         Err(e) => {
-            log::error!(
+            log::debug!(
                 "Failed to open manifest file {}: {}",
                 manifest_path.display(),
                 e
@@ -61,7 +156,7 @@ fn parse_thunderstore_manifest(
     let manifest: ThunderstoreManifest = match serde_json::from_reader(file) {
         Ok(json) => json,
         Err(e) => {
-            log::error!(
+            log::debug!(
                 "Failed to parse manifest file {}: {}",
                 manifest_path.display(),
                 e
@@ -118,7 +213,8 @@ pub fn detect_manual_mods(
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
 
-    let mod_dir = config_dir.join("Balatro").join("Mods");
+    let balatro_dir = config_dir.join("Balatro");
+    let mod_dir = balatro_dir.join("Mods");
 
     if !mod_dir.exists() {
         return Ok(Vec::new());
@@ -132,7 +228,7 @@ pub fn detect_manual_mods(
     // Create a set of normalized managed mod paths for quick lookup
     let managed_paths: HashSet<String> = managed_mods
         .iter()
-        .map(|m| normalize_path(&PathBuf::from(&m.path)))
+        .map(|m| normalize_path(&canonicalize_best_effort(&PathBuf::from(&m.path))))
         .collect();
 
     // Create a set of managed mod names (lowercase) for duplicate detection
@@ -143,15 +239,48 @@ pub fn detect_manual_mods(
     let mut bundled_dependencies = HashSet::new();
 
     // Find bundled dependencies in mod packages
-    find_bundled_dependencies(&mod_dir, &mut bundled_dependencies)?;
+    find_bundled_dependencies(&mod_dir, &mod_dir, 0, &mut bundled_dependencies)?;
 
     // Detect mods from filesystem
     let mut all_detected_mods = Vec::new();
-    detect_mods_recursive(&mod_dir, &mut all_detected_mods, &bundled_dependencies)?;
+    detect_mods_recursive(
+        &mod_dir,
+        &mod_dir,
+        0,
+        &mut all_detected_mods,
+        &bundled_dependencies,
+    )?;
+
+    // Detect Talisman installed at Balatro root (outside Mods)
+    for install_path in finder::get_balatro_paths() {
+        let talisman_path = install_path.join("Talisman");
+        if talisman_path.exists() && talisman_path.is_dir() {
+            let mut talisman = DetectedMod {
+                name: "Talisman".to_string(),
+                id: "Talisman".to_string(),
+                author: vec!["Talisman".to_string()],
+                description: "Balatro mod loader".to_string(),
+                prefix: "tali".to_string(),
+                version: None,
+                path: talisman_path.to_string_lossy().to_string(),
+                dependencies: Vec::new(),
+                conflicts: Vec::new(),
+                catalog_match: None,
+                is_duplicate: false,
+            };
+            let mod_name_lower = talisman.name.to_lowercase();
+            if managed_names.contains(&mod_name_lower) {
+                talisman.is_duplicate = true;
+                talisman.name = format!("{} (Manual)", talisman.name);
+            }
+            talisman.catalog_match = find_catalog_match(&talisman, cached_catalog_mods);
+            all_detected_mods.push(talisman);
+        }
+    }
 
     // Process detected mods to find catalog matches and handle duplicates
     for mut mod_info in all_detected_mods {
-        let mod_path = normalize_path(&PathBuf::from(&mod_info.path));
+        let mod_path = normalize_path(&canonicalize_best_effort(&PathBuf::from(&mod_info.path)));
 
         // If this mod is not managed by path, consider it a manual mod
         if !is_path_managed(&mod_path, &managed_paths) {
@@ -174,9 +303,18 @@ pub fn detect_manual_mods(
 }
 
 fn scan_for_json_files(dir_path: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut json_files = Vec::new();
+    // Prefer likely config filenames first; reduces noise and speeds scanning
+    let preferred = [
+        "mod.json",
+        "info.json",
+        "config.json",
+        // manifest.json is handled separately but keep as fallback
+        "manifest.json",
+    ];
 
-    // Read directory entries
+    let mut preferred_files = Vec::new();
+    let mut fallback_json = Vec::new();
+
     let entries = fs::read_dir(dir_path)
         .map_err(|e| format!("Failed to read directory {}: {}", dir_path.display(), e))?;
 
@@ -184,12 +322,27 @@ fn scan_for_json_files(dir_path: &Path) -> Result<Vec<PathBuf>, String> {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
-        if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("json") {
-            json_files.push(path);
+        if !path.is_file() {
+            continue;
+        }
+
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if preferred.iter().any(|p| name.eq_ignore_ascii_case(p)) {
+                preferred_files.push(path.clone());
+                continue;
+            }
+        }
+
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            fallback_json.push(path);
         }
     }
 
-    Ok(json_files)
+    if !preferred_files.is_empty() {
+        Ok(preferred_files)
+    } else {
+        Ok(fallback_json)
+    }
 }
 
 fn find_catalog_match(
@@ -220,6 +373,24 @@ fn find_catalog_match(
         // Find Steamodded in the catalog
         for catalog_mod in catalog_mods {
             if catalog_mod.title.to_lowercase() == "steamodded" {
+                return Some(CatalogMatch {
+                    title: catalog_mod.title.clone(),
+                    catalog_id: catalog_mod.title.clone(),
+                    download_url: catalog_mod.download_url.clone(),
+                    version: catalog_mod.version.clone(),
+                });
+            }
+        }
+    }
+
+    // Special case for Talisman
+    if local_id_lower == "talisman"
+        || local_name_lower == "talisman"
+        || local_id_lower.contains("talisman")
+        || local_name_lower.contains("talisman")
+    {
+        for catalog_mod in catalog_mods {
+            if catalog_mod.title.to_lowercase() == "talisman" {
                 return Some(CatalogMatch {
                     title: catalog_mod.title.clone(),
                     catalog_id: catalog_mod.title.clone(),
@@ -373,7 +544,12 @@ fn is_path_managed(path: &str, managed_paths: &HashSet<String>) -> bool {
 
     false
 }
-fn find_bundled_dependencies(dir: &Path, bundled_deps: &mut HashSet<String>) -> Result<(), String> {
+fn find_bundled_dependencies(
+    dir: &Path,
+    _root: &Path,
+    depth: usize,
+    bundled_deps: &mut HashSet<String>,
+) -> Result<(), String> {
     let entries = fs::read_dir(dir)
         .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
 
@@ -385,10 +561,17 @@ fn find_bundled_dependencies(dir: &Path, bundled_deps: &mut HashSet<String>) -> 
             continue;
         }
 
-        // Skip lovely-related directories
+        // Skip lovely-related and hidden/noisy directories
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
             let lower_name = file_name.to_lowercase();
             if lower_name.contains("lovely") {
+                continue;
+            }
+            if lower_name.starts_with('.')
+                || lower_name == ".git"
+                || lower_name == "node_modules"
+                || lower_name == "__macosx"
+            {
                 continue;
             }
         }
@@ -401,11 +584,10 @@ fn find_bundled_dependencies(dir: &Path, bundled_deps: &mut HashSet<String>) -> 
             mark_bundled_dependencies(&mods_subdir, bundled_deps)?;
         }
 
-        // Recursively check subdirectories (limited depth)
-        let depth = count_path_depth(&path, dir);
-        if depth <= 3 {
-            // Increase depth to make sure we find nested packages
-            find_bundled_dependencies(&path, bundled_deps)?;
+        // Recursively check subdirectories (limited depth from root)
+        const MAX_DEPTH_BUNDLED: usize = 3;
+        if depth < MAX_DEPTH_BUNDLED {
+            find_bundled_dependencies(&path, _root, depth + 1, bundled_deps)?;
         }
     }
 
@@ -426,7 +608,7 @@ fn mark_bundled_dependencies(
 
         if path.is_dir() {
             // Add this dependency's normalized path to our set
-            let normalized_path = normalize_path(&path);
+            let normalized_path = normalize_path(&canonicalize_best_effort(&path));
             bundled_deps.insert(normalized_path);
 
             // Log for debugging
@@ -440,6 +622,8 @@ fn mark_bundled_dependencies(
 /// Recursively scan for mods in directories
 fn detect_mods_recursive(
     dir: &Path,
+    _root: &Path,
+    depth: usize,
     detected_mods: &mut Vec<DetectedMod>,
     bundled_deps: &HashSet<String>,
 ) -> Result<(), String> {
@@ -460,10 +644,18 @@ fn detect_mods_recursive(
             if lower_name.contains("lovely") {
                 continue;
             }
+            // Skip hidden/system/noisy dirs
+            if lower_name.starts_with('.')
+                || lower_name == ".git"
+                || lower_name == "node_modules"
+                || lower_name == "__macosx"
+            {
+                continue;
+            }
         }
 
         // Skip bundled dependencies
-        let normalized_path = normalize_path(&path);
+        let normalized_path = normalize_path(&canonicalize_best_effort(&path));
         if bundled_deps.contains(&normalized_path) {
             log::debug!("Skipping bundled dependency: {}", path.display());
             continue;
@@ -477,14 +669,14 @@ fn detect_mods_recursive(
 
         // If this is a "Mods" directory, recursively scan it
         if path.file_name().and_then(|n| n.to_str()) == Some("Mods") {
-            detect_mods_recursive(&path, detected_mods, bundled_deps)?;
+            detect_mods_recursive(&path, _root, depth + 1, detected_mods, bundled_deps)?;
             continue;
         }
 
-        // Regular directory, recursively scan up to 2 levels deep
-        let depth = count_path_depth(&path, dir);
-        if depth <= 2 {
-            detect_mods_recursive(&path, detected_mods, bundled_deps)?;
+        // Regular directory, recursively scan up to MAX_DEPTH from root
+        const MAX_DEPTH: usize = 2;
+        if depth < MAX_DEPTH {
+            detect_mods_recursive(&path, _root, depth + 1, detected_mods, bundled_deps)?;
         }
     }
 
@@ -503,19 +695,8 @@ fn normalize_path(path: &Path) -> String {
     }
 }
 
-fn count_path_depth(path: &Path, base_path: &Path) -> usize {
-    let path_str = path.to_string_lossy();
-    let base_str = base_path.to_string_lossy();
-
-    if !path_str.starts_with(&*base_str) {
-        return 0;
-    }
-
-    let relative = &path_str[base_str.len()..];
-    relative
-        .chars()
-        .filter(|&c| c == std::path::MAIN_SEPARATOR)
-        .count()
+fn canonicalize_best_effort(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, String> {
@@ -584,7 +765,7 @@ fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, Strin
     }
 
     // Continue with regular detection...
-    // Scan for all JSON files and check if any of them are valid mod configs
+    // Scan for JSON files and check if any of them are valid mod configs
     let json_files = scan_for_json_files(mod_path)?;
     for json_path in json_files {
         if let Some(detected_mod) = parse_mod_json(&json_path, mod_path)? {
@@ -698,7 +879,8 @@ fn is_likely_steamodded(path: &Path) -> Result<bool, String> {
 struct ModJson {
     id: String,
     name: String,
-    author: Vec<String>,
+    #[serde(default)]
+    author: AuthorField,
     description: String,
     prefix: String,
     main_file: String,
@@ -722,6 +904,19 @@ struct ModJson {
     dump_loc: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum AuthorField {
+    String(String),
+    Array(Vec<String>),
+}
+
+impl Default for AuthorField {
+    fn default() -> Self {
+        AuthorField::Array(Vec::new())
+    }
+}
+
 fn default_badge_color() -> String {
     "666665".to_string()
 }
@@ -735,7 +930,7 @@ fn parse_mod_json(json_path: &Path, mod_path: &Path) -> Result<Option<DetectedMo
     let file = match File::open(json_path) {
         Ok(file) => file,
         Err(e) => {
-            log::error!("Failed to open JSON file {}: {}", json_path.display(), e);
+            log::debug!("Failed to open JSON file {}: {}", json_path.display(), e);
             return Ok(None);
         }
     };
@@ -743,7 +938,7 @@ fn parse_mod_json(json_path: &Path, mod_path: &Path) -> Result<Option<DetectedMo
     let mod_json: ModJson = match serde_json::from_reader(file) {
         Ok(json) => json,
         Err(e) => {
-            log::error!("Failed to parse JSON file {}: {}", json_path.display(), e);
+            log::debug!("Failed to parse JSON file {}: {}", json_path.display(), e);
             return Ok(None);
         }
     };
@@ -755,10 +950,15 @@ fn parse_mod_json(json_path: &Path, mod_path: &Path) -> Result<Option<DetectedMo
         return Ok(None);
     }
 
+    let authors: Vec<String> = match mod_json.author {
+        AuthorField::String(s) => vec![s],
+        AuthorField::Array(v) => v,
+    };
+
     Ok(Some(DetectedMod {
         name: mod_json.name,
         id: mod_json.id,
-        author: mod_json.author,
+        author: authors,
         description: mod_json.description,
         prefix: mod_json.prefix,
         version: mod_json.version,
@@ -868,7 +1068,7 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         } else if let Some(value) = line.strip_prefix("MOD_ID:") {
             id = value.trim().to_string();
         } else if let Some(value) = line.strip_prefix("MOD_AUTHOR:") {
-            // Parse author list [Author1, Author2, ...]
+            // Parse author list [Author1, Author2, ...] and strip quotes
             if let Some(author_str) = value
                 .trim()
                 .strip_prefix('[')
@@ -876,7 +1076,7 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
             {
                 author = author_str
                     .split(',')
-                    .map(|s| s.trim().to_string())
+                    .map(|s| strip_quotes(s.trim()))
                     .collect();
             }
         } else if let Some(value) = line.strip_prefix("MOD_DESCRIPTION:") {
@@ -892,7 +1092,10 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
             {
-                dependencies = deps_str.split(',').map(|s| s.trim().to_string()).collect();
+                dependencies = deps_str
+                    .split(',')
+                    .map(|s| strip_quotes(s.trim()))
+                    .collect();
             }
         } else if let Some(value) = line.strip_prefix("CONFLICTS:") {
             // Parse conflicts list
@@ -901,7 +1104,10 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
             {
-                conflicts = conf_str.split(',').map(|s| s.trim().to_string()).collect();
+                conflicts = conf_str
+                    .split(',')
+                    .map(|s| strip_quotes(s.trim()))
+                    .collect();
             }
         }
     }
@@ -949,6 +1155,17 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         catalog_match: None,
         is_duplicate: false,
     }))
+}
+
+fn strip_quotes(s: &str) -> String {
+    let mut out = s.trim().to_string();
+    if (out.starts_with('"') && out.ends_with('"'))
+        || (out.starts_with('\'') && out.ends_with('\''))
+    {
+        out.remove(0);
+        out.pop();
+    }
+    out
 }
 
 /// Get all detected mods and mark which ones are tracked in the database

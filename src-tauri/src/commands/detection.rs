@@ -14,7 +14,7 @@ pub async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
         Ok(Some((mods, _))) => mods,
         _ => Vec::new(),
     };
-    let detected_mods = local_mod_detection::detect_manual_mods(&db, &cached_mods)?;
+    let detected_mods = local_mod_detection::detect_manual_mods_cached(&db, &cached_mods)?;
 
     let mod_name = mod_type.as_str();
     match mod_name {
@@ -66,7 +66,32 @@ pub async fn get_detected_local_mods(
         Ok(Some((mods, _))) => mods,
         _ => Vec::new(),
     };
-    local_mod_detection::detect_manual_mods(&db, &cached_mods)
+    local_mod_detection::detect_manual_mods_cached(&db, &cached_mods)
+}
+
+/// Reindexes mods by syncing the database with the filesystem.
+/// Returns (files_removed, db_entries_cleaned). Currently we only clean DB entries.
+#[tauri::command]
+pub async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+
+    let installed = map_error(db.get_installed_mods())?;
+    let mut cleaned_entries = 0usize;
+    for m in installed {
+        let path = PathBuf::from(&m.path);
+        if !path.exists() {
+            map_error(db.remove_installed_mod(&m.name))?;
+            cleaned_entries += 1;
+        }
+    }
+
+    // Clear detection cache so next detection reflects changes
+    local_mod_detection::clear_detection_cache();
+
+    Ok((0, cleaned_entries))
 }
 
 #[tauri::command]

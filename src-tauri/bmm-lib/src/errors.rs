@@ -123,8 +123,9 @@ impl fmt::Display for AppError {
                 write!(f, "Failed to install mod '{mod_name}': {source}")
             }
 
-            AppError::NetworkRequest { url, source } => {
-                write!(f, "Network request to '{url}' failed: {source}")
+            AppError::NetworkRequest { url: _, source } => {
+                // Show only the underlying message to keep UI errors concise
+                write!(f, "{source}")
             }
 
             AppError::MacOsLibrary { lib_name, source } => {

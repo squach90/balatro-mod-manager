@@ -1,5 +1,6 @@
 use crate::errors::AppError;
 use flate2::read::GzDecoder;
+use reqwest::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
 use reqwest::Client;
 use std::fs;
 use std::io::Read;
@@ -20,6 +21,26 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
             source: e.to_string(),
         })?;
 
+    // Capture headers for fallback detection
+    let content_type_header = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let content_disposition_filename = response
+        .headers()
+        .get(CONTENT_DISPOSITION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_disposition_filename);
+
+    // Check status before reading body
+    if !response.status().is_success() {
+        return Err(AppError::NetworkRequest {
+            url: url.clone(),
+            source: format!("Download URL not reachable (HTTP {})", response.status()),
+        });
+    }
+
     let file = response
         .bytes()
         .await
@@ -28,9 +49,17 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
             source: e.to_string(),
         })?;
 
-    let file_type = infer::get(&file)
-        .ok_or_else(|| AppError::InvalidState("Unknown file type".into()))?
-        .mime_type();
+    let archive_kind = guess_archive_kind(
+        &file,
+        &url,
+        content_type_header.as_deref(),
+        content_disposition_filename.as_deref(),
+    )
+    .ok_or_else(|| {
+        AppError::InvalidState(
+            "Unsupported or unknown archive type (supported: .zip, .tar, .tar.gz)".into(),
+        )
+    })?;
 
     let mod_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
@@ -73,19 +102,121 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
 
     log::info!("Installing mod: {url}");
 
-    let installed_path = match file_type {
-        "application/zip" => handle_zip(file, &mod_dir, &mod_name)?,
-        "application/x-tar" => handle_tar(file, &mod_dir, &mod_name)?, // Updated
-        "application/gzip" => handle_tar_gz(file, &mod_dir, &mod_name)?, // Updated
-        _ => {
-            return Err(AppError::InvalidState(format!(
-                "Unsupported file type: {file_type}"
-            )))
-        }
+    let installed_path = match archive_kind {
+        ArchiveKind::Zip => handle_zip(file, &mod_dir, &mod_name)?,
+        ArchiveKind::Tar => handle_tar(file, &mod_dir, &mod_name)?,
+        ArchiveKind::TarGz => handle_tar_gz(file, &mod_dir, &mod_name)?,
     };
 
     log::info!("Mod installed successfully at: {installed_path:?}");
     Ok(installed_path)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ArchiveKind {
+    Zip,
+    Tar,
+    TarGz,
+}
+
+fn parse_disposition_filename(header_value: &str) -> Option<String> {
+    // very simple parser for filename=... parameter
+    // e.g. attachment; filename="foo.zip" or filename=foo.zip
+    for part in header_value.split(';') {
+        let part = part.trim();
+        if let Some(rest) = part.strip_prefix("filename=") {
+            let mut val = rest.trim().to_string();
+            if (val.starts_with('"') && val.ends_with('"'))
+                || (val.starts_with('\'') && val.ends_with('\''))
+            {
+                val.remove(0);
+                val.pop();
+            }
+            if !val.is_empty() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+fn has_zip_magic(bytes: &bytes::Bytes) -> bool {
+    bytes.len() >= 4
+        && ((bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04)
+            || (bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x05 && bytes[3] == 0x06)
+            || (bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x07 && bytes[3] == 0x08))
+}
+
+fn has_gzip_magic(bytes: &bytes::Bytes) -> bool {
+    bytes.len() >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B
+}
+
+fn has_tar_ustar(bytes: &bytes::Bytes) -> bool {
+    bytes.len() > 262 && &bytes[257..262] == b"ustar"
+}
+
+fn guess_archive_kind(
+    bytes: &bytes::Bytes,
+    url: &str,
+    content_type: Option<&str>,
+    cd_filename: Option<&str>,
+) -> Option<ArchiveKind> {
+    // 1) Strongest: manual magic-byte checks
+    if has_zip_magic(bytes) {
+        return Some(ArchiveKind::Zip);
+    }
+    if has_gzip_magic(bytes) {
+        return Some(ArchiveKind::TarGz);
+    }
+    if has_tar_ustar(bytes) {
+        return Some(ArchiveKind::Tar);
+    }
+
+    // 2) infer crate as a hint
+    if let Some(kind) = infer::get(bytes) {
+        match kind.mime_type() {
+            "application/zip" | "application/x-zip-compressed" => return Some(ArchiveKind::Zip),
+            "application/x-tar" => return Some(ArchiveKind::Tar),
+            "application/gzip" | "application/x-gzip" => return Some(ArchiveKind::TarGz),
+            _ => {}
+        }
+    }
+
+    // 3) Headers/filename hints, but only accept if minimally consistent with bytes
+    if let Some(ct) = content_type {
+        let ct = ct.to_ascii_lowercase();
+        if ct.contains("zip") && has_zip_magic(bytes) {
+            return Some(ArchiveKind::Zip);
+        }
+        if (ct.contains("x-tar") || ct == "application/tar")
+            && (has_tar_ustar(bytes) || !has_zip_magic(bytes))
+        {
+            return Some(ArchiveKind::Tar);
+        }
+        if ct.contains("gzip") && has_gzip_magic(bytes) {
+            return Some(ArchiveKind::TarGz);
+        }
+    }
+
+    let name = cd_filename
+        .map(|s| s.to_string())
+        .or_else(|| url.split('?').next().map(|s| s.to_string()));
+    if let Some(n) = name {
+        let n = n.to_ascii_lowercase();
+        if n.ends_with(".zip") && has_zip_magic(bytes) {
+            return Some(ArchiveKind::Zip);
+        }
+        if n.ends_with(".tar") && (has_tar_ustar(bytes) || !has_zip_magic(bytes)) {
+            return Some(ArchiveKind::Tar);
+        }
+        if (n.ends_with(".tar.gz") || n.ends_with(".tgz") || n.ends_with(".gz"))
+            && has_gzip_magic(bytes)
+        {
+            return Some(ArchiveKind::TarGz);
+        }
+    }
+
+    None
 }
 
 fn handle_zip(file: bytes::Bytes, mod_dir: &Path, mod_name: &str) -> Result<PathBuf, AppError> {

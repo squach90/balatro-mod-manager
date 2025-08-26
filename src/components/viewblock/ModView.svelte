@@ -25,7 +25,8 @@
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 	import { invoke } from "@tauri-apps/api/core";
-	import { cachedVersions } from "../../stores/modStore";
+import { cachedVersions } from "../../stores/modStore";
+import { addMessage } from "$lib/stores";
 	import { lovelyPopupStore } from "../../stores/modStore";
 	import { modsStore } from "../../stores/modStore";
 	import { untrack } from "svelte";
@@ -459,6 +460,11 @@
 					`Failed to ${isUpdate ? "update" : "install"} mod:`,
 					e,
 				);
+				const raw = e instanceof Error ? e.message : String(e);
+				const onlyUrlMsg = raw.includes("Download URL not reachable")
+					? (raw.match(/Download URL not reachable[^"]*/)?.[0] || raw)
+					: `Failed to ${isUpdate ? "update" : "install"} ${mod.title}: ${raw}`;
+				addMessage(onlyUrlMsg, "error");
 			} finally {
 				loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 				await forceRefreshCache();

@@ -11,6 +11,7 @@
 	import FlexSearch from "flexsearch";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
+	import { addMessage } from "$lib/stores";
 	import { fade } from "svelte/transition";
 	import ModCard from "./ModCard.svelte";
 
@@ -137,6 +138,11 @@
 				}));
 			} catch (error) {
 				console.error("Failed to install mod:", error);
+				const raw = error instanceof Error ? error.message : String(error);
+				const onlyUrlMsg = raw.includes("Download URL not reachable")
+					? (raw.match(/Download URL not reachable[^"]*/)?.[0] || raw)
+					: `Failed to install ${modToInstall.title}: ${raw}`;
+				addMessage(onlyUrlMsg as string, "error");
 			} finally {
 				loadingStates.update((s) => ({
 					...s,

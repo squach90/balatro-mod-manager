@@ -591,10 +591,11 @@
 				await refreshInstalledMods();
 			} catch (error) {
 				console.error("Failed to install mod:", error);
-				addMessage(
-					`Installation failed: ${error instanceof Error ? error.message : String(error)}`,
-					"error",
-				);
+				const raw = error instanceof Error ? error.message : String(error);
+				const onlyUrlMsg = raw.includes("Download URL not reachable")
+					? (raw.match(/Download URL not reachable[^"]*/)?.[0] || raw)
+					: `Installation failed: ${raw}`;
+				addMessage(onlyUrlMsg, "error");
 			} finally {
 				loadingStates2.update((s: Record<string, boolean>) => ({
 					...s,
