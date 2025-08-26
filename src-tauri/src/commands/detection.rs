@@ -43,9 +43,11 @@ pub async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<()
                 if path.is_dir() {
                     let ignore_file_path = path.join(".lovelyignore");
                     if ignore_file_path.exists() {
-                        std::fs::remove_file(&ignore_file_path).map_err(|e| AppError::FileWrite {
-                            path: path.clone(),
-                            source: e.to_string(),
+                        std::fs::remove_file(&ignore_file_path).map_err(|e| {
+                            AppError::FileWrite {
+                                path: path.clone(),
+                                source: e.to_string(),
+                            }
                         })?;
                     }
                 }
@@ -71,7 +73,10 @@ pub async fn get_detected_local_mods(
 pub async fn delete_manual_mod(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
     if !path.exists() {
-        return Err(format!("Invalid path '{}': Path doesn't exist", path.display()));
+        return Err(format!(
+            "Invalid path '{}': Path doesn't exist",
+            path.display()
+        ));
     }
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
@@ -84,12 +89,14 @@ pub async fn delete_manual_mod(path: String) -> Result<(), String> {
         .canonicalize()
         .map_err(|e| format!("Failed to canonicalize mods directory: {e}"))?;
     if !canonicalized_path.starts_with(&canonicalized_mods_dir) {
-        return Err(format!("Path is outside of the mods directory: {}", path.display()));
+        return Err(format!(
+            "Path is outside of the mods directory: {}",
+            path.display()
+        ));
     }
 
     if path.is_dir() {
-        std::fs::remove_dir_all(&path)
-            .map_err(|e| format!("Failed to remove directory: {e}"))?
+        std::fs::remove_dir_all(&path).map_err(|e| format!("Failed to remove directory: {e}"))?
     } else {
         std::fs::remove_file(&path).map_err(|e| format!("Failed to remove file: {e}"))?
     }
@@ -162,7 +169,8 @@ pub async fn restore_from_backup(path: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to parse metadata: {e}"))?;
             if let Some(original_path) = metadata.get("original_path").and_then(|v| v.as_str()) {
                 if original_path == path.to_string_lossy() {
-                    if let Some(backup_time) = metadata.get("backup_time").and_then(|v| v.as_u64()) {
+                    if let Some(backup_time) = metadata.get("backup_time").and_then(|v| v.as_u64())
+                    {
                         if backup_time > latest_time {
                             latest_time = backup_time;
                             latest_backup = Some(entry.path());
@@ -245,4 +253,3 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     }
     Ok(())
 }
-

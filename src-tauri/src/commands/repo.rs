@@ -1,9 +1,9 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use bmm_lib::errors::AppError;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use crate::models::ModMeta;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use bmm_lib::errors::AppError;
 
 #[tauri::command]
 pub async fn get_repo_path() -> Result<String, String> {

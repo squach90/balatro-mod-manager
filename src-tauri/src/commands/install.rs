@@ -31,7 +31,11 @@ pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), Str
         let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
 
         if lovely_console_enabled {
-            let disable_arg = if !lovely_console_enabled { " --disable-console" } else { "" };
+            let disable_arg = if !lovely_console_enabled {
+                " --disable-console"
+            } else {
+                ""
+            };
             let command_line = format!(
                 "cd '{}' && DYLD_INSERT_LIBRARIES='{}' '{}'{}",
                 path.display(),
@@ -40,9 +44,8 @@ pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), Str
                 disable_arg
             );
 
-            let applescript = format!(
-                "tell application \"Terminal\" to do script \"{command_line}\"",
-            );
+            let applescript =
+                format!("tell application \"Terminal\" to do script \"{command_line}\"",);
 
             Command::new("osascript")
                 .arg("-e")
@@ -140,7 +143,10 @@ pub async fn install_talisman_version(version: String) -> Result<String, String>
 pub async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
     let db = bmm_lib::database::Database::new().map_err(|e| e.to_string())?;
     let all_dependents = db.get_dependents(&mod_name).map_err(|e| e.to_string())?;
-    let filtered: Vec<String> = all_dependents.into_iter().filter(|d| d != &mod_name).collect();
+    let filtered: Vec<String> = all_dependents
+        .into_iter()
+        .filter(|d| d != &mod_name)
+        .collect();
     Ok(filtered)
 }
 
@@ -163,7 +169,9 @@ pub async fn cascade_uninstall(
         let dependents = map_error(db.get_dependents(&current))?;
         to_uninstall.extend(dependents);
 
-        map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(mod_details.path)))?;
+        map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(
+            mod_details.path,
+        )))?;
         map_error(db.remove_installed_mod(&current))?;
     }
 
@@ -208,7 +216,11 @@ pub async fn remove_installed_mod(
 
 #[tauri::command]
 pub async fn install_mod(url: String, folder_name: String) -> Result<PathBuf, String> {
-    let folder_name = if folder_name.is_empty() { None } else { Some(folder_name) };
+    let folder_name = if folder_name.is_empty() {
+        None
+    } else {
+        Some(folder_name)
+    };
     map_error(bmm_lib::installer::install_mod(url, folder_name).await)
 }
 
@@ -239,4 +251,3 @@ pub async fn add_installed_mod(
     };
     map_error(db.add_installed_mod(&name, &path, &dependencies, current_version))
 }
-

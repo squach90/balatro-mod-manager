@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use bmm_lib::{
-    errors::AppError,
-    lovely,
-};
+use bmm_lib::{errors::AppError, lovely};
 
 use crate::state::AppState;
 
@@ -16,7 +13,10 @@ pub async fn is_lovely_installed(_state: tauri::State<'_, AppState>) -> Result<b
     {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
-        let lovely_path = config_dir.join("Balatro").join("bins").join("liblovely.dylib");
+        let lovely_path = config_dir
+            .join("Balatro")
+            .join("bins")
+            .join("liblovely.dylib");
         Ok(lovely_path.exists())
     }
 
@@ -46,7 +46,9 @@ pub async fn is_lovely_installed(_state: tauri::State<'_, AppState>) -> Result<b
 }
 
 #[tauri::command]
-pub async fn check_lovely_update(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+pub async fn check_lovely_update(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
     // Load latest from GitHub
     let latest = lovely::get_latest_lovely_version()
         .await
@@ -81,9 +83,7 @@ pub async fn update_lovely_to_latest(state: tauri::State<'_, AppState>) -> Resul
 
     // Persist version
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.set_lovely_version(&latest)
-        .map_err(|e| e.to_string())?;
+    db.set_lovely_version(&latest).map_err(|e| e.to_string())?;
 
     Ok(latest)
 }
-

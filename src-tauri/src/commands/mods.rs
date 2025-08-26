@@ -172,4 +172,3 @@ pub async fn toggle_mod_enabled_by_path(mod_path: String, enabled: bool) -> Resu
 
     Ok(())
 }
-

@@ -1,13 +1,13 @@
-pub mod lovely;
 pub mod cache;
-pub mod settings;
-pub mod repo;
-pub mod system;
-pub mod paths;
-pub mod mods;
 pub mod detection;
 pub mod import;
 pub mod install;
+pub mod lovely;
+pub mod mods;
+pub mod paths;
+pub mod repo;
+pub mod settings;
+pub mod system;
 
 // Re-export commands so `generate_handler!` can take flat names if desired.
 pub use lovely::{check_lovely_update, is_lovely_installed, update_lovely_to_latest};

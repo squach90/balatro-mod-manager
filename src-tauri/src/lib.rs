@@ -1,8 +1,8 @@
+pub mod commands;
 mod github_repo;
 mod models;
 mod state;
 mod util;
-pub mod commands;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -42,20 +42,41 @@ pub fn run() {
             let discord_rpc = DiscordRpcManager::new();
             let discord_rpc_enabled = db.is_discord_rpc_enabled().unwrap_or(true);
             discord_rpc.set_enabled(discord_rpc_enabled);
-            app.manage(AppState { db: Mutex::new(db), discord_rpc: Mutex::new(discord_rpc) });
+            app.manage(AppState {
+                db: Mutex::new(db),
+                discord_rpc: Mutex::new(discord_rpc),
+            });
 
             tauri::async_runtime::spawn(async move {
-                let db = match Database::new() { Ok(db) => db, Err(e) => { log::warn!("Lovely check: failed to open DB: {e}"); return; } };
-                match db.get_lovely_version() { Ok(Some(_)) => {}, Ok(None) | Err(_) => { log::info!("lovely_version missing; UI will prompt to install/update Lovely"); } }
+                let db = match Database::new() {
+                    Ok(db) => db,
+                    Err(e) => {
+                        log::warn!("Lovely check: failed to open DB: {e}");
+                        return;
+                    }
+                };
+                match db.get_lovely_version() {
+                    Ok(Some(_)) => {}
+                    Ok(None) | Err(_) => {
+                        log::info!(
+                            "lovely_version missing; UI will prompt to install/update Lovely"
+                        );
+                    }
+                }
             });
 
             let app_dir = app
                 .path()
                 .app_data_dir()
                 .map_err(|_| AppError::DirNotFound(PathBuf::from("app data directory")))?;
-            std::fs::create_dir_all(&app_dir).map_err(|e| AppError::DirCreate { path: app_dir.clone(), source: e.to_string() })?;
+            std::fs::create_dir_all(&app_dir).map_err(|e| AppError::DirCreate {
+                path: app_dir.clone(),
+                source: e.to_string(),
+            })?;
             #[cfg(debug_assertions)]
-            if let Some(window) = app.get_webview_window("main") { window.open_devtools(); }
+            if let Some(window) = app.get_webview_window("main") {
+                window.open_devtools();
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

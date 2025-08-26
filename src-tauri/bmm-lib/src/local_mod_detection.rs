@@ -251,12 +251,13 @@ fn find_catalog_match(
 
         // 4. Try substring matching (check if one contains the other)
         // Avoid matching if one is very short to prevent too many false positives
-        if local_name_lower.len() > 3 && catalog_title_lower.len() > 3
+        if local_name_lower.len() > 3
+            && catalog_title_lower.len() > 3
             && (local_name_lower.contains(&catalog_title_lower)
                 || catalog_title_lower.contains(&local_name_lower))
-            {
-                return Some(create_match(catalog_mod));
-            }
+        {
+            return Some(create_match(catalog_mod));
+        }
     }
 
     // 5. Try similarity matching (edit distance)
@@ -975,8 +976,8 @@ pub fn get_untracked_mods(db: &Database) -> Result<Vec<DetectedMod>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::collections::HashSet;
+    use tempfile::tempdir;
 
     fn write_file(path: &Path, contents: &str) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1022,7 +1023,10 @@ mod tests {
             description: "Loader".into(),
             image: "".into(),
             categories: vec![],
-            colors: cache::ColorPair { color1: "".into(), color2: "".into() },
+            colors: cache::ColorPair {
+                color1: "".into(),
+                color2: "".into(),
+            },
             installed: false,
             requires_steamodded: false,
             requires_talisman: false,

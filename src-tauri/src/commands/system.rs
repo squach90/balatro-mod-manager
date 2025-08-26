@@ -9,4 +9,3 @@ pub async fn check_steam_running() -> bool {
 pub async fn check_balatro_running() -> bool {
     is_balatro_running()
 }
-

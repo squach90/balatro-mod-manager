@@ -12,7 +12,8 @@ pub async fn process_dropped_file(path: String) -> Result<String, String> {
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
     let mods_dir = config_dir.join("Balatro").join("Mods");
-    std::fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {e}"))?;
+    std::fs::create_dir_all(&mods_dir)
+        .map_err(|e| format!("Failed to create mods directory: {e}"))?;
 
     let file_path = std::path::Path::new(&path);
     let file_name = file_path
@@ -21,8 +22,8 @@ pub async fn process_dropped_file(path: String) -> Result<String, String> {
         .to_str()
         .ok_or_else(|| "Invalid file name".to_string())?;
 
-    let mut file = std::fs::File::open(file_path)
-        .map_err(|e| format!("Failed to open file: {e}"))?;
+    let mut file =
+        std::fs::File::open(file_path).map_err(|e| format!("Failed to open file: {e}"))?;
     let mut buffer = Vec::new();
     std::io::Read::read_to_end(&mut file, &mut buffer)
         .map_err(|e| format!("Failed to read file: {e}"))?;
@@ -59,7 +60,9 @@ pub async fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<Stri
     } else if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
         extract_tar_gz_from_memory(cursor, &mod_dir)?;
     } else {
-        return Err("Unsupported file format. Only ZIP, TAR, and TAR.GZ are supported.".to_string());
+        return Err(
+            "Unsupported file format. Only ZIP, TAR, and TAR.GZ are supported.".to_string(),
+        );
     }
 
     if let Ok(entries) = std::fs::read_dir(&mod_dir) {
@@ -74,7 +77,11 @@ pub async fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<Stri
             {
                 let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
                 let target_path = mod_dir.join(entry.file_name());
-                if entry.file_type().map_err(|e| format!("Failed to get file type: {e}"))?.is_dir() {
+                if entry
+                    .file_type()
+                    .map_err(|e| format!("Failed to get file type: {e}"))?
+                    .is_dir()
+                {
                     std::fs::rename(entry.path(), &target_path)
                         .map_err(|e| format!("Failed to move directory: {e}"))?;
                 } else {
@@ -93,7 +100,8 @@ pub async fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<Stri
 fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Result<(), String> {
     std::fs::create_dir_all(target_dir)
         .map_err(|e| format!("Failed to create target directory: {e}"))?;
-    let mut archive = ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {e}"))?;
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {e}"))?;
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
@@ -101,7 +109,10 @@ fn extract_zip_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
         if file.name().starts_with("__MACOSX/") {
             continue;
         }
-        let file_path = match file.enclosed_name() { Some(path) => path.to_owned(), None => continue };
+        let file_path = match file.enclosed_name() {
+            Some(path) => path.to_owned(),
+            None => continue,
+        };
         let output_path = target_dir.join(&file_path);
         if file.is_dir() {
             std::fs::create_dir_all(&output_path)
@@ -129,7 +140,9 @@ fn extract_tar_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> Res
         .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
         let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
-        let path = entry.path().map_err(|e| format!("Failed to get entry path: {e}"))?;
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
         if let Some(parent) = output_path.parent() {
             std::fs::create_dir_all(parent)
@@ -152,7 +165,9 @@ fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> 
         .map_err(|e| format!("Failed to read TAR entries: {e}"))?
     {
         let mut entry = entry.map_err(|e| format!("Failed to read TAR entry: {e}"))?;
-        let path = entry.path().map_err(|e| format!("Failed to get entry path: {e}"))?;
+        let path = entry
+            .path()
+            .map_err(|e| format!("Failed to get entry path: {e}"))?;
         let output_path = target_dir.join(path);
         if let Some(parent) = output_path.parent() {
             std::fs::create_dir_all(parent)

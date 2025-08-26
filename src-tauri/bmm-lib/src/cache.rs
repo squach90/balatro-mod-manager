@@ -383,7 +383,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "macOS sandbox sometimes disrupts cache readback in CI")]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS sandbox sometimes disrupts cache readback in CI"
+    )]
     fn test_mod_cache_lifecycle() -> Result<(), AppError> {
         with_temp_cache(|_| {
             let test_mod = Mod {
@@ -415,7 +418,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "macos", ignore = "macOS sandbox sometimes disrupts cache readback in CI")]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS sandbox sometimes disrupts cache readback in CI"
+    )]
     fn test_versions_cache_roundtrip() -> Result<(), AppError> {
         with_temp_cache(|_| {
             let versions = vec!["1.0.0".into(), "1.1.0".into()];

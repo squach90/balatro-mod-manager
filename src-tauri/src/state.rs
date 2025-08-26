@@ -7,4 +7,3 @@ pub struct AppState {
     pub db: Mutex<Database>,
     pub discord_rpc: Mutex<DiscordRpcManager>,
 }
-

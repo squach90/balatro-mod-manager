@@ -31,7 +31,10 @@ pub async fn get_balatro_path(state: tauri::State<'_, AppState>) -> Result<Optio
 }
 
 #[tauri::command]
-pub async fn set_balatro_path(state: tauri::State<'_, AppState>, path: String) -> Result<(), String> {
+pub async fn set_balatro_path(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
     let db = match state.db.lock() {
         Ok(db) => db,
         Err(e) => return Err(e.to_string()),

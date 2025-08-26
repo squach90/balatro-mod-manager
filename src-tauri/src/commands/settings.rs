@@ -26,8 +26,7 @@ pub async fn set_lovely_console_status(
 #[tauri::command]
 pub async fn get_discord_rpc_status(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.is_discord_rpc_enabled()
-        .map_err(|e| e.to_string())
+    db.is_discord_rpc_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

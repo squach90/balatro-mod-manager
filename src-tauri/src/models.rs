@@ -33,4 +33,3 @@ pub struct ModCacheInfo {
     pub path: String,
     pub last_commit: i64,
 }
-
