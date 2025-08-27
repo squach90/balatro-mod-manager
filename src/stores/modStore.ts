@@ -1,14 +1,15 @@
 import { writable, type Writable } from 'svelte/store';
 
 export interface Mod {
-	title: string;
-	description: string;
-	image: string;
-	categories: Category[];
-	colors: {
-		color1: string;
-		color2: string;
-	};
+    title: string;
+    description: string;
+    image: string;
+    imageFallback?: string;
+    categories: Category[];
+    colors: {
+        color1: string;
+        color2: string;
+    };
 	requires_steamodded: boolean;
 	requires_talisman: boolean;
 	publisher: string;

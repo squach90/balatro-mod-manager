@@ -210,10 +210,10 @@
 								"error",
 							);
 						}
-						showWarningPopup.set((p) => ({ ...p, visible: false }));
+						showWarningPopup.update((p) => ({ ...p, visible: false }));
 					},
 					onCancel: () => {
-						showWarningPopup.set((p) => ({ ...p, visible: false }));
+						showWarningPopup.update((p) => ({ ...p, visible: false }));
 					},
 				});
 			}

@@ -35,6 +35,7 @@ import { addMessage } from "$lib/stores";
 		fetchCachedMods,
 		forceRefreshCache,
 	} from "../../stores/modCache";
+    import LazyImage from "../common/LazyImage.svelte";
 
 	// Store to track which mods have updates available
 	// const updateAvailable = writable<Record<string, boolean>>({});
@@ -851,18 +852,10 @@ import { addMessage } from "$lib/stores";
 							class="image-button"
 							aria-label={`View full size image of ${mod.title}`}
 						>
-							<img
-								src={mod.image}
-								alt={mod.title}
-								draggable="false"
-							/>
+							<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
 						</button>
 					{:else}
-						<img
-							src={mod.image}
-							alt={mod.title}
-							draggable="false"
-						/>
+						<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
 					{/if}
 				</div>
 

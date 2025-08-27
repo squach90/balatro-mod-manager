@@ -281,75 +281,67 @@
 		}
 	}
 
-	onMount(() => {
-		// Animation dots initialization
-		dotInterval = setInterval(() => {
-			loadingDots.update((n) => (n + 1) % 4);
-		}, 500);
+onMount(() => {
+    // Animation dots initialization
+    dotInterval = setInterval(() => {
+        loadingDots.update((n) => (n + 1) % 4);
+    }, 500);
 
-		// Separate async function for initialization
-		const initialize = async () => {
-			const cached = await getFromCache();
-			if (
-				cached &&
-				Date.now() - cached.timestamp * 1000 < CACHE_DURATION
-			) {
-				modsStore.set(cached.mods);
-				isLoading = false;
-			} else {
-				try {
-					isLoading = true;
-					const freshMods = await fetchModDirectories();
-					modsStore.set(freshMods);
-				} finally {
-					isLoading = false;
-				}
-			}
+    // Separate async function for initialization
+    const initialize = async () => {
+        try {
+            isLoading = true;
+            const freshMods = await fetchModDirectories();
+            modsStore.set(freshMods);
 
-			try {
-				await Promise.all(
-					$modsStore.map(async (mod) => {
-						const status = await checkIfModIsInstalled(mod);
-						installationStatus.update((s) => ({
-							...s,
-							[mod.title]: status,
-						}));
-					}),
-				);
-			} catch (error) {
-				console.error("Install status check failed:", error);
-			}
+            // After mods load, update install status and local mods if needed
+            try {
+                await Promise.all(
+                    $modsStore.map(async (mod) => {
+                        const status = await checkIfModIsInstalled(mod);
+                        installationStatus.update((s) => ({
+                            ...s,
+                            [mod.title]: status,
+                        }));
+                    }),
+                );
+            } catch (error) {
+                console.error("Install status check failed:", error);
+            }
 
-			if ($currentCategory === "Installed Mods") {
-				await getLocalMods();
-			}
-		};
+            if ($currentCategory === "Installed Mods") {
+                await getLocalMods();
+            }
+        } finally {
+            isLoading = false;
+        }
+    };
 
-		// Separate async function for background state
-		const initBackgroundState = async () => {
-			try {
-				const isBackgroundAnimationEnabled: boolean = await invoke(
-					"get_background_state",
-				);
-				backgroundEnabled.set(isBackgroundAnimationEnabled);
-			} catch (error) {
-				console.error("Failed to get background status:", error);
-				addMessage(
-					"Error fetching background animation status",
-					"error",
-				);
-			}
-		};
+    // Separate async function for background state
+    const initBackgroundState = async () => {
+        try {
+            const isBackgroundAnimationEnabled: boolean = await invoke(
+                "get_background_state",
+            );
+            backgroundEnabled.set(isBackgroundAnimationEnabled);
+        } catch (error) {
+            console.error("Failed to get background status:", error);
+            addMessage(
+                "Error fetching background animation status",
+                "error",
+            );
+        }
+    };
 
-		// Call async functions without awaiting them directly in onMount
-		initialize();
-		initBackgroundState();
+    // Call async functions without awaiting them directly in onMount
+    initialize();
+    initBackgroundState();
 
-		// Return synchronous cleanup function
-		return () => {
-			clearInterval(dotInterval);
-		};
-	});
+    // Return synchronous cleanup function
+    return () => {
+        clearInterval(dotInterval);
+    };
+});
 
 	const getAllInstalledMods = async () => {
 		try {
@@ -652,143 +644,95 @@
 		}
 	};
 
-	interface ModMeta {
-		title: string;
-		"requires-steamodded": boolean;
-		"requires-talisman": boolean;
-		categories: string[];
-		author: string;
-		repo: string;
-		downloadURL?: string;
-		folderName?: string;
-		version?: string;
-	}
+    interface ModMeta {
+        title: string;
+        "requires-steamodded": boolean;
+        "requires-talisman": boolean;
+        categories: string[];
+        author: string;
+        repo: string;
+        downloadURL?: string;
+        folderName?: string;
+        version?: string;
+        "last-updated"?: number;
+    }
 
-	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
-	// const CACHE_DURATION = 5 * 1000; // 5 seconds
+	// Do not depend on cache for catalog; prefer fresh data + lazy UI
+	const CACHE_DURATION = 0;
 
-	async function saveToCache(mods: Mod[]) {
-		await invoke("save_mods_cache", { mods });
-	}
+    // Thumbnails are stored via Git LFS in the GitLab repo
+    const GITLAB_INDEX_BASE = "https://gitlab.com/balatro-mod-index/repo";
+    function buildGitLabThumbs(dirName: string): { primary: string; fallback?: string } {
+        // Do not pre-encode here; let the browser handle spaces and special chars
+        return {
+            primary: `${GITLAB_INDEX_BASE}/-/raw/main/mods/${dirName}/thumbnail.jpg`,
+            fallback: `${GITLAB_INDEX_BASE}/-/raw/master/mods/${dirName}/thumbnail.jpg`,
+        };
+    }
 
-	async function getFromCache(): Promise<{
-		mods: Mod[];
-		timestamp: number;
-	} | null> {
-		try {
-			const cached = await invoke<[Mod[], number] | null>(
-				"load_mods_cache",
-			);
-			if (!cached) return null;
-			const [mods, timestamp] = cached;
-			return { mods, timestamp };
-		} catch (error) {
-			console.error("Error loading cache:", error);
-			return null;
-		}
-	}
+    async function fetchModDirectories(): Promise<Mod[]> {
+        isLoading = true;
+        try {
+            // List mod directories from GitLab via Tauri (avoids CORS)
+            const modDirs = await invoke<string[]>("list_gitlab_mods");
+            const mods = (
+                await Promise.all(
+                    modDirs.map(async (dirName) => {
+                        try {
+                            const metaText = await invoke<string>("get_gitlab_file", {
+                                path: `mods/${dirName}/meta.json`,
+                            });
+                            const desc = await invoke<string>("get_gitlab_file", {
+                                path: `mods/${dirName}/description.md`,
+                            });
+                            const meta = JSON.parse(metaText) as ModMeta;
 
-	async function fetchModDirectories(): Promise<Mod[]> {
-		try {
-			isLoading = true;
-			const repoPath = await cloneOrUpdateRepo();
-			if (!repoPath) return [];
+                            // Resolve a working thumbnail URL via Tauri (avoids 404s), else use default cover
+                            const thumbUrl = await invoke<string | null>(
+                                "get_gitlab_thumbnail_url",
+                                { dirName }
+                            );
 
-			const modDirs = await invoke<string[]>("list_directories", {
-				path: `${repoPath}/mods`,
-			});
+							const thumbs = thumbUrl ? { primary: thumbUrl as string, fallback: undefined } : buildGitLabThumbs(dirName);
 
-			const mods = (
-				await Promise.all(
-					modDirs.map(async (dirName) => {
-						try {
-							const [meta, description] = await Promise.all([
-								invoke<ModMeta>("read_json_file", {
-									path: `${repoPath}/mods/${dirName}/meta.json`,
-								}),
-								invoke<string>("read_text_file", {
-									path: `${repoPath}/mods/${dirName}/description.md`,
-								}),
-							]);
+                            const mappedCategories = meta.categories
+                                .map((cat) => categoryMap[cat] ?? null)
+                                .filter((cat): cat is Category => cat !== null);
 
-							const imageData: string | undefined =
-								await invoke<string>("get_mod_thumbnail", {
-									modPath: dirName,
-								});
+                            return {
+                                title: meta.title,
+                                description: desc,
+                                image: thumbUrl ?? `${GITLAB_INDEX_BASE}/-/raw/main/mods/${dirName}/thumbnail.jpg`,
+                                imageFallback: thumbUrl ? undefined : "/images/cover.jpg",
+                                colors: getRandomColorPair(),
+                                categories: mappedCategories,
+                                requires_steamodded: meta["requires-steamodded"],
+                                requires_talisman: meta["requires-talisman"],
+                                publisher: meta.author,
+                                repo: meta.repo,
+                                downloadURL: meta.downloadURL || "",
+                                folderName: meta.folderName,
+                                version: meta.version,
+                                installed: false,
+                                last_updated: (meta as any)["last-updated"] ?? 0,
+                            } as Mod;
+                        } catch (error) {
+                            console.error(`Failed to process mod ${dirName}:`, error);
+                            return null;
+                        }
+                    }),
+                )
+            ).filter((m): m is Mod => m !== null);
+            return mods;
+        } catch (error) {
+            console.error("Failed to fetch mods:", error);
+            return [];
+        } finally {
+            isLoading = false;
+        }
+    }
 
-							// Log category mapping for debugging
-							// Ensure categories are properly mapped
-							const mappedCategories = meta.categories
-								.map((cat) => {
-									return categoryMap[cat] ?? null;
-								})
-								.filter((cat): cat is Category => cat !== null);
-
-							return {
-								title: meta.title,
-								description,
-								image: imageData || "images/cover.jpg",
-								colors: getRandomColorPair(),
-								categories: mappedCategories,
-								requires_steamodded:
-									meta["requires-steamodded"],
-								requires_talisman: meta["requires-talisman"],
-								publisher: meta.author,
-								repo: meta.repo,
-								downloadURL: meta.downloadURL || "",
-								folderName: meta.folderName,
-								version: meta.version,
-								installed: false,
-								last_updated: meta["last-updated"],
-							} as Mod;
-						} catch (error) {
-							console.error(
-								`Failed to process mod ${dirName}:`,
-								error,
-							);
-							return null;
-						}
-					}),
-				)
-			).filter((mod): mod is Mod => mod !== null);
-
-			await saveToCache(mods);
-			return mods;
-		} catch (error) {
-			console.error("Failed to fetch mods:", error);
-			return [];
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	async function cloneOrUpdateRepo() {
-		try {
-			const repoPath = await invoke<string>("get_repo_path");
-			const exists = await invoke<boolean>("path_exists", {
-				path: repoPath,
-			});
-			if (!exists) {
-				await invoke("clone_repo", {
-					url: "https://github.com/skyline69/balatro-mod-index.git",
-					path: repoPath,
-				});
-			} else {
-				const lastFetched = await invoke<number>("get_last_fetched");
-				if (Date.now() - lastFetched > 3600 * 1000) {
-					// 1 hour
-					await invoke("pull_repo", {
-						path: repoPath,
-					});
-					await invoke("update_last_fetched");
-				}
-			}
-			return repoPath;
-		} catch (error) {
-			console.error("Repo management failed:", error);
-			return null;
-		}
-	}
+    // No local clone or pull; we lazy-load from GitLab instead.
 
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
@@ -1245,7 +1189,7 @@
 									</p>
 								</div>
 								<div class="mods-grid local-mods-grid">
-									{#each enabledLocalMods as mod}
+									{#each enabledLocalMods as mod (mod.name)}
 										<LocalModCard
 											{mod}
 											onUninstall={handleModUninstalled}
@@ -1270,7 +1214,7 @@
 									</p>
 								</div>
 								<div class="mods-grid local-mods-grid">
-									{#each disabledLocalMods as mod}
+									{#each disabledLocalMods as mod (mod.name)}
 										<LocalModCard
 											{mod}
 											onUninstall={handleModUninstalled}
@@ -1329,7 +1273,7 @@
 									class="mods-grid"
 									class:has-local-mods={localMods.length > 0}
 								>
-									{#each enabledMods as mod}
+									{#each enabledMods as mod (mod.title)}
 										<ModCard
 											{mod}
 											onmodclick={handleModClick}
@@ -1356,7 +1300,7 @@
 									class="mods-grid"
 									class:has-local-mods={localMods.length > 0}
 								>
-									{#each disabledMods as mod}
+									{#each disabledMods as mod (mod.title)}
 										<ModCard
 											{mod}
 											onmodclick={handleModClick}
@@ -1371,7 +1315,7 @@
 					{:else}
 						<!-- Original non-InstalledMods categories -->
 						<div class="mods-grid">
-							{#each paginatedMods as mod}
+							{#each paginatedMods as mod (mod.title)}
 								<ModCard
 									{mod}
 									onmodclick={handleModClick}

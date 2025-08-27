@@ -10,6 +10,7 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
 	import { lovelyPopupStore } from "../../stores/modStore";
+    import LazyImage from "../common/LazyImage.svelte";
 
 	interface Props {
 		mod: Mod;
@@ -235,15 +236,9 @@
 		.color2};"
 >
 	<div class="mod-image">
-		<img
-			src={mod.image}
-			alt={mod.title}
-			draggable="false"
-			loading="lazy"
-			decoding="async"
-		/>
+		<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
 
-		<div class="tags">
+        <div class="tags">
 			<!-- <span class="tag updated"> -->
 			<!-- 	<Clock size={13} /> -->
 			<!-- 	{mod.lastUpdated} -->

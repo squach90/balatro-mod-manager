@@ -4,6 +4,10 @@ use std::path::PathBuf;
 use crate::models::ModMeta;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bmm_lib::errors::AppError;
+use serde::Deserialize;
+
+const GITLAB_PROJECT: &str = "balatro-mod-index/repo";
+const GITLAB_BASE: &str = "https://gitlab.com/balatro-mod-index/repo";
 
 #[tauri::command]
 pub async fn get_repo_path() -> Result<String, String> {
@@ -117,4 +121,86 @@ pub async fn read_text_file(path: &str) -> Result<String, String> {
         }
         .to_string()
     })
+}
+
+#[derive(Deserialize)]
+struct GitLabTreeEntry {
+    name: String,
+    #[allow(dead_code)]
+    r#type: String,
+}
+
+#[tauri::command]
+pub async fn list_gitlab_mods() -> Result<Vec<String>, String> {
+    let project = urlencoding::encode(GITLAB_PROJECT);
+    let url = format!(
+        "https://gitlab.com/api/v4/projects/{}/repository/tree?path=mods&ref=main&per_page=500",
+        project
+    );
+    let resp = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("GitLab API error: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("GitLab API status: {}", resp.status()));
+    }
+    let entries: Vec<GitLabTreeEntry> = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse GitLab tree failed: {}", e))?;
+    Ok(entries
+        .into_iter()
+        .filter(|e| e.r#type == "tree")
+        .map(|e| e.name)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn get_gitlab_file(path: &str) -> Result<String, String> {
+    // Encode path by segments so slashes remain
+    let encoded: String = path
+        .split('/')
+        .map(urlencoding::encode)
+        .map(|s| s.into_owned())
+        .collect::<Vec<_>>()
+        .join("/");
+
+    let u1 = format!("{}/-/raw/main/{}", GITLAB_BASE, encoded);
+    let u2 = format!("{}/-/raw/master/{}", GITLAB_BASE, encoded);
+
+    let mut resp = reqwest::get(&u1).await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        resp = reqwest::get(&u2).await.map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            return Err(format!("Failed to fetch {}: {}", path, resp.status()));
+        }
+    }
+    resp.text().await.map_err(|e| e.to_string())
+}
+
+#[allow(non_snake_case)]
+#[tauri::command]
+pub async fn get_gitlab_thumbnail_url(dirName: String) -> Result<Option<String>, String> {
+    // Try unencoded then encoded, on main then master
+    let enc = urlencoding::encode(&dirName);
+    let candidates = [
+        format!("{}/-/raw/main/mods/{}/thumbnail.jpg", GITLAB_BASE, dirName),
+        format!("{}/-/raw/main/mods/{}/thumbnail.jpg", GITLAB_BASE, enc),
+        format!("{}/-/raw/master/mods/{}/thumbnail.jpg", GITLAB_BASE, dirName),
+        format!("{}/-/raw/master/mods/{}/thumbnail.jpg", GITLAB_BASE, enc),
+    ];
+
+    use reqwest::header::RANGE;
+    let client = reqwest::Client::new();
+    for url in candidates {
+        let resp = client
+            .get(&url)
+            .header(RANGE, "bytes=0-0")
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if resp.status().is_success() {
+            return Ok(Some(url));
+        }
+    }
+    Ok(None)
 }
