@@ -885,7 +885,7 @@ struct ModJson {
     prefix: String,
     main_file: String,
     #[serde(default)]
-    priority: i32,
+    priority: i64,
     #[serde(default = "default_badge_color")]
     badge_colour: String,
     #[serde(default = "default_text_color")]
