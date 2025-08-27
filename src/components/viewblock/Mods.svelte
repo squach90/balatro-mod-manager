@@ -711,12 +711,16 @@ onMount(() => {
                                 .map((cat) => categoryMap[cat] ?? null)
                                 .filter((cat): cat is Category => cat !== null);
 
+                            const hasThumb = !!thumbUrl;
                             return {
                                 title: meta.title,
                                 description: desc,
-                                image: thumbUrl ?? `${GITLAB_INDEX_BASE}/-/raw/main/mods/${dirName}/thumbnail.jpg`,
-                                // Always provide a default fallback cover so 404s show the default image
-                                imageFallback: "images/cover.jpg",
+                                // If no resolvable thumbnail, render default cover directly to avoid spinner/question mark
+                                image: hasThumb
+                                    ? (thumbUrl as string)
+                                    : "/images/cover.jpg",
+                                // Only provide a fallback when loading a remote thumbnail
+                                imageFallback: hasThumb ? "/images/cover.jpg" : undefined,
                                 colors: getRandomColorPair(),
                                 categories: mappedCategories,
                                 requires_steamodded: meta["requires-steamodded"],

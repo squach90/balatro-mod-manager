@@ -4,7 +4,7 @@
   export let src: string;
   export let alt: string = "";
   export let fallbackSrc: string | undefined;
-  export let defaultSrc: string = "images/cover.jpg";
+  export let defaultSrc: string = "/images/cover.jpg";
   export let className: string = "";
 
   // Emit load/error for parent if needed
@@ -16,6 +16,7 @@
   let triedFallback = false;
   let visible = false;
   let loading = true;
+  let usingDefault = false; // show static cover when thumbnail is missing
 
   function ensureObserver() {
     if (!observer) {
@@ -49,18 +50,16 @@
   function handleError() {
     if (!triedFallback && fallbackSrc && currentSrc !== fallbackSrc) {
       triedFallback = true;
+      usingDefault = false;
       currentSrc = fallbackSrc;
       // keep loading true until fallback resolves
       loading = true;
     } else {
-      // Try default cover if not already using it
-      if (currentSrc !== defaultSrc && defaultSrc) {
-        currentSrc = defaultSrc;
-        loading = true;
-      } else {
-        loading = false;
-        dispatch("error");
-      }
+      // Switch to static default cover and hide the spinner
+      usingDefault = true;
+      currentSrc = null;
+      loading = false;
+      dispatch("error");
     }
   }
 
@@ -77,6 +76,7 @@
   $: if (src) {
     if (currentSrc !== null && currentSrc !== src) {
       triedFallback = false;
+      usingDefault = false;
       loading = true;
       if (visible) {
         currentSrc = src;
@@ -89,14 +89,17 @@
 </script>
 
 <div class={`lazy-image ${className}`} bind:this={wrapper}>
-  {#if currentSrc}
-    {#key currentSrc}
-      <img src={currentSrc} alt={alt} on:load={handleLoad} on:error={handleError} draggable="false" decoding="async" />
-    {/key}
-  {/if}
-
-  {#if loading}
-    <div class="spinner-square" aria-hidden="true"></div>
+  {#if usingDefault}
+    <div class="default-cover" aria-hidden="true"></div>
+  {:else}
+    {#if currentSrc}
+      {#key currentSrc}
+        <img src={currentSrc} alt={alt} on:load={handleLoad} on:error={handleError} draggable="false" decoding="async" />
+      {/key}
+    {/if}
+    {#if loading && !(usingDefault || (currentSrc && currentSrc === defaultSrc))}
+      <div class="spinner-square" aria-hidden="true"></div>
+    {/if}
   {/if}
 </div>
 
@@ -105,6 +108,8 @@
     position: relative;
     width: 100%;
     height: 100%;
+    border-radius: 5px;
+    overflow: hidden;
   }
 
   .lazy-image img {
@@ -113,6 +118,15 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 5px;
+  }
+
+  .default-cover {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: url('/images/cover.jpg') center/cover no-repeat;
     border-radius: 5px;
   }
 
