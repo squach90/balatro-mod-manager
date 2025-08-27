@@ -4,7 +4,7 @@
   export let src: string;
   export let alt: string = "";
   export let fallbackSrc: string | undefined;
-  export let defaultSrc: string = "/images/cover.jpg";
+  export let defaultSrc: string = "images/cover.jpg";
   export let className: string = "";
 
   // Emit load/error for parent if needed

@@ -675,25 +675,37 @@ onMount(() => {
         try {
             // List mod directories from GitLab via Tauri (avoids CORS)
             const modDirs = await invoke<string[]>("list_gitlab_mods");
-            const mods = (
-                await Promise.all(
-                    modDirs.map(async (dirName) => {
-                        try {
-                            const metaText = await invoke<string>("get_gitlab_file", {
-                                path: `mods/${dirName}/meta.json`,
-                            });
-                            const desc = await invoke<string>("get_gitlab_file", {
-                                path: `mods/${dirName}/description.md`,
-                            });
-                            const meta = JSON.parse(metaText) as ModMeta;
+            // Concurrency limiter to avoid GitLab 429s
+            async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+                const results: R[] = new Array(items.length) as R[];
+                let i = 0;
+                const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+                    while (true) {
+                        const idx = i++;
+                        if (idx >= items.length) break;
+                        results[idx] = await fn(items[idx]);
+                    }
+                });
+                await Promise.all(workers);
+                return results;
+            }
 
-                            // Resolve a working thumbnail URL via Tauri (avoids 404s), else use default cover
+            const mods = (
+                await mapLimit(modDirs, 6, async (dirName) => {
+                    try {
+                        const metaText = await invoke<string>("get_gitlab_file", {
+                            path: `mods/${dirName}/meta.json`,
+                        });
+                        const desc = await invoke<string>("get_gitlab_file", {
+                            path: `mods/${dirName}/description.md`,
+                        });
+                        const meta = JSON.parse(metaText) as ModMeta;
+
+                            // Resolve a working thumbnail URL via Tauri (avoids 404s)
                             const thumbUrl = await invoke<string | null>(
                                 "get_gitlab_thumbnail_url",
                                 { dirName }
                             );
-
-							const thumbs = thumbUrl ? { primary: thumbUrl as string, fallback: undefined } : buildGitLabThumbs(dirName);
 
                             const mappedCategories = meta.categories
                                 .map((cat) => categoryMap[cat] ?? null)
@@ -703,7 +715,8 @@ onMount(() => {
                                 title: meta.title,
                                 description: desc,
                                 image: thumbUrl ?? `${GITLAB_INDEX_BASE}/-/raw/main/mods/${dirName}/thumbnail.jpg`,
-                                imageFallback: thumbUrl ? undefined : "/images/cover.jpg",
+                                // Always provide a default fallback cover so 404s show the default image
+                                imageFallback: "images/cover.jpg",
                                 colors: getRandomColorPair(),
                                 categories: mappedCategories,
                                 requires_steamodded: meta["requires-steamodded"],
@@ -716,12 +729,11 @@ onMount(() => {
                                 installed: false,
                                 last_updated: (meta as any)["last-updated"] ?? 0,
                             } as Mod;
-                        } catch (error) {
-                            console.error(`Failed to process mod ${dirName}:`, error);
-                            return null;
-                        }
-                    }),
-                )
+                    } catch (error) {
+                        console.error(`Failed to process mod ${dirName}:`, error);
+                        return null;
+                    }
+                })
             ).filter((m): m is Mod => m !== null);
             return mods;
         } catch (error) {

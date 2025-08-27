@@ -425,6 +425,7 @@ dependencies = [
  "tauri-utils",
  "tempfile",
  "test-case",
+ "tokio",
  "tokio-test",
  "urlencoding",
  "walkdir",

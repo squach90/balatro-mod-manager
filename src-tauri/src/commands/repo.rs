@@ -156,6 +156,8 @@ pub async fn list_gitlab_mods() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub async fn get_gitlab_file(path: &str) -> Result<String, String> {
+    use tokio::time::{sleep, Duration};
+
     // Encode path by segments so slashes remain
     let encoded: String = path
         .split('/')
@@ -164,17 +166,27 @@ pub async fn get_gitlab_file(path: &str) -> Result<String, String> {
         .collect::<Vec<_>>()
         .join("/");
 
-    let u1 = format!("{}/-/raw/main/{}", GITLAB_BASE, encoded);
-    let u2 = format!("{}/-/raw/master/{}", GITLAB_BASE, encoded);
+    let urls = [
+        format!("{}/-/raw/main/{}", GITLAB_BASE, encoded),
+        format!("{}/-/raw/master/{}", GITLAB_BASE, encoded),
+    ];
 
-    let mut resp = reqwest::get(&u1).await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        resp = reqwest::get(&u2).await.map_err(|e| e.to_string())?;
-        if !resp.status().is_success() {
-            return Err(format!("Failed to fetch {}: {}", path, resp.status()));
+    let client = reqwest::Client::new();
+    let mut delay = Duration::from_millis(250);
+    for attempt in 0..4 {
+        for u in &urls {
+            let resp = client.get(u).send().await.map_err(|e| e.to_string())?;
+            if resp.status().is_success() {
+                return resp.text().await.map_err(|e| e.to_string());
+            }
+            let code = resp.status().as_u16();
+            // 404/410: not found — no point retrying this URL
+            if code == 404 || code == 410 { continue; }
+            // 429/5xx: temporary, retry after delay
         }
+        if attempt < 3 { sleep(delay).await; delay = delay.saturating_mul(2); }
     }
-    resp.text().await.map_err(|e| e.to_string())
+    Err(format!("Failed to fetch {} after retries", path))
 }
 
 #[allow(non_snake_case)]
