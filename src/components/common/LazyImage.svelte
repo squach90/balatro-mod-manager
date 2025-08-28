@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from "svelte";
+  import { assets } from "$app/paths";
 
   export let src: string;
   export let alt: string = "";
@@ -11,93 +12,241 @@
   const dispatch = createEventDispatcher();
 
   let wrapper: HTMLDivElement | null = null;
-  let observer: IntersectionObserver | null = null;
   let currentSrc: string | null = null;
   let triedFallback = false;
-  let visible = false;
-  let loading = true;
+  let loading = false;
   let usingDefault = false; // show static cover when thumbnail is missing
+  let loaded = false; // only show <img> when real image decoded
+  let loadTimer: number | null = null;
+  const LOAD_TIMEOUT_MS = 8000;
+  let spinnerDelayTimer: number | null = null;
+  // Delay spinner so broken/missing thumbnails (often 404 quickly) won't show it
+  const SPINNER_DELAY_MS = 700;
+  let showSpinner = false;
+  // When we decide to show default for a given src, remember it so we don't retry
+  let lockDefaultFor: string | null = null;
 
-  function ensureObserver() {
-    if (!observer) {
-      observer = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            visible = true;
-            actuallyLoad();
-            observer?.disconnect();
-            observer = null;
-            break;
-          }
-        }
-      }, { rootMargin: "200px" });
-      if (wrapper) observer.observe(wrapper);
+  function isValidSrc(val: string | undefined | null): boolean {
+    if (!val) return false;
+    const s = val.trim();
+    if (s.length === 0) return false;
+    // Allow common safe schemes and app asset paths
+    return (
+      s.startsWith("data:") ||
+      s.startsWith("/") ||
+      s.startsWith("asset:") ||
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("tauri://")
+    );
+  }
+
+  function resolveLocal(path: string | undefined | null): string | null {
+    if (!path) return null;
+    const s = path.trim();
+    if (s.length === 0) return null;
+    // Remote or data/asset schemes are left as-is
+    if (
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("data:") ||
+      s.startsWith("asset:") ||
+      s.startsWith("tauri://")
+    ) {
+      return s;
+    }
+    // Treat as app static asset; normalize leading slash
+    const normalized = s.startsWith("/") ? s : `/${s}`;
+    return `${assets}${normalized}`;
+  }
+
+  function resolvedDefaultSrc(): string {
+    return resolveLocal(defaultSrc) || `${assets}/images/cover.jpg`;
+  }
+
+  function isDefaultResolved(path: string | null | undefined): boolean {
+    if (!path) return false;
+    const r = resolveLocal(path);
+    return r === resolvedDefaultSrc() || /(^|\/)images\/cover\.jpg$/i.test(path.trim());
+  }
+
+  function clearTimer() {
+    if (loadTimer !== null) {
+      clearTimeout(loadTimer);
+      loadTimer = null;
+    }
+    if (spinnerDelayTimer !== null) {
+      clearTimeout(spinnerDelayTimer);
+      spinnerDelayTimer = null;
     }
   }
 
-  function actuallyLoad() {
-    if (!visible) return;
-    if (!currentSrc) {
-      currentSrc = src;
-    }
+  function startTimeout() {
+    clearTimer();
+    loadTimer = setTimeout(() => {
+      // Treat as a stalled load and fallback like an error
+      handleStall();
+    }, LOAD_TIMEOUT_MS) as unknown as number;
   }
 
-  function handleLoad() {
+  function startLoading() {
+    // If no src or clearly invalid, use default immediately
+    if (!isValidSrc(src)) {
+      resetToDefault();
+      lockDefaultFor = src ?? null;
+      return;
+    }
+    // If src is the same as the default cover, don't animate
+    if (isDefaultResolved(src)) {
+      resetToDefault();
+      lockDefaultFor = src ?? null;
+      return;
+    }
+    triedFallback = false;
+    usingDefault = false;
+    currentSrc = resolveLocal(src);
+    loading = true;
+    showSpinner = true; // show animation immediately for real thumbnails
+    startTimeout();
+    // Optional delayed assert remains to guard if needed
+    spinnerDelayTimer = setTimeout(() => {
+      if (loading && !usingDefault) {
+        showSpinner = true;
+      }
+    }, SPINNER_DELAY_MS) as unknown as number;
+  }
+
+  function resetToDefault() {
+    clearTimer();
+    triedFallback = false;
+    currentSrc = null;
+    usingDefault = true;
     loading = false;
+    loaded = false;
+    showSpinner = false;
+  }
+
+  function handleLoad(event: Event) {
+    // Some webviews may fire load on 404 responses; validate dimensions
+    const img = event.currentTarget as HTMLImageElement | null;
+    if (img && (img.naturalWidth === 0 || img.naturalHeight === 0)) {
+      // Treat as error to trigger fallback/default
+      handleError();
+      return;
+    }
+    clearTimer();
+    loading = false;
+    loaded = true;
+    showSpinner = false;
     dispatch("load");
   }
 
   function handleError() {
-    if (!triedFallback && fallbackSrc && currentSrc !== fallbackSrc) {
+    clearTimer();
+    if (!triedFallback && fallbackSrc && currentSrc !== resolveLocal(fallbackSrc)) {
       triedFallback = true;
       usingDefault = false;
-      currentSrc = fallbackSrc;
+      if (isDefaultResolved(fallbackSrc)) {
+        resetToDefault();
+        dispatch("error");
+        lockDefaultFor = src ?? null;
+        return;
+      }
+      currentSrc = resolveLocal(fallbackSrc);
       // keep loading true until fallback resolves
       loading = true;
+      loaded = false;
+      showSpinner = false;
+      startTimeout();
+      spinnerDelayTimer = setTimeout(() => {
+        if (loading && !usingDefault) {
+          showSpinner = true;
+        }
+      }, SPINNER_DELAY_MS) as unknown as number;
     } else {
       // Switch to static default cover and hide the spinner
-      usingDefault = true;
-      currentSrc = null;
-      loading = false;
+      resetToDefault();
       dispatch("error");
+      lockDefaultFor = src ?? null;
+    }
+  }
+
+  function handleStall() {
+    // Same logic as error handler but keep one path
+    if (!triedFallback && fallbackSrc && currentSrc !== resolveLocal(fallbackSrc)) {
+      triedFallback = true;
+      usingDefault = false;
+      if (isDefaultResolved(fallbackSrc)) {
+        resetToDefault();
+        dispatch("error");
+        lockDefaultFor = src ?? null;
+        return;
+      }
+      currentSrc = resolveLocal(fallbackSrc);
+      loading = true;
+      loaded = false;
+      showSpinner = false;
+      startTimeout();
+      spinnerDelayTimer = setTimeout(() => {
+        if (loading && !usingDefault) {
+          showSpinner = true;
+        }
+      }, SPINNER_DELAY_MS) as unknown as number;
+    } else {
+      resetToDefault();
+      dispatch("error");
+      lockDefaultFor = src ?? null;
     }
   }
 
   onMount(() => {
-    // Use IntersectionObserver to defer loading until visible
-    ensureObserver();
+    startLoading();
   });
 
   onDestroy(() => {
-    observer?.disconnect();
+    clearTimer();
   });
 
   // Reset when src changes so pagination or prop updates reload correct image
-  $: if (src) {
-    if (currentSrc !== null && currentSrc !== src) {
-      triedFallback = false;
-      usingDefault = false;
-      loading = true;
-      if (visible) {
-        currentSrc = src;
-      } else {
-        currentSrc = null;
-        ensureObserver();
-      }
+  $: if (src && src.trim().length > 0) {
+    const srcStr = src.trim();
+    const resolved = resolveLocal(srcStr);
+    // If we previously locked default for this src, keep showing default without retrying
+    if (lockDefaultFor === srcStr) {
+      if (!usingDefault) resetToDefault();
+    } else if (!isValidSrc(srcStr) || isDefaultResolved(srcStr)) {
+      if (!usingDefault) resetToDefault();
+      lockDefaultFor = srcStr;
+    } else if (currentSrc !== resolved && !usingDefault) {
+      startLoading();
+    } else if (currentSrc === null && !usingDefault) {
+      startLoading();
     }
+  } else {
+    // If no src is provided, immediately show the static default cover
+    resetToDefault();
+    lockDefaultFor = src ?? null;
   }
 </script>
 
-<div class={`lazy-image ${className}`} bind:this={wrapper}>
+<div class={`lazy-image ${className} ${loaded ? 'loaded' : ''}`} bind:this={wrapper} style={!loaded ? `background:url('${resolvedDefaultSrc()}') center/cover no-repeat` : ''}>
   {#if usingDefault}
-    <div class="default-cover" aria-hidden="true"></div>
+    <img
+      src={resolveLocal(defaultSrc) || `${assets}/images/cover.jpg`}
+      alt={alt}
+      draggable="false"
+      decoding="async"
+    />
   {:else}
     {#if currentSrc}
       {#key currentSrc}
-        <img src={currentSrc} alt={alt} on:load={handleLoad} on:error={handleError} draggable="false" decoding="async" />
+        <img src={currentSrc} alt={alt} on:load={handleLoad} on:error={handleError} draggable="false" decoding="async" aria-hidden={!loaded} />
       {/key}
+    {:else}
+      <!-- Show placeholder cover while waiting to start loading -->
+      <!-- default cover via background; no extra element needed -->
     {/if}
-    {#if loading && !(usingDefault || (currentSrc && currentSrc === defaultSrc))}
+    {#if showSpinner && currentSrc}
       <div class="spinner-square" aria-hidden="true"></div>
     {/if}
   {/if}
@@ -119,16 +268,15 @@
     height: 100%;
     object-fit: cover;
     border-radius: 5px;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
   }
 
-  .default-cover {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background: url('/images/cover.jpg') center/cover no-repeat;
-    border-radius: 5px;
+  .lazy-image.loaded img {
+    opacity: 1;
   }
+
+  /* default-cover no longer needed; default is img-based */
 
   /* Square spinning throbber */
   .spinner-square {
