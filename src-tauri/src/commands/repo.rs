@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::path::PathBuf;
 
 use crate::models::ModMeta;
@@ -10,120 +9,6 @@ const GITLAB_PROJECT: &str = "balatro-mod-index/repo";
 const GITLAB_BASE: &str = "https://gitlab.com/balatro-mod-index/repo";
 const GITLAB_RAW_MAIN: &str = "https://gitlab.com/balatro-mod-index/repo/-/raw/main";
 const GITLAB_RAW_MASTER: &str = "https://gitlab.com/balatro-mod-index/repo/-/raw/master";
-
-#[tauri::command]
-pub async fn get_repo_path() -> Result<String, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
-    let repo_path = config_dir.join("Balatro").join("mod_index");
-    Ok(repo_path.to_string_lossy().into_owned())
-}
-
-#[tauri::command]
-pub async fn clone_repo(url: &str, path: &str) -> Result<(), String> {
-    crate::github_repo::clone_repository(url, path).await
-}
-
-#[allow(non_snake_case)]
-#[tauri::command]
-pub async fn get_mod_thumbnail(modPath: String) -> Result<Option<String>, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
-
-    let full_path = config_dir
-        .join("Balatro")
-        .join("mod_index")
-        .join("mods")
-        .join(modPath)
-        .join("thumbnail.jpg");
-
-    let image_data = match std::fs::read(&full_path) {
-        Ok(data) => data,
-        Err(_) => return Ok(None),
-    };
-
-    let base64 = STANDARD.encode(image_data);
-    Ok(Some(format!("data:image/jpeg;base64,{base64}")))
-}
-
-#[tauri::command]
-pub async fn pull_repo(path: &str) -> Result<(), String> {
-    let path_buf = PathBuf::from(path);
-    if !path_buf.exists() {
-        return Err(format!("Directory '{path}' does not exist"));
-    }
-
-    if !crate::github_repo::is_repository_directory(path) {
-        let repo_url = "https://github.com/skyline69/balatro-mod-index";
-        return crate::github_repo::clone_repository(repo_url, path).await;
-    }
-
-    crate::github_repo::pull_repository(path).await
-}
-
-#[tauri::command]
-pub async fn list_directories(path: &str) -> Result<Vec<String>, String> {
-    let dir = PathBuf::from(path);
-    let entries = std::fs::read_dir(dir).map_err(|e| {
-        AppError::FileRead {
-            path: PathBuf::from(path),
-            source: e.to_string(),
-        }
-        .to_string()
-    })?;
-
-    let mut dirs = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| {
-            AppError::FileRead {
-                path: PathBuf::from(path),
-                source: e.to_string(),
-            }
-            .to_string()
-        })?;
-
-        if let Ok(file_type) = entry.file_type() {
-            if file_type.is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    dirs.push(name.to_string());
-                }
-            }
-        }
-    }
-    Ok(dirs)
-}
-
-#[tauri::command]
-pub async fn read_json_file(path: &str) -> Result<ModMeta, String> {
-    let path = PathBuf::from(path);
-    let file = File::open(&path).map_err(|e| {
-        AppError::FileRead {
-            path: path.clone(),
-            source: e.to_string(),
-        }
-        .to_string()
-    })?;
-
-    serde_json::from_reader(file).map_err(|e| {
-        AppError::JsonParse {
-            path,
-            source: e.to_string(),
-        }
-        .to_string()
-    })
-}
-
-#[tauri::command]
-pub async fn read_text_file(path: &str) -> Result<String, String> {
-    let path = PathBuf::from(path);
-    std::fs::read_to_string(&path).map_err(|e| {
-        AppError::FileRead {
-            path,
-            source: e.to_string(),
-        }
-        .to_string()
-    })
-}
 
 #[derive(Deserialize)]
 struct GitLabTreeEntry {
@@ -183,10 +68,15 @@ pub async fn get_gitlab_file(path: &str) -> Result<String, String> {
             }
             let code = resp.status().as_u16();
             // 404/410: not found — no point retrying this URL
-            if code == 404 || code == 410 { continue; }
+            if code == 404 || code == 410 {
+                continue;
+            }
             // 429/5xx: temporary, retry after delay
         }
-        if attempt < 3 { sleep(delay).await; delay = delay.saturating_mul(2); }
+        if attempt < 3 {
+            sleep(delay).await;
+            delay = delay.saturating_mul(2);
+        }
     }
     Err(format!("Failed to fetch {} after retries", path))
 }
@@ -199,7 +89,10 @@ pub async fn get_gitlab_thumbnail_url(dirName: String) -> Result<Option<String>,
     let candidates = [
         format!("{}/-/raw/main/mods/{}/thumbnail.jpg", GITLAB_BASE, dirName),
         format!("{}/-/raw/main/mods/{}/thumbnail.jpg", GITLAB_BASE, enc),
-        format!("{}/-/raw/master/mods/{}/thumbnail.jpg", GITLAB_BASE, dirName),
+        format!(
+            "{}/-/raw/master/mods/{}/thumbnail.jpg",
+            GITLAB_BASE, dirName
+        ),
         format!("{}/-/raw/master/mods/{}/thumbnail.jpg", GITLAB_BASE, enc),
     ];
 
@@ -234,20 +127,13 @@ pub async fn fetch_gitlab_mods_archive() -> Result<Vec<ArchiveModItem>, String> 
     use flate2::read::GzDecoder;
     use std::collections::HashMap;
     use std::io::Read;
-    use tar::Archive;
     use std::time::Instant;
+    use tar::Archive;
 
-    // Cache location in config dir
+    // Cache location in config dir (created lazily when writing)
     let config_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
     let cache_dir = config_dir.join("Balatro").join("mod_index_cache");
-    std::fs::create_dir_all(&cache_dir).map_err(|e| {
-        AppError::DirCreate {
-            path: cache_dir.clone(),
-            source: e.to_string(),
-        }
-        .to_string()
-    })?;
     let cache_file = cache_dir.join("mod_index_archive.json");
 
     #[derive(Serialize, Deserialize)]
@@ -294,7 +180,11 @@ pub async fn fetch_gitlab_mods_archive() -> Result<Vec<ArchiveModItem>, String> 
             Ok(resp) => {
                 if resp.status().as_u16() == 304 {
                     if let Some(c) = existing_cache {
-                        log::info!("GitLab archive 304 Not Modified (branch: {}), using cached items: {}", c.branch, c.items.len());
+                        log::info!(
+                            "GitLab archive 304 Not Modified (branch: {}), using cached items: {}",
+                            c.branch,
+                            c.items.len()
+                        );
                         return Ok(c.items);
                     }
                     // No cache to use; try next URL branch without ETag
@@ -360,12 +250,29 @@ pub async fn fetch_gitlab_mods_archive() -> Result<Vec<ArchiveModItem>, String> 
 
         // Expect paths like: <top> / mods / <dir> / (meta.json|description.md)
         let mut comps = path.components();
-        match comps.next() { Some(_) => (), None => continue };
-        let mods_dir = match comps.next() { Some(c) => c, None => continue };
-        if mods_dir.as_os_str() != "mods" { continue; }
-        let dir_os = match comps.next() { Some(c) => c.as_os_str().to_owned(), None => continue };
-        let dir_name = match dir_os.to_str() { Some(s) => s.to_string(), None => continue };
-        let filename = match comps.next() { Some(c) => c.as_os_str().to_string_lossy().to_string(), None => continue };
+        match comps.next() {
+            Some(_) => (),
+            None => continue,
+        };
+        let mods_dir = match comps.next() {
+            Some(c) => c,
+            None => continue,
+        };
+        if mods_dir.as_os_str() != "mods" {
+            continue;
+        }
+        let dir_os = match comps.next() {
+            Some(c) => c.as_os_str().to_owned(),
+            None => continue,
+        };
+        let dir_name = match dir_os.to_str() {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let filename = match comps.next() {
+            Some(c) => c.as_os_str().to_string_lossy().to_string(),
+            None => continue,
+        };
 
         if filename == "meta.json" {
             let mut buf = String::new();
@@ -403,7 +310,12 @@ pub async fn fetch_gitlab_mods_archive() -> Result<Vec<ArchiveModItem>, String> 
     }
 
     // Sort by title asc for stability
-    out.sort_by(|a, b| a.meta.title.to_lowercase().cmp(&b.meta.title.to_lowercase()));
+    out.sort_by(|a, b| {
+        a.meta
+            .title
+            .to_lowercase()
+            .cmp(&b.meta.title.to_lowercase())
+    });
 
     log::info!(
         "Parsed {} mods from archive in {} ms",
@@ -417,6 +329,8 @@ pub async fn fetch_gitlab_mods_archive() -> Result<Vec<ArchiveModItem>, String> 
         branch: image_branch.to_string(),
         items: out.clone(),
     };
+    // Ensure directory exists before writing
+    let _ = std::fs::create_dir_all(&cache_dir);
     if let Ok(f) = std::fs::File::create(&cache_file) {
         let _ = serde_json::to_writer_pretty(f, &cache);
     }
@@ -435,17 +349,10 @@ struct IndexFileV1 {
 pub async fn fetch_gitlab_mods() -> Result<Vec<ArchiveModItem>, String> {
     use reqwest::header::{ETAG, IF_NONE_MATCH};
 
-    // Cache location
+    // Cache location (created lazily only when writing)
     let config_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
     let cache_dir = config_dir.join("Balatro").join("mod_index_cache");
-    std::fs::create_dir_all(&cache_dir).map_err(|e| {
-        AppError::DirCreate {
-            path: cache_dir.clone(),
-            source: e.to_string(),
-        }
-        .to_string()
-    })?;
     let cache_file = cache_dir.join("index_v1.json");
     let etag_file = cache_dir.join("index_v1.etag");
 
@@ -483,11 +390,13 @@ pub async fn fetch_gitlab_mods() -> Result<Vec<ArchiveModItem>, String> {
                     let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
                     let parsed: IndexFileV1 = serde_json::from_slice(&bytes)
                         .map_err(|e| format!("Failed to parse index.json: {}", e))?;
-                    // Save cache and etag
+                    // Save cache and etag (ensure directory exists)
+                    let _ = std::fs::create_dir_all(&cache_dir);
                     if let Ok(f) = std::fs::File::create(&cache_file) {
                         let _ = serde_json::to_writer_pretty(f, &parsed);
                     }
                     if let Some(et) = new_etag {
+                        let _ = std::fs::create_dir_all(&cache_dir);
                         let _ = std::fs::write(&etag_file, et);
                     }
                     return Ok(parsed.mods);
@@ -510,7 +419,10 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
     let t0 = Instant::now();
     // 1) List mod directories via GitLab API (main, then master)
     #[derive(Deserialize)]
-    struct GitLabTreeEntry { name: String, r#type: String }
+    struct GitLabTreeEntry {
+        name: String,
+        r#type: String,
+    }
 
     let client = reqwest::Client::new();
     let project = urlencoding::encode(GITLAB_PROJECT);
@@ -524,7 +436,11 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 let entries: Vec<GitLabTreeEntry> = resp.json().await.map_err(|e| e.to_string())?;
-                mod_dirs = entries.into_iter().filter(|e| e.r#type == "tree").map(|e| e.name).collect();
+                mod_dirs = entries
+                    .into_iter()
+                    .filter(|e| e.r#type == "tree")
+                    .map(|e| e.name)
+                    .collect();
                 branch_used = Some(if i == 0 { "main" } else { "master" });
                 break;
             }
@@ -546,8 +462,16 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
             async move {
                 // Try main then master for meta.json
                 let paths = [
-                    format!("{}/mods/{}/meta.json", GITLAB_RAW_MAIN, urlencoding::encode(&dir_clone)),
-                    format!("{}/mods/{}/meta.json", GITLAB_RAW_MASTER, urlencoding::encode(&dir_clone)),
+                    format!(
+                        "{}/mods/{}/meta.json",
+                        GITLAB_RAW_MAIN,
+                        urlencoding::encode(&dir_clone)
+                    ),
+                    format!(
+                        "{}/mods/{}/meta.json",
+                        GITLAB_RAW_MASTER,
+                        urlencoding::encode(&dir_clone)
+                    ),
                 ];
                 for url in &paths {
                     if let Ok(resp) = client.get(url).send().await {
@@ -556,7 +480,11 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
                                 if let Ok(meta) = serde_json::from_str::<ModMeta>(&text) {
                                     let image_url = format!(
                                         "{}/mods/{}/thumbnail.jpg",
-                                        if image_branch == "main" { GITLAB_RAW_MAIN } else { GITLAB_RAW_MASTER },
+                                        if image_branch == "main" {
+                                            GITLAB_RAW_MAIN
+                                        } else {
+                                            GITLAB_RAW_MASTER
+                                        },
                                         urlencoding::encode(&dir_clone)
                                     );
                                     return Some(ArchiveModItem {
@@ -578,7 +506,12 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
         .await;
 
     let mut items: Vec<ArchiveModItem> = results.into_iter().flatten().collect();
-    items.sort_by(|a, b| a.meta.title.to_lowercase().cmp(&b.meta.title.to_lowercase()));
+    items.sort_by(|a, b| {
+        a.meta
+            .title
+            .to_lowercase()
+            .cmp(&b.meta.title.to_lowercase())
+    });
     log::info!(
         "Fetched meta for {} mods via API in {} ms",
         items.len(),
@@ -600,13 +533,26 @@ fn safe_slug(input: &str) -> String {
 }
 
 fn ensure_assets_dirs() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(std::path::PathBuf::from("config directory")).to_string())?;
+    let config_dir = dirs::config_dir().ok_or_else(|| {
+        AppError::DirNotFound(std::path::PathBuf::from("config directory")).to_string()
+    })?;
     let base = config_dir.join("Balatro").join("mod_assets");
     let thumbs = base.join("thumbnails");
     let descs = base.join("descriptions");
-    std::fs::create_dir_all(&thumbs).map_err(|e| AppError::DirCreate { path: thumbs.clone(), source: e.to_string() }.to_string())?;
-    std::fs::create_dir_all(&descs).map_err(|e| AppError::DirCreate { path: descs.clone(), source: e.to_string() }.to_string())?;
+    std::fs::create_dir_all(&thumbs).map_err(|e| {
+        AppError::DirCreate {
+            path: thumbs.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+    std::fs::create_dir_all(&descs).map_err(|e| {
+        AppError::DirCreate {
+            path: descs.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
     Ok((thumbs, descs))
 }
 
@@ -631,7 +577,13 @@ pub async fn get_cached_installed_thumbnail(
     let slug = safe_slug(&title);
     let path = thumbs_dir.join(format!("{slug}.jpg"));
     if path.exists() {
-        let data = std::fs::read(&path).map_err(|e| AppError::FileRead { path: path.clone(), source: e.to_string() }.to_string())?;
+        let data = std::fs::read(&path).map_err(|e| {
+            AppError::FileRead {
+                path: path.clone(),
+                source: e.to_string(),
+            }
+            .to_string()
+        })?;
         let b64 = STANDARD.encode(data);
         return Ok(Some(format!("data:image/jpeg;base64,{b64}")));
     }
@@ -648,7 +600,13 @@ pub async fn get_cached_installed_thumbnail(
             if resp.status().is_success() {
                 if let Ok(bytes) = resp.bytes().await {
                     // Persist and return
-                    std::fs::write(&path, &bytes).map_err(|e| AppError::FileWrite { path: path.clone(), source: e.to_string() }.to_string())?;
+                    std::fs::write(&path, &bytes).map_err(|e| {
+                        AppError::FileWrite {
+                            path: path.clone(),
+                            source: e.to_string(),
+                        }
+                        .to_string()
+                    })?;
                     let b64 = STANDARD.encode(&bytes);
                     return Ok(Some(format!("data:image/jpeg;base64,{b64}")));
                 }
@@ -677,7 +635,13 @@ pub async fn get_description_cached_or_remote(
     let path = descs_dir.join(format!("{slug}.md"));
 
     if installed && path.exists() {
-        return std::fs::read_to_string(&path).map_err(|e| AppError::FileRead { path, source: e.to_string() }.to_string());
+        return std::fs::read_to_string(&path).map_err(|e| {
+            AppError::FileRead {
+                path,
+                source: e.to_string(),
+            }
+            .to_string()
+        });
     }
 
     // Fetch from GitLab raw (main then master)

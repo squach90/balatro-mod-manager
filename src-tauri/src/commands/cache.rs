@@ -51,7 +51,11 @@ pub async fn clear_cache() -> Result<(), String> {
         Some(p) => p,
         None => {
             // If we can't resolve config dir, return any prior error or success for the primary cache
-            return if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) };
+            return if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors.join("; "))
+            };
         }
     };
     let mod_index_cache_dir = config_dir.join("Balatro").join("mod_index_cache");
@@ -65,7 +69,11 @@ pub async fn clear_cache() -> Result<(), String> {
         }
     }
 
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
 }
 
 #[tauri::command]
