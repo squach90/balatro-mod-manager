@@ -39,6 +39,13 @@
 		isClearingCache = true;
 		try {
 			await invoke("clear_cache");
+			// Also clear small UI caches persisted in localStorage
+			try {
+				localStorage.removeItem("version-cache-steamodded");
+				localStorage.removeItem("version-cache-talisman");
+			} catch (e) {
+				// ignore storage errors
+			}
 			addMessage("Successfully cleared all caches!", "success");
 		} catch (error) {
 			addMessage("Failed to clear cache: " + error, "error");

@@ -291,8 +291,18 @@ onMount(() => {
     const initialize = async () => {
         try {
             isLoading = true;
+            // If the user is on Installed Mods, pre-seed placeholders so they are visible immediately
+            if ($currentCategory === "Installed Mods") {
+                await seedInstalledPlaceholders();
+            }
             const freshMods = await fetchModDirectories();
-            modsStore.set(freshMods);
+            // Merge fresh remote mods with any locally seeded placeholders
+            modsStore.update((arr) => {
+                const map = new Map<string, Mod>();
+                for (const m of arr) map.set(m.title, m);
+                for (const m of freshMods) map.set(m.title, m); // prefer remote data when available
+                return Array.from(map.values());
+            });
 
             // After mods load, update install status and local mods if needed
             try {
@@ -307,6 +317,13 @@ onMount(() => {
                 );
             } catch (error) {
                 console.error("Install status check failed:", error);
+            }
+
+            // Fill local thumbnails for installed mods to avoid remote image fetches
+            try {
+                await fillInstalledThumbnails($modsStore);
+            } catch (e) {
+                console.warn("thumbnail fill failed", e);
             }
 
             if ($currentCategory === "Installed Mods") {
@@ -660,91 +677,164 @@ onMount(() => {
 	// Do not depend on cache for catalog; prefer fresh data + lazy UI
 	const CACHE_DURATION = 0;
 
-    // Thumbnails are stored via Git LFS in the GitLab repo
-    const GITLAB_INDEX_BASE = "https://gitlab.com/balatro-mod-index/repo";
-    function buildGitLabThumbs(dirName: string): { primary: string; fallback?: string } {
-        // Do not pre-encode here; let the browser handle spaces and special chars
-        return {
-            primary: `${GITLAB_INDEX_BASE}/-/raw/main/mods/${dirName}/thumbnail.jpg`,
-            fallback: `${GITLAB_INDEX_BASE}/-/raw/master/mods/${dirName}/thumbnail.jpg`,
-        };
+    // Types returned by the single-archive Tauri command
+    interface ArchiveModItem {
+        dir_name: string;
+        meta: ModMeta;
+        description: string;
+        image_url: string;
     }
 
     async function fetchModDirectories(): Promise<Mod[]> {
         isLoading = true;
         try {
-            // List mod directories from GitLab via Tauri (avoids CORS)
-            const modDirs = await invoke<string[]>("list_gitlab_mods");
-            // Concurrency limiter to avoid GitLab 429s
-            async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
-                const results: R[] = new Array(items.length) as R[];
-                let i = 0;
-                const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
-                    while (true) {
-                        const idx = i++;
-                        if (idx >= items.length) break;
-                        results[idx] = await fn(items[idx]);
-                    }
-                });
-                await Promise.all(workers);
-                return results;
-            }
+            // Prefer prebuilt index.json if available, fallback to archive transparently
+            const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
+            const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+                const mappedCategories = item.meta.categories
+                    .map((cat) => categoryMap[cat] ?? null)
+                    .filter((cat): cat is Category => cat !== null);
 
-            const mods = (
-                await mapLimit(modDirs, 6, async (dirName) => {
-                    try {
-                        const metaText = await invoke<string>("get_gitlab_file", {
-                            path: `mods/${dirName}/meta.json`,
-                        });
-                        const desc = await invoke<string>("get_gitlab_file", {
-                            path: `mods/${dirName}/description.md`,
-                        });
-                        const meta = JSON.parse(metaText) as ModMeta;
-
-                            // Resolve a working thumbnail URL via Tauri (avoids 404s)
-                            const thumbUrl = await invoke<string | null>(
-                                "get_gitlab_thumbnail_url",
-                                { dirName }
-                            );
-
-                            const mappedCategories = meta.categories
-                                .map((cat) => categoryMap[cat] ?? null)
-                                .filter((cat): cat is Category => cat !== null);
-
-                            const hasThumb = !!thumbUrl;
-                            return {
-                                title: meta.title,
-                                description: desc,
-                                // If no resolvable thumbnail, render default cover directly to avoid spinner/question mark
-                                image: hasThumb
-                                    ? (thumbUrl as string)
-                                    : "/images/cover.jpg",
-                                // Only provide a fallback when loading a remote thumbnail
-                                imageFallback: hasThumb ? "/images/cover.jpg" : undefined,
-                                colors: getRandomColorPair(),
-                                categories: mappedCategories,
-                                requires_steamodded: meta["requires-steamodded"],
-                                requires_talisman: meta["requires-talisman"],
-                                publisher: meta.author,
-                                repo: meta.repo,
-                                downloadURL: meta.downloadURL || "",
-                                folderName: meta.folderName,
-                                version: meta.version,
-                                installed: false,
-                                last_updated: (meta as any)["last-updated"] ?? 0,
-                            } as Mod;
-                    } catch (error) {
-                        console.error(`Failed to process mod ${dirName}:`, error);
-                        return null;
-                    }
-                })
-            ).filter((m): m is Mod => m !== null);
-            return mods;
+                // Use remote image URL; LazyImage will fallback to a default cover on error
+                const img = item.image_url || "/images/cover.jpg";
+                const hasRemote = Boolean(item.image_url);
+                return {
+                    title: item.meta.title,
+                    description: item.description,
+                    image: hasRemote ? img : "/images/cover.jpg",
+                    imageFallback: hasRemote ? "/images/cover.jpg" : undefined,
+                    colors: getRandomColorPair(),
+                    categories: mappedCategories,
+                    requires_steamodded: (item.meta as any)["requires-steamodded"],
+                    requires_talisman: (item.meta as any)["requires-talisman"],
+                    publisher: item.meta.author,
+                    repo: item.meta.repo,
+                    downloadURL: item.meta.downloadURL || "",
+                    folderName: item.meta.folderName,
+                    version: item.meta.version,
+                    installed: false,
+                    last_updated: (item.meta as any)["last-updated"] ?? 0,
+                    _dirName: item.dir_name,
+                } as Mod & { _dirName?: string };
+            });
+            // Kick off background description fetch (bounded concurrency)
+            fillDescriptions(mods).catch((e) => console.warn("desc fill failed", e));
+            return mods as Mod[];
         } catch (error) {
             console.error("Failed to fetch mods:", error);
             return [];
         } finally {
             isLoading = false;
+        }
+    }
+
+    async function fillDescriptions(mods: (Mod & { _dirName?: string })[]) {
+        // Limit concurrent requests to avoid 429s
+        const limit = 10;
+        let i = 0;
+        async function worker() {
+            while (true) {
+                const idx = i++;
+                if (idx >= mods.length) break;
+                const m = mods[idx];
+                if (!m || m.description) continue;
+                const dir = (m as any)._dirName as string | undefined;
+                if (!dir) continue;
+                try {
+                    const text = await invoke<string>(
+                        "get_description_cached_or_remote",
+                        { title: m.title, dirName: dir }
+                    );
+                    // Update store reactively
+                    modsStore.update((arr) => {
+                        const pos = arr.findIndex((x) => x.title === m.title);
+                        if (pos >= 0) {
+                            arr = arr.slice();
+                            (arr[pos] as any).description = text;
+                        }
+                        return arr;
+                    });
+                } catch (_) {
+                    // ignore per-mod desc failures
+                }
+            }
+        }
+        await Promise.all(new Array(Math.min(limit, mods.length)).fill(0).map(worker));
+    }
+
+    async function fillInstalledThumbnails(mods: (Mod & { _dirName?: string })[]) {
+        const limit = 8;
+        let i = 0;
+        const client = async () => {
+            while (true) {
+                const idx = i++;
+                if (idx >= mods.length) break;
+                const m = mods[idx];
+                if (!m) continue;
+                if (!$installationStatus[m.title]) continue; // only for installed mods
+                const dir = (m as any)._dirName as string | undefined;
+                if (!dir) continue;
+                try {
+                    const dataUrl = await invoke<string | null>(
+                        "get_cached_installed_thumbnail",
+                        { title: m.title, dirName: dir }
+                    );
+                    if (dataUrl) {
+                        modsStore.update((arr) => {
+                            const pos = arr.findIndex((x) => x.title === m.title);
+                            if (pos >= 0) {
+                                arr = arr.slice();
+                                (arr[pos] as any).image = dataUrl;
+                                (arr[pos] as any).imageFallback = undefined;
+                            }
+                            return arr;
+                        });
+                    }
+                } catch (_) {
+                    // ignore per-mod failures
+                }
+            }
+        };
+        await Promise.all(new Array(Math.min(limit, mods.length)).fill(0).map(() => client()));
+    }
+
+    async function seedInstalledPlaceholders() {
+        try {
+            // Load installed mods quickly from DB cache helper
+            installedMods = await fetchCachedMods();
+            if (!installedMods || installedMods.length === 0) return;
+            modsStore.update((arr) => {
+                const existingTitles = new Set(arr.map((m) => m.title));
+                const additions: Mod[] = installedMods
+                    .filter((m) => !existingTitles.has(m.name))
+                    .map((m) => ({
+                        title: m.name,
+                        description: "",
+                        image: "/images/cover.jpg",
+                        colors: getRandomColorPair(),
+                        categories: [],
+                        requires_steamodded: false,
+                        requires_talisman: false,
+                        publisher: "Installed",
+                        repo: "",
+                        downloadURL: "",
+                        folderName: m.name,
+                        version: "",
+                        installed: true,
+                        last_updated: 0,
+                        // Keep private installed path for potential future local reads
+                        // @ts-ignore
+                        _installedPath: m.path,
+                    } as any));
+                return additions.length ? [...additions, ...arr] : arr;
+            });
+
+            // Immediately reflect installationStatus so filters show
+            for (const m of installedMods) {
+                installationStatus.update((s) => ({ ...s, [m.name]: true }));
+            }
+        } catch (e) {
+            console.warn("seedInstalledPlaceholders failed", e);
         }
     }
 
@@ -941,59 +1031,12 @@ onMount(() => {
 			await forceRefreshCache();
 			installedMods = await fetchCachedMods();
 
-			// Update installation status for all mods in the store
-			for (const mod of $modsStore) {
-				const installedMod = installedMods.find(
-					(m) => m.name === mod.title,
-				);
-
-				// Check if the mod is installed
-				const isInstalled = installedMod !== undefined;
-
-				// Update installation status
-				installationStatus.update((s) => ({
-					...s,
-					[mod.title]: isInstalled,
-				}));
-
-				// Only check for updates if the mod is installed
-				if (isInstalled && installedMod) {
-					try {
-						// Check for updates using the invoke command
-						const hasUpdate = await invoke<boolean>(
-							"mod_update_available",
-							{
-								modName: mod.title,
-							},
-						);
-
-						// Update the global store
-						updateAvailableStore.update((s) => ({
-							...s,
-							[mod.title]: hasUpdate,
-						}));
-
-						// Check if mod is enabled
-						const isEnabled = await invoke<boolean>(
-							"is_mod_enabled",
-							{
-								modName: mod.title,
-							},
-						);
-
-						// Update the enabled status
-						modEnabledStore.update((s) => ({
-							...s,
-							[mod.title]: isEnabled,
-						}));
-					} catch (error) {
-						console.error(
-							`Failed to check updates for ${mod.title}:`,
-							error,
-						);
-					}
-				}
-			}
+            // Update installation status for all mods in the store
+            for (const mod of $modsStore) {
+                const installedMod = installedMods.find((m) => m.name === mod.title);
+                const isInstalled = installedMod !== undefined;
+                installationStatus.update((s) => ({ ...s, [mod.title]: isInstalled }));
+            }
 
 			// Filter mods by enabled status
 			updateEnabledDisabledLists();
@@ -1047,9 +1090,18 @@ onMount(() => {
 		}
 	}
 
-	$: if ($currentModView === null && $currentCategory === "Installed Mods") {
-		refreshInstalledMods();
-	}
+let prevCategory = "";
+$: {
+    const cat = $currentCategory;
+    if ($currentModView === null && cat === "Installed Mods" && prevCategory !== "Installed Mods") {
+        // Category just switched to Installed Mods
+        refreshInstalledMods();
+        if (sortedAndFilteredMods.length === 0) {
+            seedInstalledPlaceholders();
+        }
+    }
+    prevCategory = cat;
+}
 
 	$: {
 		if (
@@ -1078,7 +1130,7 @@ onMount(() => {
 
 		<div class="separator"></div>
 
-		{#if isLoading}
+		{#if isLoading && $currentCategory !== "Installed Mods"}
 			<div class="loading-container">
 				<p class="loading-text">
 					Loading mods{".".repeat($loadingDots)}
@@ -1317,6 +1369,21 @@ onMount(() => {
 									class:has-local-mods={localMods.length > 0}
 								>
 									{#each disabledMods as mod (mod.title)}
+										<ModCard
+											{mod}
+											onmodclick={handleModClick}
+											oninstallclick={installMod}
+											onuninstallclick={uninstallMod}
+											onToggleEnabled={handleModToggled}
+										/>
+									{/each}
+								</div>
+							{/if}
+
+							{#if enabledMods.length === 0 && disabledMods.length === 0}
+								<!-- Fallback: show installed catalog mods before enabled state resolves -->
+								<div class="mods-grid">
+									{#each paginatedMods as mod (mod.title)}
 										<ModCard
 											{mod}
 											onmodclick={handleModClick}

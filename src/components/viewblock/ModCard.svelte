@@ -31,17 +31,19 @@
 	// Check if an update is available when component mounts
 	let updateChecked = false;
 	let isEnabled = $state(true); // Default to enabled if not yet checked
+    let enabledChecked = false;
 
 	// Load the enabled state whenever the mod changes or when installationStatus changes
 	$effect(() => {
-		if ($installationStatus[mod.title]) {
+		if ($installationStatus[mod.title] && !enabledChecked && $modEnabledStore[mod.title] === undefined) {
+			enabledChecked = true;
 			checkModEnabled(mod.title);
 		}
 	});
 
-	// Initial load of update status
+	// Initial load of update status (installed-only to reduce network calls)
 	$effect(() => {
-		if (!updateChecked) {
+		if (!updateChecked && $installationStatus[mod.title]) {
 			updateChecked = true;
 			checkForUpdate(mod.title);
 		}
@@ -248,7 +250,15 @@
 
 	<div class="mod-info">
 		<h3>{mod.title}</h3>
-		<p>{truncateText(stripMarkdown(mod.description))}</p>
+		{#if mod.description && mod.description.trim().length > 0}
+			<p>{truncateText(stripMarkdown(mod.description))}</p>
+		{:else}
+			<div class="desc-skeleton" aria-hidden="true">
+				<div class="line" style="width: 92%"></div>
+				<div class="line" style="width: 84%"></div>
+				<div class="line" style="width: 68%"></div>
+			</div>
+		{/if}
 	</div>
 
 	<div class="button-container">
@@ -405,6 +415,27 @@
 		font-size: 1rem;
 		line-height: 1.2;
 	}
+
+    /* Description skeleton */
+    .desc-skeleton { margin-top: 0.2rem; }
+    .desc-skeleton .line {
+        height: 12px;
+        margin: 6px 0;
+        border-radius: 6px;
+        background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.08) 25%,
+            rgba(255, 255, 255, 0.18) 37%,
+            rgba(255, 255, 255, 0.08) 63%
+        );
+        background-size: 400% 100%;
+        animation: shimmer 1.2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: 0 0; }
+    }
 
 	.button-container {
 		display: flex;

@@ -85,7 +85,8 @@ import { addMessage } from "$lib/stores";
 	let talismanVersions = $state<string[]>([]);
 	let selectedVersion = $state("newest");
 	let loadingVersions = $state(false);
-	let renderedDescription = $state("");
+let renderedDescription = $state("");
+let descLoading = $state(false);
 	let isCheckingForUpdates = $state(false);
 
 	// Add a local state variable for tracking enabled status
@@ -627,16 +628,40 @@ import { addMessage } from "$lib/stores";
 		return status;
 	};
 
-	// This effect handles the description rendering
-	$effect(() => {
-		if (mod?.description) {
-			Promise.resolve(marked(mod.description)).then((result) => {
-				renderedDescription = result;
-			});
-		} else {
-			renderedDescription = "";
-		}
-	});
+    // Ensure description is loaded (lazy) for detail view
+    async function ensureDescriptionLoaded(m: any) {
+        if (!m || m.description) return;
+        const dir = m._dirName as string | undefined;
+        if (!dir) return;
+        try {
+            descLoading = true;
+            const text = await invoke<string>(
+                "get_description_cached_or_remote",
+                { title: m.title, dirName: dir }
+            );
+            // Update currentModView store with new description
+            currentModView.set({ ...m, description: text });
+        } catch (_) {
+            // ignore
+        } finally {
+            descLoading = false;
+        }
+    }
+
+    // This effect handles the description rendering
+    $effect(() => {
+        const m = mod as any;
+        if (m && !m.description) {
+            ensureDescriptionLoaded(m);
+        }
+        if (m?.description) {
+            Promise.resolve(marked(m.description)).then((result) => {
+                renderedDescription = result;
+            });
+        } else {
+            renderedDescription = "";
+        }
+    });
 
 	// Watch for changes to renderedDescription separately
 	$effect(() => {
@@ -1038,6 +1063,14 @@ import { addMessage } from "$lib/stores";
 				>
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html renderedDescription}
+
+					{#if !renderedDescription && descLoading}
+						<div class="desc-skeleton" aria-hidden="true">
+							{#each Array(8) as _, i}
+								<div class="line" style={`width: ${90 - (i % 3) * 12}%`}></div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
