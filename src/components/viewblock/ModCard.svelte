@@ -373,12 +373,7 @@
 		height: 150px;
 	}
 
-	.mod-image img {
-		width: 100%;
-		height: 100%;
-		border-radius: 5px;
-		object-fit: cover;
-	}
+	/* Image styling handled inside LazyImage */
 
 	.tags {
 		position: absolute;

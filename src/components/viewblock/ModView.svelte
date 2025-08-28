@@ -1227,17 +1227,7 @@ let descLoading = $state(false);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
-	img {
-		width: 100%;
-		height: 250px;
-		object-fit: cover;
-		transition: transform 0.2s ease;
-		display: block;
-	}
-
-	img:hover {
-		transform: scale(1.02);
-	}
+	/* Image display is managed by LazyImage; keep container-only styles */
 
 	.button-container {
 		display: flex;
@@ -1596,10 +1586,7 @@ let descLoading = $state(false);
 	.delete-button:active {
 		transform: translateY(1px);
 	}
-	/* Make sure the original image is clickable */
-	.image-container img {
-		cursor: default;
-	}
+	/* Image elements live inside LazyImage, so no direct img rules here */
 
 	/* .image-container .clickable { */
 	/* 	cursor: pointer; */
@@ -1613,17 +1600,13 @@ let descLoading = $state(false);
 			width: 100%;
 			height: 350px;
 
-			& > img {
-				height: 100%;
-			}
+
 		}
 
 		.image-button {
 			height: 100%;
 
-			& > img {
-				height: 100%;
-			}
+
 		}
 
 		.right-column {
