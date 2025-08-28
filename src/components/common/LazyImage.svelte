@@ -111,7 +111,17 @@
     }
     triedFallback = false;
     usingDefault = false;
-    currentSrc = resolveLocal(src);
+    const resolved = resolveLocal(src);
+    currentSrc = resolved;
+    // Treat non-network sources as immediately loaded (no timeout)
+    if (resolved && /^data:/i.test(resolved)) {
+      clearTimer();
+      loading = false;
+      loaded = true;
+      showSpinner = false;
+      dispatch("load");
+      return;
+    }
     loading = true;
     showSpinner = true; // show animation immediately for real thumbnails
     startTimeout();
@@ -220,7 +230,9 @@
   }
 
   async function tryLoadCachedOrStart() {
-    if (enableCache && cacheTitle && cacheTitle.trim().length > 0) {
+    const srcStr = src?.trim() || "";
+    // Only consult remote thumbnail cache for http(s) sources
+    if (enableCache && cacheTitle && cacheTitle.trim().length > 0 && /^https?:\/\//i.test(srcStr)) {
       try {
         const cached = await invoke<string | null>(
           "get_cached_thumbnail_by_title",
@@ -230,9 +242,12 @@
           triedFallback = false;
           usingDefault = false;
           currentSrc = cached;
-          loading = true;
+          // Data URLs should be considered loaded immediately
+          clearTimer();
+          loading = false;
+          loaded = true;
           showSpinner = false;
-          startTimeout();
+          dispatch("load");
           return;
         }
       } catch (_) {

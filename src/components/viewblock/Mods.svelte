@@ -30,6 +30,7 @@
 	import type { LocalMod, Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
 	import { modsStore, installationStatus } from "../../stores/modStore";
+	import { catalogLoading } from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -296,14 +297,8 @@
 				if ($currentCategory === "Installed Mods") {
 					await seedInstalledPlaceholders();
 				}
-				const freshMods = await fetchModDirectories();
-				// Merge fresh remote mods with any locally seeded placeholders
-				modsStore.update((arr) => {
-					const map = new Map<string, Mod>();
-					for (const m of arr) map.set(m.title, m);
-					for (const m of freshMods) map.set(m.title, m); // prefer remote data when available
-					return Array.from(map.values());
-				});
+				// Kick off a background refresh; cached mods (if any) already hydrate the store
+				refreshCatalogInBackground();
 
 				// After mods load, update install status and local mods if needed
 				try {
@@ -687,17 +682,17 @@
 		image_url: string;
 	}
 
-	async function fetchModDirectories(): Promise<Mod[]> {
-		isLoading = true;
+	async function refreshCatalogInBackground(): Promise<void> {
+		if ($catalogLoading) return;
+		catalogLoading.set(true);
+		addMessage("Loading mods in background…", "info");
 		try {
-			// Prefer prebuilt index.json if available, fallback to archive transparently
 			const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
 			const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
 				const mappedCategories = item.meta.categories
 					.map((cat) => categoryMap[cat] ?? null)
 					.filter((cat): cat is Category => cat !== null);
 
-				// Use remote image URL; LazyImage will fallback to a default cover on error
 				const img = item.image_url || "/images/cover.jpg";
 				const hasRemote = Boolean(item.image_url);
 				return {
@@ -707,9 +702,7 @@
 					imageFallback: hasRemote ? "/images/cover.jpg" : undefined,
 					colors: getRandomColorPair(),
 					categories: mappedCategories,
-					requires_steamodded: (item.meta as any)[
-						"requires-steamodded"
-					],
+					requires_steamodded: (item.meta as any)["requires-steamodded"],
 					requires_talisman: (item.meta as any)["requires-talisman"],
 					publisher: item.meta.author,
 					repo: item.meta.repo,
@@ -721,16 +714,53 @@
 					_dirName: item.dir_name,
 				} as Mod & { _dirName?: string };
 			});
-			// Kick off background description fetch (bounded concurrency)
-			fillDescriptions(mods).catch((e) =>
-				console.warn("desc fill failed", e),
-			);
-			return mods as Mod[];
+
+			// Merge fresh remote mods with any locally seeded placeholders; prefer remote data
+			// Merge while preserving existing thumbnails to avoid flicker/regressions
+			modsStore.update((arr) => {
+				const incoming = new Map<string, Mod>();
+				for (const m of mods as Mod[]) incoming.set(m.title, m);
+				const seen = new Set<string>();
+				const out: Mod[] = [];
+				for (const existing of arr) {
+					const inc = incoming.get(existing.title);
+					if (inc) {
+						// Keep existing image if it's already set to a non-default thumbnail
+						const keepExistingImage =
+							Boolean(existing.image) &&
+							existing.image.trim().length > 0 &&
+							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+						out.push({
+							...existing,
+							...inc,
+							image: keepExistingImage ? existing.image : inc.image,
+							imageFallback: keepExistingImage
+								? (existing as any).imageFallback
+								: (inc as any).imageFallback,
+						});
+						seen.add(existing.title);
+					} else {
+						out.push(existing);
+					}
+				}
+				for (const [title, inc] of incoming) {
+					if (!seen.has(title)) out.push(inc);
+				}
+				return out;
+			});
+
+			// Re-apply local thumbnails for installed mods (non-blocking)
+			fillInstalledThumbnails($modsStore).catch(() => {});
+			fillDescriptions(mods).catch((e) => console.warn("desc fill failed", e));
+			addMessage("All mods loaded", "success");
 		} catch (error) {
-			console.error("Failed to fetch mods:", error);
-			return [];
+			console.error("Failed to refresh catalog:", error);
+			addMessage(
+				`Background load failed: ${error instanceof Error ? error.message : String(error)}`,
+				"error",
+			);
 		} finally {
-			isLoading = false;
+			catalogLoading.set(false);
 		}
 	}
 

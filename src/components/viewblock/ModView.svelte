@@ -877,10 +877,10 @@ let descLoading = $state(false);
 							class="image-button"
 							aria-label={`View full size image of ${mod.title}`}
 						>
-							<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
+							<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
 						</button>
 					{:else}
-						<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
+						<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
 					{/if}
 				</div>
 

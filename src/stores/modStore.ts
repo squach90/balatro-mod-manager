@@ -127,6 +127,41 @@ export const currentJokerView = writable<Mod | null>(null);
 export const searchResults = writable<Mod[]>([]);
 export const modsStore = writable<Mod[]>([]);
 
+// Background catalog loading state and last refresh time
+export const catalogLoading = writable(false);
+export const catalogLastRefreshed = writable<number | null>(null);
+
+// Persist and hydrate the mods catalog for instant UI + offline fallback
+if (typeof window !== 'undefined') {
+    try {
+        const cached = localStorage.getItem('mods-cache');
+        if (cached) {
+            const parsed: Mod[] = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+                modsStore.set(parsed);
+            }
+        }
+        const ts = localStorage.getItem('mods-cache-ts');
+        if (ts) {
+            const n = Number(ts);
+            if (!Number.isNaN(n)) catalogLastRefreshed.set(n);
+        }
+    } catch (_) {
+        // ignore cache read errors
+    }
+
+    modsStore.subscribe((value) => {
+        try {
+            localStorage.setItem('mods-cache', JSON.stringify(value));
+            const now = Date.now();
+            localStorage.setItem('mods-cache-ts', String(now));
+            catalogLastRefreshed.set(now);
+        } catch (_) {
+            // ignore cache write errors
+        }
+    });
+}
+
 
 export const installationStatus: Writable<InstallationStatus> = writable({});
 
