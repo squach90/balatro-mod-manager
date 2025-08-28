@@ -145,6 +145,8 @@ pub fn run() {
             commands::repo::fetch_gitlab_mods,
             commands::repo::fetch_gitlab_mods_meta_only,
             commands::repo::get_cached_installed_thumbnail,
+            commands::repo::get_cached_thumbnail_by_title,
+            commands::repo::cache_thumbnail_from_url,
             commands::repo::get_description_cached_or_remote,
             commands::mods::is_mod_enabled,
             commands::mods::toggle_mod_enabled,

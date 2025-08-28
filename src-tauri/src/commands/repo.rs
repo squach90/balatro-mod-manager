@@ -557,6 +557,69 @@ fn ensure_assets_dirs() -> Result<(std::path::PathBuf, std::path::PathBuf), Stri
 }
 
 #[tauri::command]
+pub async fn get_cached_thumbnail_by_title(title: String) -> Result<Option<String>, String> {
+    let (thumbs_dir, _) = ensure_assets_dirs()?;
+    let slug = safe_slug(&title);
+    let path = thumbs_dir.join(format!("{slug}.jpg"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let data = std::fs::read(&path).map_err(|e| {
+        AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+    let b64 = STANDARD.encode(data);
+    Ok(Some(format!("data:image/jpeg;base64,{b64}")))
+}
+
+#[tauri::command]
+pub async fn cache_thumbnail_from_url(title: String, url: String) -> Result<bool, String> {
+    use reqwest::header::{CONTENT_TYPE, USER_AGENT};
+    let (thumbs_dir, _) = ensure_assets_dirs()?;
+    let slug = safe_slug(&title);
+    let path = thumbs_dir.join(format!("{slug}.jpg"));
+    if path.exists() {
+        // Already cached
+        return Ok(false);
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header(USER_AGENT, "balatro-mod-manager/1.0")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("Failed to download thumbnail ({}): {}", resp.status(), url));
+    }
+
+    let ct = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+    // Accept common image types; we store as .jpg regardless
+    if !(ct.contains("image/")) {
+        log::warn!("Unexpected content type for thumbnail {}: {}", url, ct);
+    }
+
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    std::fs::write(&path, &bytes).map_err(|e| {
+        AppError::FileWrite {
+            path: path.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+    Ok(true)
+}
+
+#[tauri::command]
 pub async fn get_cached_installed_thumbnail(
     title: String,
     dir_name: String,
@@ -620,21 +683,14 @@ pub async fn get_cached_installed_thumbnail(
 pub async fn get_description_cached_or_remote(
     title: String,
     dir_name: String,
-    state: tauri::State<'_, crate::state::AppState>,
+    _state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<String, String> {
-    let installed = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.get_installed_mods()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .any(|m| m.name.eq_ignore_ascii_case(&title))
-    };
-
     let (_, descs_dir) = ensure_assets_dirs()?;
     let slug = safe_slug(&title);
     let path = descs_dir.join(format!("{slug}.md"));
 
-    if installed && path.exists() {
+    // Always prefer cached copy if present
+    if path.exists() {
         return std::fs::read_to_string(&path).map_err(|e| {
             AppError::FileRead {
                 path,
@@ -655,11 +711,9 @@ pub async fn get_description_cached_or_remote(
         if let Ok(resp) = client.get(url).send().await {
             if resp.status().is_success() {
                 if let Ok(text) = resp.text().await {
-                    if installed {
-                        // Store for offline use
-                        if let Err(e) = std::fs::write(&path, &text) {
-                            log::warn!("Failed to cache description for {}: {}", title, e);
-                        }
+                    // Cache for future sessions regardless of install state
+                    if let Err(e) = std::fs::write(&path, &text) {
+                        log::warn!("Failed to cache description for {}: {}", title, e);
                     }
                     return Ok(text);
                 }

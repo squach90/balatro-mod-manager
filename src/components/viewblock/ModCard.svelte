@@ -238,7 +238,12 @@
 		.color2};"
 >
 	<div class="mod-image">
-		<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} />
+    <LazyImage
+        src={mod.image}
+        fallbackSrc={(mod as any).imageFallback}
+        alt={mod.title}
+        cacheTitle={mod.title}
+    />
 
         <div class="tags">
 			<!-- <span class="tag updated"> -->

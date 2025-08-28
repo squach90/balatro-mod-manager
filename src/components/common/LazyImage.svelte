@@ -7,9 +7,14 @@
   export let fallbackSrc: string | undefined;
   export let defaultSrc: string = "/images/cover.jpg";
   export let className: string = "";
+  // Optional caching by title: when provided, we try to use a cached
+  // thumbnail and persist successful remote loads for future sessions.
+  export let cacheTitle: string | undefined;
+  export let enableCache: boolean = true;
 
   // Emit load/error for parent if needed
   const dispatch = createEventDispatcher();
+  import { invoke } from "@tauri-apps/api/core";
 
   let wrapper: HTMLDivElement | null = null;
   let currentSrc: string | null = null;
@@ -25,6 +30,8 @@
   let showSpinner = false;
   // When we decide to show default for a given src, remember it so we don't retry
   let lockDefaultFor: string | null = null;
+  // Avoid duplicate cache writes in a single session
+  const seenCacheTitles = new Set<string>();
 
   function isValidSrc(val: string | undefined | null): boolean {
     if (!val) return false;
@@ -139,6 +146,19 @@
     loaded = true;
     showSpinner = false;
     dispatch("load");
+
+    // If a remote image loaded successfully, persist it to the cache for future use
+    if (
+      enableCache &&
+      cacheTitle &&
+      currentSrc &&
+      /^https?:\/\//i.test(currentSrc) &&
+      !seenCacheTitles.has(cacheTitle)
+    ) {
+      seenCacheTitles.add(cacheTitle);
+      // Non-blocking; backend will no-op if already cached
+      invoke("cache_thumbnail_from_url", { title: cacheTitle, url: currentSrc }).catch(() => {});
+    }
   }
 
   function handleError() {
@@ -199,8 +219,31 @@
     }
   }
 
-  onMount(() => {
+  async function tryLoadCachedOrStart() {
+    if (enableCache && cacheTitle && cacheTitle.trim().length > 0) {
+      try {
+        const cached = await invoke<string | null>(
+          "get_cached_thumbnail_by_title",
+          { title: cacheTitle }
+        );
+        if (cached) {
+          triedFallback = false;
+          usingDefault = false;
+          currentSrc = cached;
+          loading = true;
+          showSpinner = false;
+          startTimeout();
+          return;
+        }
+      } catch (_) {
+        // ignore cache read errors
+      }
+    }
     startLoading();
+  }
+
+  onMount(() => {
+    tryLoadCachedOrStart();
   });
 
   onDestroy(() => {
@@ -218,9 +261,9 @@
       if (!usingDefault) resetToDefault();
       lockDefaultFor = srcStr;
     } else if (currentSrc !== resolved && !usingDefault) {
-      startLoading();
+      tryLoadCachedOrStart();
     } else if (currentSrc === null && !usingDefault) {
-      startLoading();
+      tryLoadCachedOrStart();
     }
   } else {
     // If no src is provided, immediately show the static default cover
