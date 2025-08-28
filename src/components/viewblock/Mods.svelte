@@ -175,9 +175,10 @@
 		}
 	}
 
+	// Avoid forcing a refresh on every reactive pass; only fetch local mods here.
+	// We refresh installed mods on category switch and after install/uninstall events.
 	$: if ($currentCategory === "Installed Mods") {
 		getLocalMods();
-		refreshInstalledMods();
 	}
 
 	async function checkIfModIsInstalled(mod: Mod) {

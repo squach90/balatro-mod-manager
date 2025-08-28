@@ -8,7 +8,8 @@ const createModCache = () => {
 	// Private variables inside closure
 	const cache = writable<InstalledMod[]>([]);
 	let lastFetchTime = 0;
-	const CACHE_TIMEOUT = 2000; // 2 seconds
+	const CACHE_TIMEOUT = 15000; // 15 seconds to avoid chatty IPC
+	let inFlight: Promise<InstalledMod[]> | null = null; // coalesce concurrent calls
 
 	// Core cache function that handles all operations
 	async function getModsFromCache(forceRefresh = false): Promise<InstalledMod[]> {
@@ -16,15 +17,24 @@ const createModCache = () => {
 
 		if (forceRefresh || lastFetchTime === 0 || now - lastFetchTime > CACHE_TIMEOUT) {
 			try {
-				const installed: InstalledMod[] = await invoke("get_installed_mods_from_db");
-				const formattedMods = installed.map((mod) => ({
-					name: mod.name,
-					path: mod.path,
-				}));
+				// Deduplicate concurrent requests
+				if (!inFlight) {
+					inFlight = (async () => {
+						const installed: InstalledMod[] = await invoke("get_installed_mods_from_db");
+						const formattedMods = installed.map((mod) => ({
+							name: mod.name,
+							path: mod.path,
+						}));
 
-				cache.set(formattedMods);
-				lastFetchTime = now;
-				return formattedMods;
+						cache.set(formattedMods);
+						lastFetchTime = Date.now();
+						return formattedMods;
+					})();
+				}
+
+				const result = await inFlight;
+				inFlight = null;
+				return result;
 			} catch (error) {
 				console.error("Failed to get installed mods:", error);
 				return [];
@@ -69,4 +79,3 @@ export const {
 	checkModInCache,
 	forceRefreshCache
 } = modCache;
-
