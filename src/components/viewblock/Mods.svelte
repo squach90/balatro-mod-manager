@@ -297,8 +297,13 @@
 				if ($currentCategory === "Installed Mods") {
 					await seedInstalledPlaceholders();
 				}
-				// Kick off a background refresh; cached mods (if any) already hydrate the store
-				refreshCatalogInBackground();
+				// If we have no cached catalog yet, do a foreground load for first-run
+				if ($modsStore.length === 0) {
+					await loadCatalogForeground();
+				} else {
+					// Otherwise, refresh in the background
+					refreshCatalogInBackground();
+				}
 
 				// After mods load, update install status and local mods if needed
 				try {
@@ -759,6 +764,79 @@
 				`Background load failed: ${error instanceof Error ? error.message : String(error)}`,
 				"error",
 			);
+		} finally {
+			catalogLoading.set(false);
+		}
+	}
+
+	// Foreground loader for first-run (no cached catalog): blocks UI spinner until ready
+	async function loadCatalogForeground(): Promise<void> {
+		if ($catalogLoading) return;
+		catalogLoading.set(true);
+		try {
+			const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
+			const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+				const mappedCategories = item.meta.categories
+					.map((cat) => categoryMap[cat] ?? null)
+					.filter((cat): cat is Category => cat !== null);
+
+				const img = item.image_url || "/images/cover.jpg";
+				const hasRemote = Boolean(item.image_url);
+				return {
+					title: item.meta.title,
+					description: item.description,
+					image: hasRemote ? img : "/images/cover.jpg",
+					imageFallback: hasRemote ? "/images/cover.jpg" : undefined,
+					colors: getRandomColorPair(),
+					categories: mappedCategories,
+					requires_steamodded: (item.meta as any)["requires-steamodded"],
+					requires_talisman: (item.meta as any)["requires-talisman"],
+					publisher: item.meta.author,
+					repo: item.meta.repo,
+					downloadURL: item.meta.downloadURL || "",
+					folderName: item.meta.folderName,
+					version: item.meta.version,
+					installed: false,
+					last_updated: (item.meta as any)["last-updated"] ?? 0,
+					_dirName: item.dir_name,
+				} as Mod & { _dirName?: string };
+			});
+
+			// Merge with any pre-seeded placeholders, preserve thumbnails if any
+			modsStore.update((arr) => {
+				const incoming = new Map<string, Mod>();
+				for (const m of mods as Mod[]) incoming.set(m.title, m);
+				const seen = new Set<string>();
+				const out: Mod[] = [];
+				for (const existing of arr) {
+					const inc = incoming.get(existing.title);
+					if (inc) {
+						const keepExistingImage =
+							Boolean(existing.image) &&
+							existing.image.trim().length > 0 &&
+							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+						out.push({
+							...existing,
+							...inc,
+							image: keepExistingImage ? existing.image : inc.image,
+							imageFallback: keepExistingImage
+								? (existing as any).imageFallback
+								: (inc as any).imageFallback,
+						});
+						seen.add(existing.title);
+					} else {
+						out.push(existing);
+					}
+				}
+				for (const [title, inc] of incoming) {
+					if (!seen.has(title)) out.push(inc);
+				}
+				return out;
+			});
+
+			// Also kick off thumbnails/descriptions
+			fillInstalledThumbnails($modsStore).catch(() => {});
+			fillDescriptions(mods).catch(() => {});
 		} finally {
 			catalogLoading.set(false);
 		}
