@@ -736,8 +736,9 @@ import { onMount, onDestroy } from "svelte";
 				} as Mod & { _dirName?: string };
 			});
 
-			// Merge fresh remote mods with any locally seeded placeholders; prefer remote data
-			// Preserve existing thumbnails and descriptions when present
+            // Merge fresh remote mods with any locally seeded placeholders; prefer remote data
+            // Preserve existing thumbnails and descriptions when present; prune stale removed mods
+            let prunedCount = 0;
             modsStore.update((arr) => {
                 const incoming = new Map<string, Mod>();
                 for (const m of mods as Mod[]) incoming.set(m.title, m);
@@ -768,7 +769,12 @@ import { onMount, onDestroy } from "svelte";
                         });
                         seen.add(existing.title);
                     } else {
-                        out.push(existing);
+                        // Keep only local placeholders (no _dirName); drop stale remote entries
+                        if (!(existing as any)._dirName) {
+                            out.push(existing);
+                        } else {
+                            prunedCount++;
+                        }
                     }
                 }
                 for (const [title, inc] of incoming) {
@@ -776,6 +782,30 @@ import { onMount, onDestroy } from "svelte";
                 }
                 return out;
             });
+
+            if (prunedCount > 0) {
+                addMessage(`Pruned ${prunedCount} removed mod${prunedCount === 1 ? '' : 's'} from cache`, "info");
+            }
+
+            // Persist refreshed upstream catalog to Rust cache for update checks
+            try {
+                const forCache = (mods as Mod[]).map((m) => ({
+                    title: m.title,
+                    description: m.description,
+                    image: m.image,
+                    categories: m.categories,
+                    colors: m.colors,
+                    installed: false,
+                    requires_steamodded: m.requires_steamodded,
+                    requires_talisman: m.requires_talisman,
+                    publisher: m.publisher,
+                    repo: m.repo,
+                    downloadURL: (m as any).downloadURL || "",
+                    folderName: (m as any).folderName ?? null,
+                    version: (m as any).version ?? null,
+                }));
+                invoke("save_mods_cache", { mods: forCache }).catch(() => {});
+            } catch (_) { /* ignore */ }
 
 			// Re-apply local thumbnails for installed mods (non-blocking)
 			fillInstalledThumbnails($modsStore).catch(() => {});
@@ -841,7 +871,8 @@ import { onMount, onDestroy } from "svelte";
 				} as Mod & { _dirName?: string };
 			});
 
-            // Merge with any pre-seeded placeholders, preserve thumbnails/colors if any
+            // Merge with any pre-seeded placeholders, and prune stale removed mods
+            let prunedCount = 0;
             modsStore.update((arr) => {
                 const incoming = new Map<string, Mod>();
                 for (const m of mods as Mod[]) incoming.set(m.title, m);
@@ -870,7 +901,11 @@ import { onMount, onDestroy } from "svelte";
                         });
                         seen.add(existing.title);
                     } else {
-                        out.push(existing);
+                        if (!(existing as any)._dirName) {
+                            out.push(existing);
+                        } else {
+                            prunedCount++;
+                        }
                     }
                 }
                 for (const [title, inc] of incoming) {
@@ -878,6 +913,30 @@ import { onMount, onDestroy } from "svelte";
                 }
                 return out;
             });
+
+            if (prunedCount > 0) {
+                addMessage(`Pruned ${prunedCount} removed mod${prunedCount === 1 ? '' : 's'} from cache`, "info");
+            }
+
+            // Persist refreshed upstream catalog to Rust cache
+            try {
+                const forCache = (mods as Mod[]).map((m) => ({
+                    title: m.title,
+                    description: m.description,
+                    image: m.image,
+                    categories: m.categories,
+                    colors: m.colors,
+                    installed: false,
+                    requires_steamodded: m.requires_steamodded,
+                    requires_talisman: m.requires_talisman,
+                    publisher: m.publisher,
+                    repo: m.repo,
+                    downloadURL: (m as any).downloadURL || "",
+                    folderName: (m as any).folderName ?? null,
+                    version: (m as any).version ?? null,
+                }));
+                invoke("save_mods_cache", { mods: forCache }).catch(() => {});
+            } catch (_) { /* ignore */ }
 
 			// Also kick off thumbnails/descriptions
 			fillInstalledThumbnails($modsStore).catch(() => {});
