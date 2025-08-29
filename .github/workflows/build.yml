@@ -157,26 +157,34 @@ jobs:
           $APP_VERSION = $line.Matches.Groups[1].Value
           echo "APP_VERSION=$APP_VERSION" >> $env:GITHUB_ENV
 
-      - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri App (macOS)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
         env:
           CI: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && env.CERT_ID || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ env.CERT_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           MACOSX_DEPLOYMENT_TARGET: 11.0
-          # Optimize Rust compilation
           CARGO_BUILD_JOBS: 4
           CARGO_INCREMENTAL: true
-          # Speed up macOS build
-          MACOS_TARGETS_OPTIMIZED: true
           CARGO_TARGET_DIR: src-tauri/target
-        with:
-          args: ${{ matrix.args }} -v
-          projectPath: .
-          tauriPath: src-tauri
+        run: |
+          bunx --bun @tauri-apps/cli tauri build --target universal-apple-darwin --bundles dmg app -v
+
+      - name: Build Tauri App (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          CI: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_BUILD_JOBS: 4
+          CARGO_INCREMENTAL: true
+          CARGO_TARGET_DIR: src-tauri/target
+        run: |
+          bunx --bun @tauri-apps/cli tauri build --bundles nsis -v
       
       # Debug: list bundle outputs to verify build locations
       - name: List macOS bundle outputs (debug)
