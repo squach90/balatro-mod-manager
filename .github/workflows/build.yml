@@ -71,6 +71,14 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
+      # Ensure Windows bundlers are available (WiX for MSI, NSIS for EXE)
+      - name: Install Windows bundler dependencies (WiX + NSIS)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+          choco install nsis -y --no-progress
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
