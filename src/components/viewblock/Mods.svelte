@@ -738,42 +738,44 @@ import { onMount, onDestroy } from "svelte";
 
 			// Merge fresh remote mods with any locally seeded placeholders; prefer remote data
 			// Preserve existing thumbnails and descriptions when present
-			modsStore.update((arr) => {
-				const incoming = new Map<string, Mod>();
-				for (const m of mods as Mod[]) incoming.set(m.title, m);
-				const seen = new Set<string>();
-				const out: Mod[] = [];
-				for (const existing of arr) {
-					const inc = incoming.get(existing.title);
-					if (inc) {
-						// Keep existing image if it's already set to a non-default thumbnail
-						const keepExistingImage =
-							Boolean(existing.image) &&
-							existing.image.trim().length > 0 &&
-							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
-						const preferExistingDesc =
-							(existing.description?.trim().length ?? 0) > 0;
-						out.push({
-							...existing,
-							...inc,
-							description: preferExistingDesc
-								? existing.description
-								: (inc.description ?? ""),
-							image: keepExistingImage ? existing.image : inc.image,
-							imageFallback: keepExistingImage
-								? (existing as any).imageFallback
-								: (inc as any).imageFallback,
-						});
-						seen.add(existing.title);
-					} else {
-						out.push(existing);
-					}
-				}
-				for (const [title, inc] of incoming) {
-					if (!seen.has(title)) out.push(inc);
-				}
-				return out;
-			});
+            modsStore.update((arr) => {
+                const incoming = new Map<string, Mod>();
+                for (const m of mods as Mod[]) incoming.set(m.title, m);
+                const seen = new Set<string>();
+                const out: Mod[] = [];
+                for (const existing of arr) {
+                    const inc = incoming.get(existing.title);
+                    if (inc) {
+                        // Keep existing image if it's already set to a non-default thumbnail
+                        const keepExistingImage =
+                            Boolean(existing.image) &&
+                            existing.image.trim().length > 0 &&
+                            !/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+                        const preferExistingDesc =
+                            (existing.description?.trim().length ?? 0) > 0;
+                        out.push({
+                            ...existing,
+                            ...inc,
+                            description: preferExistingDesc
+                                ? existing.description
+                                : (inc.description ?? ""),
+                            // Preserve existing colors to avoid visual flicker on refresh
+                            colors: existing.colors,
+                            image: keepExistingImage ? existing.image : inc.image,
+                            imageFallback: keepExistingImage
+                                ? (existing as any).imageFallback
+                                : (inc as any).imageFallback,
+                        });
+                        seen.add(existing.title);
+                    } else {
+                        out.push(existing);
+                    }
+                }
+                for (const [title, inc] of incoming) {
+                    if (!seen.has(title)) out.push(inc);
+                }
+                return out;
+            });
 
 			// Re-apply local thumbnails for installed mods (non-blocking)
 			fillInstalledThumbnails($modsStore).catch(() => {});
@@ -839,42 +841,43 @@ import { onMount, onDestroy } from "svelte";
 				} as Mod & { _dirName?: string };
 			});
 
-			// Merge with any pre-seeded placeholders, preserve thumbnails if any
-			modsStore.update((arr) => {
-				const incoming = new Map<string, Mod>();
-				for (const m of mods as Mod[]) incoming.set(m.title, m);
-				const seen = new Set<string>();
-				const out: Mod[] = [];
-				for (const existing of arr) {
-					const inc = incoming.get(existing.title);
-					if (inc) {
-						const keepExistingImage =
-							Boolean(existing.image) &&
-							existing.image.trim().length > 0 &&
-							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
-						const preferExistingDesc =
-							(existing.description?.trim().length ?? 0) > 0;
-						out.push({
-							...existing,
-							...inc,
-							description: preferExistingDesc
-								? existing.description
-								: inc.description,
-							image: keepExistingImage ? existing.image : inc.image,
-							imageFallback: keepExistingImage
-								? (existing as any).imageFallback
-								: (inc as any).imageFallback,
-						});
-						seen.add(existing.title);
-					} else {
-						out.push(existing);
-					}
-				}
-				for (const [title, inc] of incoming) {
-					if (!seen.has(title)) out.push(inc);
-				}
-				return out;
-			});
+            // Merge with any pre-seeded placeholders, preserve thumbnails/colors if any
+            modsStore.update((arr) => {
+                const incoming = new Map<string, Mod>();
+                for (const m of mods as Mod[]) incoming.set(m.title, m);
+                const seen = new Set<string>();
+                const out: Mod[] = [];
+                for (const existing of arr) {
+                    const inc = incoming.get(existing.title);
+                    if (inc) {
+                        const keepExistingImage =
+                            Boolean(existing.image) &&
+                            existing.image.trim().length > 0 &&
+                            !/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+                        const preferExistingDesc =
+                            (existing.description?.trim().length ?? 0) > 0;
+                        out.push({
+                            ...existing,
+                            ...inc,
+                            description: preferExistingDesc
+                                ? existing.description
+                                : inc.description,
+                            colors: existing.colors,
+                            image: keepExistingImage ? existing.image : inc.image,
+                            imageFallback: keepExistingImage
+                                ? (existing as any).imageFallback
+                                : (inc as any).imageFallback,
+                        });
+                        seen.add(existing.title);
+                    } else {
+                        out.push(existing);
+                    }
+                }
+                for (const [title, inc] of incoming) {
+                    if (!seen.has(title)) out.push(inc);
+                }
+                return out;
+            });
 
 			// Also kick off thumbnails/descriptions
 			fillInstalledThumbnails($modsStore).catch(() => {});
