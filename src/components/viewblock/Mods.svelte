@@ -731,7 +731,7 @@
 			});
 
 			// Merge fresh remote mods with any locally seeded placeholders; prefer remote data
-			// Merge while preserving existing thumbnails to avoid flicker/regressions
+			// Preserve existing thumbnails and descriptions when present
 			modsStore.update((arr) => {
 				const incoming = new Map<string, Mod>();
 				for (const m of mods as Mod[]) incoming.set(m.title, m);
@@ -745,9 +745,14 @@
 							Boolean(existing.image) &&
 							existing.image.trim().length > 0 &&
 							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+						const preferExistingDesc =
+							(existing.description?.trim().length ?? 0) > 0;
 						out.push({
 							...existing,
 							...inc,
+							description: preferExistingDesc
+								? existing.description
+								: (inc.description ?? ""),
 							image: keepExistingImage ? existing.image : inc.image,
 							imageFallback: keepExistingImage
 								? (existing as any).imageFallback
@@ -766,7 +771,8 @@
 
 			// Re-apply local thumbnails for installed mods (non-blocking)
 			fillInstalledThumbnails($modsStore).catch(() => {});
-			// Quickly fill descriptions from cache only, then fetch missing ones remotely
+			// Fill visible page descriptions first for fast UI, then cached, then remaining
+			try { await fillDescriptionsVisibleFirst(); } catch { /* ignore */ }
 			fillCachedDescriptions($modsStore).catch(() => {});
 			fillDescriptions(mods).catch((e) => console.warn("desc fill failed", e));
 			addMessage("All mods loaded", "success");
@@ -836,9 +842,14 @@
 							Boolean(existing.image) &&
 							existing.image.trim().length > 0 &&
 							!/\bimages\/cover\.jpg$/i.test(existing.image.trim());
+						const preferExistingDesc =
+							(existing.description?.trim().length ?? 0) > 0;
 						out.push({
 							...existing,
 							...inc,
+							description: preferExistingDesc
+								? existing.description
+								: inc.description,
 							image: keepExistingImage ? existing.image : inc.image,
 							imageFallback: keepExistingImage
 								? (existing as any).imageFallback
@@ -857,6 +868,9 @@
 
 			// Also kick off thumbnails/descriptions
 			fillInstalledThumbnails($modsStore).catch(() => {});
+			// Visible page priority, then cached, then remaining
+			try { await fillDescriptionsVisibleFirst(); } catch { /* ignore */ }
+			fillCachedDescriptions($modsStore).catch(() => {});
 			fillDescriptions(mods).catch(() => {});
 		} finally {
 			catalogLoading.set(false);
@@ -864,8 +878,8 @@
 	}
 
 	async function fillDescriptions(mods: (Mod & { _dirName?: string })[]) {
-		// Limit concurrent requests to avoid 429s
-		const limit = 10;
+		// Limit concurrent requests to avoid 429s and prioritize detail view
+		const limit = 6;
 		let i = 0;
 		async function worker() {
 			while (true) {
@@ -896,6 +910,43 @@
 		}
 		await Promise.all(
 			new Array(Math.min(limit, mods.length)).fill(0).map(worker),
+		);
+	}
+
+	async function fillDescriptionsVisibleFirst() {
+		// Prioritize current page mods so skeletons disappear quickly
+		const candidates = paginatedMods
+			.filter((m) => !m.description || m.description.trim().length === 0)
+			.map((m) => ({ title: m.title, dir: (m as any)._dirName as string | undefined }))
+			.filter((x) => Boolean(x.dir));
+		if (candidates.length === 0) return;
+		const limit = 4;
+		let i = 0;
+		async function worker() {
+			while (true) {
+				const idx = i++;
+				if (idx >= candidates.length) break;
+				const c = candidates[idx]!;
+				try {
+					const text = await invoke<string>(
+						"get_description_cached_or_remote",
+						{ title: c.title, dirName: c.dir }
+					);
+					modsStore.update((arr) => {
+						const pos = arr.findIndex((x) => x.title === c.title);
+						if (pos >= 0) {
+							arr = arr.slice();
+							(arr[pos] as any).description = text;
+						}
+						return arr;
+					});
+				} catch (_) {
+					// ignore
+				}
+			}
+		}
+		await Promise.all(
+			new Array(Math.min(limit, candidates.length)).fill(0).map(() => worker()),
 		);
 	}
 

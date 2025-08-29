@@ -69,6 +69,18 @@ pub async fn clear_cache() -> Result<(), String> {
         }
     }
 
+    // Clear UI assets cache (thumbnails/descriptions)
+    let mod_assets_dir = config_dir.join("Balatro").join("mod_assets");
+    if mod_assets_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&mod_assets_dir) {
+            errors.push(format!(
+                "Failed to clear mod assets at {}: {}",
+                mod_assets_dir.display(),
+                e
+            ));
+        }
+    }
+
     if errors.is_empty() {
         Ok(())
     } else {

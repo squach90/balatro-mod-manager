@@ -641,6 +641,15 @@ let descLoading = $state(false);
             );
             // Update currentModView store with new description
             currentModView.set({ ...m, description: text });
+            // Also update the main modsStore so the card stops showing skeleton
+            modsStore.update((arr) => {
+                const pos = arr.findIndex((x) => x.title === m.title);
+                if (pos >= 0) {
+                    arr = arr.slice();
+                    (arr[pos] as any).description = text;
+                }
+                return arr;
+            });
         } catch (_) {
             // ignore
         } finally {

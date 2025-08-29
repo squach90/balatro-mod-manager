@@ -43,6 +43,8 @@
 			try {
 				localStorage.removeItem("version-cache-steamodded");
 				localStorage.removeItem("version-cache-talisman");
+				localStorage.removeItem("mods-cache");
+				localStorage.removeItem("mods-cache-ts");
 			} catch (e) {
 				// ignore storage errors
 			}
