@@ -35,6 +35,7 @@ import { addMessage } from "$lib/stores";
 		fetchCachedMods,
 		forceRefreshCache,
 	} from "../../stores/modCache";
+    import LazyImage from "../common/LazyImage.svelte";
 
 	// Store to track which mods have updates available
 	// const updateAvailable = writable<Record<string, boolean>>({});
@@ -84,7 +85,8 @@ import { addMessage } from "$lib/stores";
 	let talismanVersions = $state<string[]>([]);
 	let selectedVersion = $state("newest");
 	let loadingVersions = $state(false);
-	let renderedDescription = $state("");
+let renderedDescription = $state("");
+let descLoading = $state(false);
 	let isCheckingForUpdates = $state(false);
 
 	// Add a local state variable for tracking enabled status
@@ -626,16 +628,49 @@ import { addMessage } from "$lib/stores";
 		return status;
 	};
 
-	// This effect handles the description rendering
-	$effect(() => {
-		if (mod?.description) {
-			Promise.resolve(marked(mod.description)).then((result) => {
-				renderedDescription = result;
-			});
-		} else {
-			renderedDescription = "";
-		}
-	});
+    // Ensure description is loaded (lazy) for detail view
+    async function ensureDescriptionLoaded(m: any) {
+        if (!m || m.description) return;
+        const dir = m._dirName as string | undefined;
+        if (!dir) return;
+        try {
+            descLoading = true;
+            const text = await invoke<string>(
+                "get_description_cached_or_remote",
+                { title: m.title, dirName: dir }
+            );
+            // Update currentModView store with new description
+            currentModView.set({ ...m, description: text });
+            // Also update the main modsStore so the card stops showing skeleton
+            modsStore.update((arr) => {
+                const pos = arr.findIndex((x) => x.title === m.title);
+                if (pos >= 0) {
+                    arr = arr.slice();
+                    (arr[pos] as any).description = text;
+                }
+                return arr;
+            });
+        } catch (_) {
+            // ignore
+        } finally {
+            descLoading = false;
+        }
+    }
+
+    // This effect handles the description rendering
+    $effect(() => {
+        const m = mod as any;
+        if (m && !m.description) {
+            ensureDescriptionLoaded(m);
+        }
+        if (m?.description) {
+            Promise.resolve(marked(m.description)).then((result) => {
+                renderedDescription = result;
+            });
+        } else {
+            renderedDescription = "";
+        }
+    });
 
 	// Watch for changes to renderedDescription separately
 	$effect(() => {
@@ -851,18 +886,10 @@ import { addMessage } from "$lib/stores";
 							class="image-button"
 							aria-label={`View full size image of ${mod.title}`}
 						>
-							<img
-								src={mod.image}
-								alt={mod.title}
-								draggable="false"
-							/>
+							<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
 						</button>
 					{:else}
-						<img
-							src={mod.image}
-							alt={mod.title}
-							draggable="false"
-						/>
+						<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
 					{/if}
 				</div>
 
@@ -1045,6 +1072,14 @@ import { addMessage } from "$lib/stores";
 				>
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html renderedDescription}
+
+					{#if !renderedDescription && descLoading}
+						<div class="desc-skeleton" aria-hidden="true">
+							{#each Array(8) as _, i}
+								<div class="line" style={`width: ${90 - (i % 3) * 12}%`}></div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -1170,18 +1205,18 @@ import { addMessage } from "$lib/stores";
 		font-family: "M6X11", sans-serif;
 	}
 
-	.image-button {
-		padding: 0;
-		margin: 0;
-		border: none;
-		background: none;
-		cursor: pointer;
-		width: 100%;
-		height: 100%;
-		display: block;
-		line-height: 0; /* Add this to remove any spacing */
-		font-size: 0; /* Add this to remove any spacing */
-	}
+    .image-button {
+        padding: 0;
+        margin: 0;
+        border: none;
+        background: none;
+        cursor: default; /* do not show pointer over thumbnail */
+        width: 100%;
+        height: 100%;
+        display: block;
+        line-height: 0; /* remove any spacing */
+        font-size: 0; /* remove any spacing */
+    }
 
 	h2 {
 		margin-bottom: 2rem;
@@ -1201,17 +1236,17 @@ import { addMessage } from "$lib/stores";
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
-	img {
-		width: 100%;
-		height: 250px;
-		object-fit: cover;
-		transition: transform 0.2s ease;
-		display: block;
-	}
+    /* Image display is managed by LazyImage; keep container-only styles */
+    .image-container { cursor: default; }
 
-	img:hover {
-		transform: scale(1.02);
-	}
+    /* Subtle zoom-in on hover for thumbnail (style child component via :global) */
+    .image-container :global(.lazy-image img) {
+        transition: transform 180ms ease-out;
+        will-change: transform;
+    }
+    .image-container:hover :global(.lazy-image img) {
+        transform: scale(1.04);
+    }
 
 	.button-container {
 		display: flex;
@@ -1570,10 +1605,7 @@ import { addMessage } from "$lib/stores";
 	.delete-button:active {
 		transform: translateY(1px);
 	}
-	/* Make sure the original image is clickable */
-	.image-container img {
-		cursor: default;
-	}
+	/* Image elements live inside LazyImage, so no direct img rules here */
 
 	/* .image-container .clickable { */
 	/* 	cursor: pointer; */
@@ -1587,17 +1619,13 @@ import { addMessage } from "$lib/stores";
 			width: 100%;
 			height: 350px;
 
-			& > img {
-				height: 100%;
-			}
+
 		}
 
 		.image-button {
 			height: 100%;
 
-			& > img {
-				height: 100%;
-			}
+
 		}
 
 		.right-column {

@@ -40,7 +40,52 @@ pub async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
 
 #[tauri::command]
 pub async fn clear_cache() -> Result<(), String> {
-    map_error(cache::clear_cache())
+    // Clear legacy/app caches stored under the OS cache directory
+    let mut errors: Vec<String> = Vec::new();
+    if let Err(e) = cache::clear_cache() {
+        errors.push(e.to_string());
+    }
+
+    // Also clear the GitLab mod index cache we maintain under the config directory
+    let config_dir = match dirs::config_dir() {
+        Some(p) => p,
+        None => {
+            // If we can't resolve config dir, return any prior error or success for the primary cache
+            return if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors.join("; "))
+            };
+        }
+    };
+    let mod_index_cache_dir = config_dir.join("Balatro").join("mod_index_cache");
+    if mod_index_cache_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&mod_index_cache_dir) {
+            errors.push(format!(
+                "Failed to clear mod index cache at {}: {}",
+                mod_index_cache_dir.display(),
+                e
+            ));
+        }
+    }
+
+    // Clear UI assets cache (thumbnails/descriptions)
+    let mod_assets_dir = config_dir.join("Balatro").join("mod_assets");
+    if mod_assets_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&mod_assets_dir) {
+            errors.push(format!(
+                "Failed to clear mod assets at {}: {}",
+                mod_assets_dir.display(),
+                e
+            ));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
 }
 
 #[tauri::command]

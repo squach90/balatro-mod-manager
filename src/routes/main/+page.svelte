@@ -17,6 +17,7 @@
 		showWarningPopup,
 	} from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
+	import { fetchCachedMods } from "../../stores/modCache";
 	import { addMessage } from "$lib/stores";
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
@@ -120,9 +121,7 @@
 	const selectedMod = $derived($selectedModStore);
 
 	async function handleRefresh() {
-		const installedMods: InstalledMod[] = await invoke(
-			"get_installed_mods_from_db",
-		);
+		const installedMods: InstalledMod[] = await fetchCachedMods();
 		installationStatus.set(
 			Object.fromEntries(
 				installedMods.map((mod: InstalledMod) => [mod.name, true]),
@@ -210,10 +209,10 @@
 								"error",
 							);
 						}
-						showWarningPopup.set((p) => ({ ...p, visible: false }));
+						showWarningPopup.update((p) => ({ ...p, visible: false }));
 					},
 					onCancel: () => {
-						showWarningPopup.set((p) => ({ ...p, visible: false }));
+						showWarningPopup.update((p) => ({ ...p, visible: false }));
 					},
 				});
 			}

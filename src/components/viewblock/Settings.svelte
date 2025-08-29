@@ -39,6 +39,15 @@
 		isClearingCache = true;
 		try {
 			await invoke("clear_cache");
+			// Also clear small UI caches persisted in localStorage
+			try {
+				localStorage.removeItem("version-cache-steamodded");
+				localStorage.removeItem("version-cache-talisman");
+				localStorage.removeItem("mods-cache");
+				localStorage.removeItem("mods-cache-ts");
+			} catch (e) {
+				// ignore storage errors
+			}
 			addMessage("Successfully cleared all caches!", "success");
 		} catch (error) {
 			addMessage("Failed to clear cache: " + error, "error");
@@ -67,7 +76,7 @@
 
 	async function openModsFolder() {
 		try {
-			// Get the repository path (which should be config_dir/Balatro/mod_index)
+			// Get the mods folder path (config_dir/Balatro/Mods)
 			const modsFolderPath: string = await invoke("get_mods_folder");
 
 			// Get the parent directory (config_dir/Balatro) by finding the last path separator

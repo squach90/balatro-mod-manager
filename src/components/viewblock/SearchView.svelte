@@ -11,6 +11,7 @@
 	import FlexSearch from "flexsearch";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
+	import { fetchCachedMods } from "../../stores/modCache";
 	import { addMessage } from "$lib/stores";
 	import { fade } from "svelte/transition";
 	import ModCard from "./ModCard.svelte";
@@ -37,17 +38,11 @@
 
 	const getAllInstalledMods = async () => {
 		try {
-			const installed: InstalledMod[] = await invoke(
-				"get_installed_mods_from_db",
-			);
-			// fill the installed mods Array
-			installedMods = installed.map((mod) => {
-				return {
-					name: mod.name,
-					path: mod.path,
-					// collection_hash: mod.collection_hash,
-				};
-			});
+			const installed = await fetchCachedMods();
+			installedMods = installed.map((mod) => ({
+				name: mod.name,
+				path: mod.path,
+			}));
 		} catch (error) {
 			console.error("Failed to get installed mods:", error);
 		}

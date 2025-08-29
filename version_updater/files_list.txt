@@ -62,7 +62,6 @@
 ../src-tauri/Info.plist
 ../src-tauri/src/lib.rs
 ../src-tauri/src/main.rs
-../src-tauri/src/github_repo.rs
 ../Taskfile.yml
 ../version_updater/app/main.f90
 ../version_updater/test/check.f90

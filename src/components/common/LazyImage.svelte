@@ -1,0 +1,385 @@
+<script lang="ts">
+  import { onMount, onDestroy, createEventDispatcher } from "svelte";
+  import { assets } from "$app/paths";
+
+  export let src: string;
+  export let alt: string = "";
+  export let fallbackSrc: string | undefined;
+  export let defaultSrc: string = "/images/cover.jpg";
+  export let className: string = "";
+  // Optional caching by title: when provided, we try to use a cached
+  // thumbnail and persist successful remote loads for future sessions.
+  export let cacheTitle: string | undefined;
+  export let enableCache: boolean = true;
+
+  // Emit load/error for parent if needed
+  const dispatch = createEventDispatcher();
+  import { invoke } from "@tauri-apps/api/core";
+
+  let wrapper: HTMLDivElement | null = null;
+  let currentSrc: string | null = null;
+  let triedFallback = false;
+  let loading = false;
+  let usingDefault = false; // show static cover when thumbnail is missing
+  let loaded = false; // only show <img> when real image decoded
+  let loadTimer: number | null = null;
+  const LOAD_TIMEOUT_MS = 8000;
+  let spinnerDelayTimer: number | null = null;
+  // Delay spinner so broken/missing thumbnails (often 404 quickly) won't show it
+  const SPINNER_DELAY_MS = 700;
+  let showSpinner = false;
+  // When we decide to show default for a given src, remember it so we don't retry
+  let lockDefaultFor: string | null = null;
+  // Avoid duplicate cache writes in a single session
+  const seenCacheTitles = new Set<string>();
+  // One-shot cache recheck timer to update image after background caching
+  let cacheRecheckTimer: number | null = null;
+  const CACHE_RECHECK_DELAY_MS = 6000;
+
+  function isValidSrc(val: string | undefined | null): boolean {
+    if (!val) return false;
+    const s = val.trim();
+    if (s.length === 0) return false;
+    // Allow common safe schemes and app asset paths
+    return (
+      s.startsWith("data:") ||
+      s.startsWith("/") ||
+      s.startsWith("asset:") ||
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("tauri://")
+    );
+  }
+
+  function resolveLocal(path: string | undefined | null): string | null {
+    if (!path) return null;
+    const s = path.trim();
+    if (s.length === 0) return null;
+    // Remote or data/asset schemes are left as-is
+    if (
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("data:") ||
+      s.startsWith("asset:") ||
+      s.startsWith("tauri://")
+    ) {
+      return s;
+    }
+    // Treat as app static asset; normalize leading slash
+    const normalized = s.startsWith("/") ? s : `/${s}`;
+    return `${assets}${normalized}`;
+  }
+
+  function resolvedDefaultSrc(): string {
+    return resolveLocal(defaultSrc) || `${assets}/images/cover.jpg`;
+  }
+
+  function isDefaultResolved(path: string | null | undefined): boolean {
+    if (!path) return false;
+    const r = resolveLocal(path);
+    return r === resolvedDefaultSrc() || /(^|\/)images\/cover\.jpg$/i.test(path.trim());
+  }
+
+  function clearTimer() {
+    if (loadTimer !== null) {
+      clearTimeout(loadTimer);
+      loadTimer = null;
+    }
+    if (spinnerDelayTimer !== null) {
+      clearTimeout(spinnerDelayTimer);
+      spinnerDelayTimer = null;
+    }
+  }
+
+  function startTimeout() {
+    clearTimer();
+    loadTimer = setTimeout(() => {
+      // Treat as a stalled load and fallback like an error
+      handleStall();
+    }, LOAD_TIMEOUT_MS) as unknown as number;
+  }
+
+  function startLoading() {
+    // If no src or clearly invalid, use default immediately
+    if (!isValidSrc(src)) {
+      resetToDefault();
+      lockDefaultFor = src ?? null;
+      return;
+    }
+    // If src is the same as the default cover, don't animate
+    if (isDefaultResolved(src)) {
+      resetToDefault();
+      lockDefaultFor = src ?? null;
+      return;
+    }
+    triedFallback = false;
+    usingDefault = false;
+    const resolved = resolveLocal(src);
+    currentSrc = resolved;
+    // Treat non-network sources as immediately loaded (no timeout)
+    if (resolved && /^data:/i.test(resolved)) {
+      clearTimer();
+      loading = false;
+      loaded = true;
+      showSpinner = false;
+      dispatch("load");
+      return;
+    }
+    loading = true;
+    showSpinner = true; // show animation immediately for real thumbnails
+    startTimeout();
+    // Optional delayed assert remains to guard if needed
+    spinnerDelayTimer = setTimeout(() => {
+      if (loading && !usingDefault) {
+        showSpinner = true;
+      }
+    }, SPINNER_DELAY_MS) as unknown as number;
+  }
+
+  function resetToDefault() {
+    clearTimer();
+    triedFallback = false;
+    currentSrc = null;
+    usingDefault = true;
+    loading = false;
+    loaded = false;
+    showSpinner = false;
+    // Schedule a one-shot cache recheck: background queue may fetch it soon
+    if (enableCache && cacheTitle && cacheRecheckTimer === null) {
+      cacheRecheckTimer = setTimeout(async () => {
+        cacheRecheckTimer = null;
+        try {
+          const cached = await invoke<string | null>(
+            "get_cached_thumbnail_by_title",
+            { title: cacheTitle }
+          );
+          if (cached) {
+            currentSrc = cached;
+            usingDefault = false;
+            loading = false;
+            loaded = true;
+            showSpinner = false;
+            dispatch("load");
+          }
+        } catch (_) { /* ignore */ }
+      }, CACHE_RECHECK_DELAY_MS) as unknown as number;
+    }
+  }
+
+  function handleLoad(event: Event) {
+    // Some webviews may fire load on 404 responses; validate dimensions
+    const img = event.currentTarget as HTMLImageElement | null;
+    if (img && (img.naturalWidth === 0 || img.naturalHeight === 0)) {
+      // Treat as error to trigger fallback/default
+      handleError();
+      return;
+    }
+    clearTimer();
+    loading = false;
+    loaded = true;
+    showSpinner = false;
+    dispatch("load");
+
+    // If a remote image loaded successfully, persist it to the cache for future use
+    if (
+      enableCache &&
+      cacheTitle &&
+      currentSrc &&
+      /^https?:\/\//i.test(currentSrc) &&
+      !seenCacheTitles.has(cacheTitle)
+    ) {
+      seenCacheTitles.add(cacheTitle);
+      // Non-blocking; backend will no-op if already cached
+      invoke("cache_thumbnail_from_url", { title: cacheTitle, url: currentSrc }).catch(() => {});
+    }
+  }
+
+  function handleError() {
+    clearTimer();
+    if (!triedFallback && fallbackSrc && currentSrc !== resolveLocal(fallbackSrc)) {
+      triedFallback = true;
+      usingDefault = false;
+      if (isDefaultResolved(fallbackSrc)) {
+        resetToDefault();
+        dispatch("error");
+        lockDefaultFor = src ?? null;
+        return;
+      }
+      currentSrc = resolveLocal(fallbackSrc);
+      // keep loading true until fallback resolves
+      loading = true;
+      loaded = false;
+      showSpinner = false;
+      startTimeout();
+      spinnerDelayTimer = setTimeout(() => {
+        if (loading && !usingDefault) {
+          showSpinner = true;
+        }
+      }, SPINNER_DELAY_MS) as unknown as number;
+    } else {
+      // Switch to static default cover and hide the spinner
+      resetToDefault();
+      dispatch("error");
+      lockDefaultFor = src ?? null;
+    }
+  }
+
+  function handleStall() {
+    // Same logic as error handler but keep one path
+    if (!triedFallback && fallbackSrc && currentSrc !== resolveLocal(fallbackSrc)) {
+      triedFallback = true;
+      usingDefault = false;
+      if (isDefaultResolved(fallbackSrc)) {
+        resetToDefault();
+        dispatch("error");
+        lockDefaultFor = src ?? null;
+        return;
+      }
+      currentSrc = resolveLocal(fallbackSrc);
+      loading = true;
+      loaded = false;
+      showSpinner = false;
+      startTimeout();
+      spinnerDelayTimer = setTimeout(() => {
+        if (loading && !usingDefault) {
+          showSpinner = true;
+        }
+      }, SPINNER_DELAY_MS) as unknown as number;
+    } else {
+      resetToDefault();
+      dispatch("error");
+      lockDefaultFor = src ?? null;
+    }
+  }
+
+  async function tryLoadCachedOrStart() {
+    const srcStr = src?.trim() || "";
+    // Only consult remote thumbnail cache for http(s) sources
+    if (enableCache && cacheTitle && cacheTitle.trim().length > 0 && /^https?:\/\//i.test(srcStr)) {
+      try {
+        const cached = await invoke<string | null>(
+          "get_cached_thumbnail_by_title",
+          { title: cacheTitle }
+        );
+        if (cached) {
+          triedFallback = false;
+          usingDefault = false;
+          currentSrc = cached;
+          // Data URLs should be considered loaded immediately
+          clearTimer();
+          loading = false;
+          loaded = true;
+          showSpinner = false;
+          dispatch("load");
+          return;
+        }
+      } catch (_) {
+        // ignore cache read errors
+      }
+    }
+    startLoading();
+  }
+
+  onMount(() => {
+    tryLoadCachedOrStart();
+  });
+
+  onDestroy(() => {
+    clearTimer();
+    if (cacheRecheckTimer !== null) {
+      clearTimeout(cacheRecheckTimer);
+      cacheRecheckTimer = null;
+    }
+  });
+
+  // Reset when src changes so pagination or prop updates reload correct image
+  $: if (src && src.trim().length > 0) {
+    const srcStr = src.trim();
+    const resolved = resolveLocal(srcStr);
+    // If we previously locked default for this src, keep showing default without retrying
+    if (lockDefaultFor === srcStr) {
+      if (!usingDefault) resetToDefault();
+    } else if (!isValidSrc(srcStr) || isDefaultResolved(srcStr)) {
+      if (!usingDefault) resetToDefault();
+      lockDefaultFor = srcStr;
+    } else if (currentSrc !== resolved && !usingDefault) {
+      tryLoadCachedOrStart();
+    } else if (currentSrc === null && !usingDefault) {
+      tryLoadCachedOrStart();
+    }
+  } else {
+    // If no src is provided, immediately show the static default cover
+    resetToDefault();
+    lockDefaultFor = src ?? null;
+  }
+</script>
+
+<div class={`lazy-image ${className} ${loaded ? 'loaded' : ''}`} bind:this={wrapper} style={!loaded ? `background:url('${resolvedDefaultSrc()}') center/cover no-repeat` : ''}>
+  {#if usingDefault}
+    <img
+      src={resolveLocal(defaultSrc) || `${assets}/images/cover.jpg`}
+      alt={alt}
+      draggable="false"
+      decoding="async"
+    />
+  {:else}
+    {#if currentSrc}
+      {#key currentSrc}
+        <img src={currentSrc} alt={alt} on:load={handleLoad} on:error={handleError} draggable="false" decoding="async" aria-hidden={!loaded} />
+      {/key}
+    {:else}
+      <!-- Show placeholder cover while waiting to start loading -->
+      <!-- default cover via background; no extra element needed -->
+    {/if}
+    {#if showSpinner && currentSrc}
+      <div class="spinner-square" aria-hidden="true"></div>
+    {/if}
+  {/if}
+</div>
+
+<style>
+  .lazy-image {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .lazy-image img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 5px;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+
+  .lazy-image.loaded img {
+    opacity: 1;
+  }
+
+  /* default-cover no longer needed; default is img-based */
+
+  /* Square spinning throbber */
+  .spinner-square {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    border-radius: 4px;
+    background: #fdcf51;
+    box-shadow: 0 0 0 2px #f4eee0 inset;
+    animation: square-spin 1s linear infinite;
+  }
+
+  @keyframes square-spin {
+    0% { transform: translateZ(0) rotate(0deg); opacity: 0.8; }
+    50% { transform: translateZ(0) rotate(180deg); opacity: 1; }
+    100% { transform: translateZ(0) rotate(360deg); opacity: 0.8; }
+  }
+</style>

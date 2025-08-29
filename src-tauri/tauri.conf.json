@@ -69,13 +69,12 @@
 			"path": {
 				"all": true
 			},
-			"fs": {
-				"scope": [
-					"$RESOURCE/**",
-					"$CONFIG/Balatro/mod_index/**",
-					"$ASSET/**"
-				]
-			},
+            "fs": {
+                "scope": [
+                    "$RESOURCE/**",
+                    "$ASSET/**"
+                ]
+            },
 			"window": {
 				"show": true
 			}

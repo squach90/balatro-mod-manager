@@ -6,7 +6,7 @@ pub struct Payload {
     pub cwd: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModMeta {
     #[serde(rename = "requires-steamodded")]
     pub requires_steamodded: bool,

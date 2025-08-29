@@ -1,7 +1,7 @@
 pub mod commands;
-mod github_repo;
 mod models;
 mod state;
+mod thumb_queue;
 mod util;
 
 use std::path::PathBuf;
@@ -45,7 +45,26 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 discord_rpc: Mutex::new(discord_rpc),
+                thumbs: crate::thumb_queue::ThumbnailManager::new(),
             });
+
+            // Remove legacy GitHub-based local clone directory if it exists.
+            if let Some(cfg_dir) = dirs::config_dir() {
+                let legacy_repo = cfg_dir.join("Balatro").join("mod_index");
+                if legacy_repo.exists() {
+                    match std::fs::remove_dir_all(&legacy_repo) {
+                        Ok(()) => log::info!(
+                            "Removed legacy GitHub repo directory: {}",
+                            legacy_repo.display()
+                        ),
+                        Err(e) => log::warn!(
+                            "Failed to remove legacy repo directory {}: {}",
+                            legacy_repo.display(),
+                            e
+                        ),
+                    }
+                }
+            }
 
             tauri::async_runtime::spawn(async move {
                 let db = match Database::new() {
@@ -121,13 +140,20 @@ pub fn run() {
             commands::settings::is_security_warning_acknowledged,
             commands::cache::get_last_fetched,
             commands::cache::update_last_fetched,
-            commands::repo::get_repo_path,
-            commands::repo::clone_repo,
-            commands::repo::pull_repo,
-            commands::repo::list_directories,
-            commands::repo::read_json_file,
-            commands::repo::read_text_file,
-            commands::repo::get_mod_thumbnail,
+            commands::repo::list_gitlab_mods,
+            commands::repo::get_gitlab_file,
+            commands::repo::get_gitlab_thumbnail_url,
+            commands::repo::fetch_gitlab_mods_archive,
+            commands::repo::fetch_gitlab_mods,
+            commands::repo::fetch_gitlab_mods_meta_only,
+            commands::repo::get_cached_installed_thumbnail,
+            commands::repo::get_cached_thumbnail_by_title,
+            commands::repo::cache_thumbnail_from_url,
+            commands::repo::get_description_cached_or_remote,
+            commands::repo::get_cached_description_by_title,
+            commands::repo::batch_fetch_thumbnails_lfs,
+            commands::thumbnails::enqueue_thumbnails,
+            commands::thumbnails::enqueue_thumbnail,
             commands::mods::is_mod_enabled,
             commands::mods::toggle_mod_enabled,
             commands::mods::is_mod_enabled_by_path,

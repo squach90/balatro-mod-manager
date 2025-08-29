@@ -166,6 +166,38 @@ pub fn get_installed_mods() -> Vec<String> {
         .collect()
 }
 
+pub fn is_balatro_running() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let system = System::new_all();
+        let x = system
+            .processes_by_exact_name(std::ffi::OsStr::new("Balatro.exe"))
+            .next()
+            .is_some();
+        x
+    }
+
+    #[cfg(target_family = "unix")]
+    {
+        use libproc::proc_pid::name;
+        use libproc::processes;
+
+        if let Ok(pids) = processes::pids_by_type(processes::ProcFilter::All) {
+            for pid in pids {
+                if let Ok(name) = name(pid as i32) {
+                    if (name.to_lowercase().contains("balatro")
+                        && name.to_lowercase() != "balatro-mod-manager")
+                        | (name == "love")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
@@ -212,37 +244,5 @@ mod tests {
             Some(val) => std::env::set_var("HOME", val),
             None => std::env::remove_var("HOME"),
         }
-    }
-}
-
-pub fn is_balatro_running() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        let system = System::new_all();
-        let x = system
-            .processes_by_exact_name(std::ffi::OsStr::new("Balatro.exe"))
-            .next()
-            .is_some();
-        x
-    }
-
-    #[cfg(target_family = "unix")]
-    {
-        use libproc::proc_pid::name;
-        use libproc::processes;
-
-        if let Ok(pids) = processes::pids_by_type(processes::ProcFilter::All) {
-            for pid in pids {
-                if let Ok(name) = name(pid as i32) {
-                    if (name.to_lowercase().contains("balatro")
-                        && name.to_lowercase() != "balatro-mod-manager")
-                        | (name == "love")
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
     }
 }

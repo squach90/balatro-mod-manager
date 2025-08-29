@@ -58,10 +58,11 @@ pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), Str
                 lovely_path.display(),
                 balatro_executable.display()
             );
+            // Spawn the process without waiting so the UI doesn't block
             Command::new("sh")
                 .arg("-c")
                 .arg(cmd)
-                .status()
+                .spawn()
                 .map_err(|e| e.to_string())?;
         }
 
