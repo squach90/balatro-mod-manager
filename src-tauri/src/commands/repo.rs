@@ -869,7 +869,7 @@ pub async fn batch_fetch_thumbnails_lfs(inputs: Vec<ModThumbInput>) -> Result<u3
             .or_default()
             .push(m.title.clone());
     }
-    let mut needed_dirs: HashSet<String> = dir_to_titles.keys().cloned().collect();
+    let needed_dirs: HashSet<String> = dir_to_titles.keys().cloned().collect();
 
     // 1) Try to get all pointer oids in-memory by downloading a single archive of `mods/`.
     let project = urlencoding::encode(GITLAB_PROJECT);
