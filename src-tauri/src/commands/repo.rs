@@ -9,6 +9,8 @@ const GITLAB_PROJECT: &str = "balatro-mod-index/repo";
 const GITLAB_BASE: &str = "https://gitlab.com/balatro-mod-index/repo";
 const GITLAB_RAW_MAIN: &str = "https://gitlab.com/balatro-mod-index/repo/-/raw/main";
 const GITLAB_RAW_MASTER: &str = "https://gitlab.com/balatro-mod-index/repo/-/raw/master";
+const GITLAB_LFS_BATCH: &str =
+    "https://gitlab.com/balatro-mod-index/repo.git/info/lfs/objects/batch";
 
 #[derive(Deserialize)]
 struct GitLabTreeEntry {
@@ -717,4 +719,370 @@ pub async fn get_cached_description_by_title(title: String) -> Result<Option<Str
         .to_string()
     })?;
     Ok(Some(text))
+}
+
+// ============ LFS Batch Thumbnails ============
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModThumbInput {
+    pub title: String,
+    pub dir_name: String,
+}
+
+#[derive(Deserialize)]
+struct GitLabFileContent {
+    content: String,
+    encoding: String,
+}
+
+#[derive(Serialize)]
+struct LfsBatchReq<'a> {
+    operation: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transfers: Option<&'a [&'a str]>,
+    objects: Vec<LfsObjectSpec>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct LfsObjectSpec {
+    oid: String,
+    size: u64,
+}
+
+#[derive(Deserialize)]
+struct LfsBatchResp {
+    #[allow(dead_code)]
+    transfer: Option<String>,
+    objects: Vec<LfsObjectResp>,
+}
+
+#[derive(Deserialize)]
+struct LfsObjectResp {
+    oid: String,
+    size: u64,
+    #[serde(default)]
+    actions: Option<LfsObjActions>,
+}
+
+#[derive(Deserialize, Clone)]
+struct LfsObjActions {
+    download: LfsAction,
+}
+
+#[derive(Deserialize, Clone)]
+struct LfsAction {
+    href: String,
+    #[serde(default)]
+    header: Option<std::collections::HashMap<String, String>>,
+}
+
+fn parse_lfs_pointer(ptr_text: &str) -> Option<(String, u64)> {
+    let mut oid: Option<String> = None;
+    let mut size: Option<u64> = None;
+    for line in ptr_text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("oid ") {
+            // Accept formats like: "sha256:<hex>" or already just the hex
+            let val = rest.trim();
+            if let Some(h) = val.strip_prefix("sha256:") {
+                oid = Some(h.to_string());
+            } else {
+                oid = Some(val.to_string());
+            }
+        } else if let Some(rest) = line.strip_prefix("size ") {
+            if let Ok(n) = rest.trim().parse::<u64>() {
+                size = Some(n);
+            }
+        }
+    }
+    match (oid, size) {
+        (Some(o), Some(s)) => Some((o, s)),
+        _ => None,
+    }
+}
+
+async fn fetch_pointer_for_thumb(
+    client: &reqwest::Client,
+    project_enc: &str,
+    dir_name: &str,
+) -> Option<(String, u64)> {
+    // file_path must encode slashes (i.e., use one-shot encode of full path)
+    let file_path = format!("mods/{}/thumbnail.jpg", dir_name);
+    let file_enc = urlencoding::encode(&file_path);
+    let branches = ["main", "master"]; // try main first, then master
+    for b in branches {
+        let url = format!(
+            "https://gitlab.com/api/v4/projects/{}/repository/files/{}/?ref={}",
+            project_enc, file_enc, b
+        );
+        if let Ok(resp) = client.get(&url).send().await {
+            if resp.status().is_success() {
+                if let Ok(meta) = resp.json::<GitLabFileContent>().await {
+                    if meta.encoding.to_lowercase() == "base64" {
+                        if let Ok(bytes) =
+                            base64::engine::general_purpose::STANDARD.decode(meta.content)
+                        {
+                            if let Ok(text) = String::from_utf8(bytes) {
+                                if let Some((oid, size)) = parse_lfs_pointer(&text) {
+                                    return Some((oid, size));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub async fn batch_fetch_thumbnails_lfs(inputs: Vec<ModThumbInput>) -> Result<u32, String> {
+    use futures::{stream, StreamExt};
+
+    // Ensure output directory exists early
+    let (thumbs_dir, _) = ensure_assets_dirs()?;
+
+    // Filter out inputs already cached
+    let pending: Vec<ModThumbInput> = inputs
+        .into_iter()
+        .filter(|m| {
+            let slug = safe_slug(&m.title);
+            !thumbs_dir.join(format!("{slug}.jpg")).exists()
+        })
+        .collect();
+    if pending.is_empty() {
+        return Ok(0);
+    }
+
+    // HTTP client (reused across all requests)
+    let client = reqwest::Client::builder()
+        .user_agent("balatro-mod-manager/1.0")
+        .build()
+        .map_err(|e| e.to_string())?;
+    // Organize titles by dir and compute the set we need
+    use std::collections::{HashMap, HashSet};
+    let mut dir_to_titles: HashMap<String, Vec<String>> = HashMap::new();
+    for m in &pending {
+        dir_to_titles
+            .entry(m.dir_name.clone())
+            .or_default()
+            .push(m.title.clone());
+    }
+    let mut needed_dirs: HashSet<String> = dir_to_titles.keys().cloned().collect();
+
+    // 1) Try to get all pointer oids in-memory by downloading a single archive of `mods/`.
+    let project = urlencoding::encode(GITLAB_PROJECT);
+    let archive_urls = [
+        format!(
+            "https://gitlab.com/api/v4/projects/{}/repository/archive.tar.gz?sha=main&path=mods",
+            project
+        ),
+        format!(
+            "https://gitlab.com/api/v4/projects/{}/repository/archive.tar.gz?sha=master&path=mods",
+            project
+        ),
+    ];
+
+    let mut oid_to_titles: HashMap<String, Vec<String>> = HashMap::new();
+    let mut objects: Vec<LfsObjectSpec> = Vec::new();
+    let mut seen_oid: HashSet<String> = HashSet::new();
+
+    'outer: for url in &archive_urls {
+        match client.get(url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.bytes().await {
+                    Ok(b) => {
+                        use flate2::read::GzDecoder;
+                        use std::io::Read;
+                        use tar::Archive;
+                        let mut dec = GzDecoder::new(b.as_ref());
+                        let mut tar_bytes = Vec::with_capacity(b.len());
+                        if dec.read_to_end(&mut tar_bytes).is_err() {
+                            continue;
+                        }
+                        let mut archive = Archive::new(std::io::Cursor::new(tar_bytes));
+                        let mut found = 0usize;
+                        let total_needed = needed_dirs.len();
+                        if let Ok(mut entries) = archive.entries() {
+                            'entries: for e in entries.by_ref() {
+                                let mut entry = match e {
+                                    Ok(v) => v,
+                                    Err(_) => continue,
+                                };
+                                let path = match entry.path() {
+                                    Ok(p) => p.into_owned(),
+                                    Err(_) => continue,
+                                };
+                                // Path looks like: <root>/mods/<dir>/thumbnail.jpg
+                                let comps: Vec<_> = path.components().collect();
+                                let mut mods_idx = None;
+                                for (i, c) in comps.iter().enumerate() {
+                                    if c.as_os_str() == std::ffi::OsStr::new("mods") {
+                                        mods_idx = Some(i);
+                                        break;
+                                    }
+                                }
+                                let mi = match mods_idx {
+                                    Some(i) => i,
+                                    None => continue,
+                                };
+                                if comps.len() < mi + 3 {
+                                    continue;
+                                }
+                                let dir_name_os = match &comps[mi + 1] {
+                                    std::path::Component::Normal(n) => n,
+                                    _ => continue,
+                                };
+                                let file_os = match &comps[mi + 2] {
+                                    std::path::Component::Normal(n) => n,
+                                    _ => continue,
+                                };
+                                if file_os.to_string_lossy() != "thumbnail.jpg" {
+                                    continue;
+                                }
+                                let dir_name = dir_name_os.to_string_lossy().to_string();
+                                if !needed_dirs.contains(&dir_name) {
+                                    continue;
+                                }
+
+                                let mut s = String::new();
+                                if entry.read_to_string(&mut s).is_err() {
+                                    continue;
+                                }
+                                if let Some((oid, size)) = parse_lfs_pointer(&s) {
+                                    oid_to_titles.entry(oid.clone()).or_default().extend(
+                                        dir_to_titles.get(&dir_name).cloned().unwrap_or_default(),
+                                    );
+                                    if seen_oid.insert(oid.clone()) {
+                                        objects.push(LfsObjectSpec { oid, size });
+                                    }
+                                    found += 1;
+                                    if found >= total_needed {
+                                        break 'entries;
+                                    }
+                                }
+                            }
+                        }
+                        // break outer if we collected anything from this branch
+                        if !objects.is_empty() {
+                            break 'outer;
+                        }
+                    }
+                    Err(_) => continue,
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    // Fallback to per-file pointer fetch if archive path yielded nothing
+    if objects.is_empty() {
+        let project_enc = urlencoding::encode(GITLAB_PROJECT).to_string();
+        let pointer_results = stream::iter(pending.into_iter())
+            .map(|m| {
+                let client = client.clone();
+                let project_enc = project_enc.clone();
+                let dir = m.dir_name;
+                let title = m.title;
+                async move {
+                    let p = fetch_pointer_for_thumb(&client, &project_enc, &dir).await;
+                    p.map(|(oid, size)| (title, oid, size))
+                }
+            })
+            .buffer_unordered(12)
+            .collect::<Vec<_>>()
+            .await;
+
+        for item in pointer_results.into_iter().flatten() {
+            let (title, oid, size) = item;
+            oid_to_titles.entry(oid.clone()).or_default().push(title);
+            if seen_oid.insert(oid.clone()) {
+                objects.push(LfsObjectSpec { oid, size });
+            }
+        }
+        if objects.is_empty() {
+            return Ok(0);
+        }
+    }
+
+    // 2) Perform LFS batch requests (chunked, e.g., 50 objects per request)
+    let chunk_size = 50usize;
+    let mut total_saved = 0u32;
+    for chunk in objects.chunks(chunk_size) {
+        let req_body = LfsBatchReq {
+            operation: "download",
+            transfers: Some(&["basic"]),
+            objects: chunk.to_vec(),
+        };
+        let resp = client
+            .post(GITLAB_LFS_BATCH)
+            .header(
+                reqwest::header::ACCEPT,
+                "application/vnd.git-lfs+json; charset=utf-8",
+            )
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/vnd.git-lfs+json; charset=utf-8",
+            )
+            .json(&req_body)
+            .send()
+            .await
+            .map_err(|e| format!("LFS batch error: {}", e))?;
+        if !resp.status().is_success() {
+            return Err(format!("LFS batch status: {}", resp.status()));
+        }
+        let batch: LfsBatchResp = resp
+            .json()
+            .await
+            .map_err(|e| format!("Parse LFS batch response failed: {}", e))?;
+
+        // 3) Download each object and store under each mapped title
+        let concurrency = 8usize;
+        let saved = stream::iter(batch.objects.into_iter())
+            .filter_map(|o| {
+                let actions = o.actions.clone();
+                let titles = oid_to_titles.get(&o.oid).cloned();
+                async move {
+                    match (actions, titles) {
+                        (Some(a), Some(ts)) => Some((o.oid, o.size, a.download, ts)),
+                        _ => None,
+                    }
+                }
+            })
+            .map(|(_oid, _size, act, titles)| {
+                let client = client.clone();
+                let thumbs_dir_cloned = thumbs_dir.clone();
+                async move {
+                    let mut req = client.get(&act.href);
+                    if let Some(h) = act.header {
+                        for (k, v) in h {
+                            req = req.header(k, v);
+                        }
+                    }
+                    if let Ok(resp) = req.send().await {
+                        if resp.status().is_success() {
+                            if let Ok(bytes) = resp.bytes().await {
+                                let mut count = 0u32;
+                                for t in &titles {
+                                    let slug = safe_slug(t);
+                                    let path = thumbs_dir_cloned.join(format!("{slug}.jpg"));
+                                    if std::fs::write(&path, &bytes).is_ok() {
+                                        count += 1;
+                                    }
+                                }
+                                return count;
+                            }
+                        }
+                    }
+                    0u32
+                }
+            })
+            .buffer_unordered(concurrency)
+            .fold(0u32, |acc, n| async move { acc + n })
+            .await;
+        total_saved += saved;
+    }
+
+    Ok(total_saved)
 }
