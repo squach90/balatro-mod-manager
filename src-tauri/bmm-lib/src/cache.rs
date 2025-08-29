@@ -408,7 +408,8 @@ mod tests {
                 version: None,
             };
 
-            save_cache(&[test_mod.clone()])?;
+            // Use a single-element slice referencing the value to avoid cloning
+            save_cache(std::slice::from_ref(&test_mod))?;
             let loaded = load_cache()?.expect("Should load cache");
 
             assert_eq!(loaded.0.len(), 1);

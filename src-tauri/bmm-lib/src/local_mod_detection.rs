@@ -1230,7 +1230,7 @@ mod tests {
         assert!(!super::is_path_managed(&cousin, &managed));
 
         // If the managed path is nested under the given path, also true
-        assert!(super::is_path_managed(&"/tmp".to_string(), &managed));
+        assert!(super::is_path_managed("/tmp", &managed));
     }
 
     #[test]
