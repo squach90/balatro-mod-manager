@@ -74,6 +74,14 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
+      - name: Setup macOS SDK env for universal build
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+          # Workaround Xcode 15+ linker strictness for min/macOS platform version
+          echo "RUSTFLAGS=-C link-arg=-Wl,-platform_version,macos,11.0,15.0" >> $GITHUB_ENV
+
       # Ensure Windows bundlers are available (WiX for MSI, NSIS for EXE)
       - name: Install Windows bundler dependencies (WiX + NSIS)
         if: matrix.platform == 'windows-latest'
@@ -145,7 +153,8 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $APP_VERSION = Select-String -Path src-tauri/Cargo.toml -Pattern 'version = "([^"]*)"' | ForEach-Object { $_.Matches.Groups[1].Value }
+          $line = Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' -List | Select-Object -First 1
+          $APP_VERSION = $line.Matches.Groups[1].Value
           echo "APP_VERSION=$APP_VERSION" >> $env:GITHUB_ENV
 
       - name: Build Tauri App
@@ -163,6 +172,7 @@ jobs:
           CARGO_INCREMENTAL: true
           # Speed up macOS build
           MACOS_TARGETS_OPTIMIZED: true
+          CARGO_TARGET_DIR: src-tauri/target
         with:
           args: ${{ matrix.args }} -v
           projectPath: .
@@ -205,6 +215,16 @@ jobs:
           } else {
             Write-Host 'root target missing';
           }
+
+      - name: Compile Windows binary (fallback)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        working-directory: src-tauri
+        run: |
+          cargo build --release
+          if (!(Test-Path 'target/release')) { exit 1 }
+          Write-Host 'Release artifacts:'
+          Get-ChildItem -Path target/release -File | Select-Object FullName,Length
           
       # Upload artifacts by platform
       - name: Upload macOS artifacts
