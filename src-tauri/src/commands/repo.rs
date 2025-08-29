@@ -700,3 +700,21 @@ pub async fn get_description_cached_or_remote(
     }
     Err(format!("Description not found for {}", dir_name))
 }
+
+#[tauri::command]
+pub async fn get_cached_description_by_title(title: String) -> Result<Option<String>, String> {
+    let (_, descs_dir) = ensure_assets_dirs()?;
+    let slug = safe_slug(&title);
+    let path = descs_dir.join(format!("{slug}.md"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+    Ok(Some(text))
+}

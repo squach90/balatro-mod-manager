@@ -150,6 +150,7 @@ pub fn run() {
             commands::repo::get_cached_thumbnail_by_title,
             commands::repo::cache_thumbnail_from_url,
             commands::repo::get_description_cached_or_remote,
+            commands::repo::get_cached_description_by_title,
             commands::thumbnails::enqueue_thumbnails,
             commands::thumbnails::enqueue_thumbnail,
             commands::mods::is_mod_enabled,

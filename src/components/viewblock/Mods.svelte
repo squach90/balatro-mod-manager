@@ -691,10 +691,10 @@
 		if ($catalogLoading) return;
 		catalogLoading.set(true);
 		addMessage("Loading mods in background…", "info");
-        try {
-            const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
-            // Enqueue background caching for thumbnails (non-blocking, handles 429)
-            try {
+		try {
+			const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
+			// Enqueue background caching for thumbnails (non-blocking, handles 429)
+			try {
                 const thumbItems = items
                     .filter((i) => i.image_url && /^https?:\/\//i.test(i.image_url))
                     .map((i) => ({ title: i.meta.title, url: i.image_url }));
@@ -766,6 +766,8 @@
 
 			// Re-apply local thumbnails for installed mods (non-blocking)
 			fillInstalledThumbnails($modsStore).catch(() => {});
+			// Quickly fill descriptions from cache only, then fetch missing ones remotely
+			fillCachedDescriptions($modsStore).catch(() => {});
 			fillDescriptions(mods).catch((e) => console.warn("desc fill failed", e));
 			addMessage("All mods loaded", "success");
 		} catch (error) {
@@ -894,6 +896,41 @@
 		}
 		await Promise.all(
 			new Array(Math.min(limit, mods.length)).fill(0).map(worker),
+		);
+	}
+
+	async function fillCachedDescriptions(mods: Mod[]) {
+		// Only reads local cache; no network. Gentle concurrency.
+		const limit = 12;
+		let i = 0;
+		async function worker() {
+			while (true) {
+				const idx = i++;
+				if (idx >= mods.length) break;
+				const m = mods[idx];
+				if (!m || (m.description && m.description.trim().length > 0)) continue;
+				try {
+					const cached = await invoke<string | null>(
+						"get_cached_description_by_title",
+						{ title: m.title },
+					);
+					if (cached) {
+						modsStore.update((arr) => {
+							const pos = arr.findIndex((x) => x.title === m.title);
+							if (pos >= 0) {
+								arr = arr.slice();
+								(arr[pos] as any).description = cached;
+							}
+							return arr;
+						});
+					}
+				} catch (_) {
+					// ignore
+				}
+			}
+		}
+		await Promise.all(
+			new Array(Math.min(limit, mods.length)).fill(0).map(() => worker()),
 		);
 	}
 
