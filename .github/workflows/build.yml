@@ -165,6 +165,8 @@ jobs:
           MACOS_TARGETS_OPTIMIZED: true
         with:
           args: ${{ matrix.args }} -v
+          projectPath: .
+          tauriPath: src-tauri
       
       # Debug: list bundle outputs to verify build locations
       - name: List macOS bundle outputs (debug)
