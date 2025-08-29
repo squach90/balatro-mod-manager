@@ -111,13 +111,25 @@ jobs:
       - name: Build frontend (SvelteKit)
         run: bun run build
 
-      - name: Verify frontend dist exists
+      - name: Verify frontend dist exists (macOS/Linux)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
         run: |
           if [ ! -f build/index.html ]; then
             echo "Frontend dist missing (build/index.html).";
             ls -la build || true;
             exit 1;
           fi
+
+      - name: Verify frontend dist exists (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'build/index.html')) {
+            Write-Host 'Frontend dist missing (build/index.html).';
+            if (Test-Path 'build') { Get-ChildItem -Path build -Recurse | Select-Object FullName }
+            exit 1
+          }
         
       - name: Extract app version on Unix systems
         if: matrix.platform == 'macos-latest' # || matrix.platform == 'ubuntu-22.04'
