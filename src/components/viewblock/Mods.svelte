@@ -47,9 +47,8 @@ import { onMount, onDestroy } from "svelte";
 		forceRefreshCache,
 	} from "../../stores/modCache";
 	import { updateAvailableStore } from "../../stores/modStore";
+	import { modEnabledStore } from "../../stores/modStore";
 
-	// Add this import for the enabled/disabled mod store
-	const modEnabledStore = writable<Record<string, boolean>>({});
 	const loadingDots = writable(0);
 	let installedMods: InstalledMod[] = [];
 
@@ -737,13 +736,16 @@ import { onMount, onDestroy } from "svelte";
 			});
 
             // Merge fresh remote mods with any locally seeded placeholders; prefer remote data
-            // Preserve existing thumbnails and descriptions when present; prune stale removed mods
+            // Preserve existing thumbnails and descriptions when present; cautiously prune removed mods
             let prunedCount = 0;
             modsStore.update((arr) => {
                 const incoming = new Map<string, Mod>();
                 for (const m of mods as Mod[]) incoming.set(m.title, m);
                 const seen = new Set<string>();
                 const out: Mod[] = [];
+                // Only allow pruning when we fetched a reasonably complete index
+                const existingRemoteCount = arr.reduce((n, it) => n + ((it as any)._dirName ? 1 : 0), 0);
+                const pruneAllowed = incoming.size > 0 && incoming.size >= Math.max(10, Math.floor(existingRemoteCount * 0.5));
                 for (const existing of arr) {
                     const inc = incoming.get(existing.title);
                     if (inc) {
@@ -772,8 +774,11 @@ import { onMount, onDestroy } from "svelte";
                         // Keep only local placeholders (no _dirName); drop stale remote entries
                         if (!(existing as any)._dirName) {
                             out.push(existing);
-                        } else {
+                        } else if (pruneAllowed) {
                             prunedCount++;
+                        } else {
+                            // Not safe to prune; keep the existing remote entry
+                            out.push(existing);
                         }
                     }
                 }
@@ -871,13 +876,15 @@ import { onMount, onDestroy } from "svelte";
 				} as Mod & { _dirName?: string };
 			});
 
-            // Merge with any pre-seeded placeholders, and prune stale removed mods
+            // Merge with any pre-seeded placeholders, and cautiously prune removed mods
             let prunedCount = 0;
             modsStore.update((arr) => {
                 const incoming = new Map<string, Mod>();
                 for (const m of mods as Mod[]) incoming.set(m.title, m);
                 const seen = new Set<string>();
                 const out: Mod[] = [];
+                const existingRemoteCount = arr.reduce((n, it) => n + ((it as any)._dirName ? 1 : 0), 0);
+                const pruneAllowed = incoming.size > 0 && incoming.size >= Math.max(10, Math.floor(existingRemoteCount * 0.5));
                 for (const existing of arr) {
                     const inc = incoming.get(existing.title);
                     if (inc) {
@@ -903,8 +910,10 @@ import { onMount, onDestroy } from "svelte";
                     } else {
                         if (!(existing as any)._dirName) {
                             out.push(existing);
-                        } else {
+                        } else if (pruneAllowed) {
                             prunedCount++;
+                        } else {
+                            out.push(existing);
                         }
                     }
                 }
@@ -1427,6 +1436,9 @@ onDestroy(() => {
 
 			// Filter mods by enabled status
 			updateEnabledDisabledLists();
+
+			// Ensure enabled/disabled state is populated for catalog mods
+			await handleModToggled();
 		} catch (error) {
 			console.error("Failed to refresh installed mods:", error);
 		}
