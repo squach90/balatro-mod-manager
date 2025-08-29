@@ -11,6 +11,9 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+    env:
+      # Force Cargo to output to src-tauri/target so artifact paths are consistent
+      CARGO_TARGET_DIR: src-tauri/target
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +24,7 @@ jobs:
           # - platform: 'ubuntu-22.04'
           #   args: ''
           - platform: 'windows-latest'
-            args: '--bundles nsis msi'
+            args: '--bundles nsis'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -173,9 +176,16 @@ jobs:
           else
             echo "src-tauri/target missing";
           fi
+          echo "Listing root target directory (depth-limited)"
+          if [ -d target ]; then
+            find target -maxdepth 3 -type d -name bundle -print -exec sh -c 'echo "== {} =="; ls -la {}' \;;
+          else
+            echo "root target missing";
+          fi
           echo "Try listing known bundle locations"
           ls -la src-tauri/target/universal-apple-darwin/release/bundle || true
           ls -la src-tauri/target/release/bundle || true
+          ls -la target/release/bundle || true
 
       - name: List Windows bundle outputs (debug)
         if: matrix.platform == 'windows-latest'
@@ -187,6 +197,12 @@ jobs:
           } else {
             Write-Host 'src-tauri/target missing';
           }
+          Write-Host "Listing root target bundle directories"
+          if (Test-Path 'target') {
+            Get-ChildItem -Path target -Recurse -Depth 4 -Directory -Filter bundle | ForEach-Object { $_.FullName; Get-ChildItem -Path $_.FullName };
+          } else {
+            Write-Host 'root target missing';
+          }
           
       # Upload artifacts by platform
       - name: Upload macOS artifacts
@@ -197,6 +213,8 @@ jobs:
           path: |
             src-tauri/target/**/bundle/macos/*.app/**
             src-tauri/target/**/bundle/dmg/*.dmg
+            target/**/bundle/macos/*.app/**
+            target/**/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 7
           
@@ -208,6 +226,11 @@ jobs:
           path: |
             src-tauri/target/**/bundle/msi/*.msi
             src-tauri/target/**/bundle/nsis/*.exe
+            target/**/bundle/msi/*.msi
+            target/**/bundle/nsis/*.exe
+            # Fallbacks if bundlers fail but we still want some binary to inspect
+            src-tauri/target/**/release/*.exe
+            target/**/release/*.exe
           if-no-files-found: error
           retention-days: 7
           
