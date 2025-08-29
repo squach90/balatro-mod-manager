@@ -35,7 +35,7 @@
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
 	import SearchView from "./SearchView.svelte";
-	import { onMount } from "svelte";
+import { onMount, onDestroy } from "svelte";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
@@ -52,6 +52,12 @@
 	const modEnabledStore = writable<Record<string, boolean>>({});
 	const loadingDots = writable(0);
 	let installedMods: InstalledMod[] = [];
+
+	// Dedupe description loads across helpers
+	const inflightDescriptions = new Set<string>();
+	const attemptedCacheTitles = new Set<string>();
+	let visibleFirstRunning = false;
+	let visibleHydrateTimer: number | null = null;
 
 	// Add these variables to track enabled/disabled mods
 	let enabledMods: Mod[] = [];
@@ -771,9 +777,13 @@
 
 			// Re-apply local thumbnails for installed mods (non-blocking)
 			fillInstalledThumbnails($modsStore).catch(() => {});
-			// Fill visible page descriptions first for fast UI, then cached, then remaining
+			// Use cached descriptions immediately for the current page
+			try { await fillCachedDescriptionsVisibleFirst(); } catch { /* ignore */ }
+			// Ensure visible page has descriptions even without cache
 			try { await fillDescriptionsVisibleFirst(); } catch { /* ignore */ }
+			// Continue filling cached descriptions for the rest (non-blocking)
 			fillCachedDescriptions($modsStore).catch(() => {});
+			// Then fetch any remaining missing ones remotely
 			fillDescriptions(mods).catch((e) => console.warn("desc fill failed", e));
 			addMessage("All mods loaded", "success");
 		} catch (error) {
@@ -868,9 +878,13 @@
 
 			// Also kick off thumbnails/descriptions
 			fillInstalledThumbnails($modsStore).catch(() => {});
-			// Visible page priority, then cached, then remaining
+			// Use cached descriptions immediately for the current page
+			try { await fillCachedDescriptionsVisibleFirst(); } catch { /* ignore */ }
+			// Ensure visible page has descriptions even without cache
 			try { await fillDescriptionsVisibleFirst(); } catch { /* ignore */ }
+			// Continue filling cached descriptions for the rest
 			fillCachedDescriptions($modsStore).catch(() => {});
+			// Then fetch remaining ones remotely
 			fillDescriptions(mods).catch(() => {});
 		} finally {
 			catalogLoading.set(false);
@@ -887,9 +901,11 @@
 				if (idx >= mods.length) break;
 				const m = mods[idx];
 				if (!m || m.description) continue;
+				if (inflightDescriptions.has(m.title)) continue;
 				const dir = (m as any)._dirName as string | undefined;
 				if (!dir) continue;
 				try {
+					inflightDescriptions.add(m.title);
 					const text = await invoke<string>(
 						"get_description_cached_or_remote",
 						{ title: m.title, dirName: dir },
@@ -905,6 +921,8 @@
 					});
 				} catch (_) {
 					// ignore per-mod desc failures
+				} finally {
+					inflightDescriptions.delete(m.title);
 				}
 			}
 		}
@@ -922,12 +940,15 @@
 		if (candidates.length === 0) return;
 		const limit = 4;
 		let i = 0;
+		visibleFirstRunning = true;
 		async function worker() {
 			while (true) {
 				const idx = i++;
 				if (idx >= candidates.length) break;
 				const c = candidates[idx]!;
+				if (inflightDescriptions.has(c.title)) continue;
 				try {
+					inflightDescriptions.add(c.title);
 					const text = await invoke<string>(
 						"get_description_cached_or_remote",
 						{ title: c.title, dirName: c.dir }
@@ -942,12 +963,15 @@
 					});
 				} catch (_) {
 					// ignore
+				} finally {
+					inflightDescriptions.delete(c.title);
 				}
 			}
 		}
 		await Promise.all(
 			new Array(Math.min(limit, candidates.length)).fill(0).map(() => worker()),
 		);
+		visibleFirstRunning = false;
 	}
 
 	async function fillCachedDescriptions(mods: Mod[]) {
@@ -982,6 +1006,45 @@
 		}
 		await Promise.all(
 			new Array(Math.min(limit, mods.length)).fill(0).map(() => worker()),
+		);
+	}
+
+	async function fillCachedDescriptionsVisibleFirst() {
+		const candidates = paginatedMods
+			.filter((m) => !m.description || m.description.trim().length === 0)
+			.map((m) => m.title);
+		if (candidates.length === 0) return;
+		const limit = 8;
+		let i = 0;
+		async function worker() {
+			while (true) {
+				const idx = i++;
+				if (idx >= candidates.length) break;
+				const title = candidates[idx]!;
+				if (attemptedCacheTitles.has(title)) continue;
+				try {
+					attemptedCacheTitles.add(title);
+					const cached = await invoke<string | null>(
+						"get_cached_description_by_title",
+						{ title },
+					);
+					if (cached) {
+						modsStore.update((arr) => {
+							const pos = arr.findIndex((x) => x.title === title);
+							if (pos >= 0) {
+								arr = arr.slice();
+								(arr[pos] as any).description = cached;
+							}
+							return arr;
+						});
+					}
+				} catch (_) {
+					// ignore
+				}
+			}
+		}
+		await Promise.all(
+			new Array(Math.min(limit, candidates.length)).fill(0).map(() => worker()),
 		);
 	}
 
@@ -1244,10 +1307,33 @@
 	}
 
 	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
-	$: paginatedMods = sortedAndFilteredMods.slice(
-		($currentPage - 1) * $itemsPerPage,
-		$currentPage * $itemsPerPage,
-	);
+$: paginatedMods = sortedAndFilteredMods.slice(
+    ($currentPage - 1) * $itemsPerPage,
+    $currentPage * $itemsPerPage,
+);
+
+// Whenever the visible page changes, try to quickly hydrate from cache
+$: {
+    // trigger on paginatedMods recalculation; debounce to avoid storms
+    if (paginatedMods) {
+        if (visibleHydrateTimer !== null) {
+            clearTimeout(visibleHydrateTimer);
+        }
+        visibleHydrateTimer = setTimeout(() => {
+            fillCachedDescriptionsVisibleFirst().catch(() => {});
+            if (!visibleFirstRunning) {
+                fillDescriptionsVisibleFirst().catch(() => {});
+            }
+        }, 120) as unknown as number;
+    }
+}
+
+onDestroy(() => {
+    if (visibleHydrateTimer !== null) {
+        clearTimeout(visibleHydrateTimer);
+        visibleHydrateTimer = null;
+    }
+});
 
 	const maxVisiblePages = 5;
 	let startPage = 1;
