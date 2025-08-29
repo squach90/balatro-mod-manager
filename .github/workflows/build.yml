@@ -79,6 +79,26 @@ jobs:
           choco install wixtoolset -y --no-progress
           choco install nsis -y --no-progress
 
+      - name: Ensure bundler tools on PATH (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $paths = @(
+            'C:\\Program Files (x86)\\WiX Toolset v3.14\\bin',
+            'C:\\Program Files (x86)\\WiX Toolset v3.11\\bin',
+            'C:\\Program Files (x86)\\NSIS'
+          )
+          foreach ($p in $paths) { if (Test-Path $p) { echo $p | Out-File -FilePath $env:GITHUB_PATH -Append } }
+          Write-Host "PATH is now: $env:PATH"
+          Write-Host "Checking bundler tools availability..."
+          where.exe makensis || (Write-Warning 'makensis not found')
+          where.exe candle || (Write-Warning 'candle.exe not found')
+          where.exe light || (Write-Warning 'light.exe not found')
+          # Print versions to logs
+          cmd /c "makensis -VERSION" || $true
+          cmd /c "candle -? > NUL" || $true
+          cmd /c "light -? > NUL" || $true
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
@@ -87,6 +107,17 @@ jobs:
 
       - name: install frontend dependencies
         run: bun install
+
+      - name: Build frontend (SvelteKit)
+        run: bun run build
+
+      - name: Verify frontend dist exists
+        run: |
+          if [ ! -f build/index.html ]; then
+            echo "Frontend dist missing (build/index.html).";
+            ls -la build || true;
+            exit 1;
+          fi
         
       - name: Extract app version on Unix systems
         if: matrix.platform == 'macos-latest' # || matrix.platform == 'ubuntu-22.04'
@@ -118,14 +149,18 @@ jobs:
           # Speed up macOS build
           MACOS_TARGETS_OPTIMIZED: true
         with:
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} -v
       
       # Debug: list bundle outputs to verify build locations
       - name: List macOS bundle outputs (debug)
         if: matrix.platform == 'macos-latest'
         run: |
           echo "Listing src-tauri/target directory (depth-limited)"
-          find src-tauri/target -maxdepth 3 -type d -name bundle -print -exec sh -c 'echo "== {} =="; ls -la {}' \;
+          if [ -d src-tauri/target ]; then
+            find src-tauri/target -maxdepth 3 -type d -name bundle -print -exec sh -c 'echo "== {} =="; ls -la {}' \;;
+          else
+            echo "src-tauri/target missing";
+          fi
           echo "Try listing known bundle locations"
           ls -la src-tauri/target/universal-apple-darwin/release/bundle || true
           ls -la src-tauri/target/release/bundle || true
@@ -135,7 +170,11 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Listing src-tauri/target bundle directories"
-          Get-ChildItem -Path src-tauri/target -Recurse -Depth 4 -Directory -Filter bundle | ForEach-Object { $_.FullName; Get-ChildItem -Path $_.FullName }
+          if (Test-Path 'src-tauri/target') {
+            Get-ChildItem -Path src-tauri/target -Recurse -Depth 4 -Directory -Filter bundle | ForEach-Object { $_.FullName; Get-ChildItem -Path $_.FullName };
+          } else {
+            Write-Host 'src-tauri/target missing';
+          }
           
       # Upload artifacts by platform
       - name: Upload macOS artifacts
