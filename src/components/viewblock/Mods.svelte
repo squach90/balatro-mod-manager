@@ -691,9 +691,19 @@
 		if ($catalogLoading) return;
 		catalogLoading.set(true);
 		addMessage("Loading mods in background…", "info");
-		try {
-			const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
-			const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+        try {
+            const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
+            // Enqueue background caching for thumbnails (non-blocking, handles 429)
+            try {
+                const thumbItems = items
+                    .filter((i) => i.image_url && /^https?:\/\//i.test(i.image_url))
+                    .map((i) => ({ title: i.meta.title, url: i.image_url }));
+                if (thumbItems.length > 0) {
+                    // fire and forget
+                    invoke("enqueue_thumbnails", { items: thumbItems }).catch(() => {});
+                }
+            } catch (_) { /* ignore */ }
+            const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
 				const mappedCategories = item.meta.categories
 					.map((cat) => categoryMap[cat] ?? null)
 					.filter((cat): cat is Category => cat !== null);
@@ -773,9 +783,18 @@
 	async function loadCatalogForeground(): Promise<void> {
 		if ($catalogLoading) return;
 		catalogLoading.set(true);
-		try {
-			const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
-			const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+        try {
+            const items = await invoke<ArchiveModItem[]>("fetch_gitlab_mods");
+            // Enqueue background caching for thumbnails
+            try {
+                const thumbItems = items
+                    .filter((i) => i.image_url && /^https?:\/\//i.test(i.image_url))
+                    .map((i) => ({ title: i.meta.title, url: i.image_url }));
+                if (thumbItems.length > 0) {
+                    invoke("enqueue_thumbnails", { items: thumbItems }).catch(() => {});
+                }
+            } catch (_) { /* ignore */ }
+            const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
 				const mappedCategories = item.meta.categories
 					.map((cat) => categoryMap[cat] ?? null)
 					.filter((cat): cat is Category => cat !== null);

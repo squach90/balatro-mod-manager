@@ -576,47 +576,22 @@ pub async fn get_cached_thumbnail_by_title(title: String) -> Result<Option<Strin
 }
 
 #[tauri::command]
-pub async fn cache_thumbnail_from_url(title: String, url: String) -> Result<bool, String> {
-    use reqwest::header::{CONTENT_TYPE, USER_AGENT};
+pub async fn cache_thumbnail_from_url(
+    title: String,
+    url: String,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<bool, String> {
+    // If present, no-op quickly
     let (thumbs_dir, _) = ensure_assets_dirs()?;
     let slug = safe_slug(&title);
     let path = thumbs_dir.join(format!("{slug}.jpg"));
     if path.exists() {
-        // Already cached
         return Ok(false);
     }
 
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(&url)
-        .header(USER_AGENT, "balatro-mod-manager/1.0")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("Failed to download thumbnail ({}): {}", resp.status(), url));
-    }
-
-    let ct = resp
-        .headers()
-        .get(CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_lowercase();
-    // Accept common image types; we store as .jpg regardless
-    if !(ct.contains("image/")) {
-        log::warn!("Unexpected content type for thumbnail {}: {}", url, ct);
-    }
-
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    std::fs::write(&path, &bytes).map_err(|e| {
-        AppError::FileWrite {
-            path: path.clone(),
-            source: e.to_string(),
-        }
-        .to_string()
-    })?;
-    Ok(true)
+    // Enqueue background fetch with 429-aware backoff; return immediately
+    state.thumbs.enqueue(title, url);
+    Ok(false)
 }
 
 #[tauri::command]
@@ -673,6 +648,9 @@ pub async fn get_cached_installed_thumbnail(
                     let b64 = STANDARD.encode(&bytes);
                     return Ok(Some(format!("data:image/jpeg;base64,{b64}")));
                 }
+            } else if resp.status().as_u16() == 429 {
+                // Handle rate limiting in the background; keep UI unblocked
+                state.thumbs.enqueue(title.clone(), url.to_string());
             }
         }
     }

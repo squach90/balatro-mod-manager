@@ -2,6 +2,7 @@ pub mod commands;
 mod models;
 mod state;
 mod util;
+mod thumb_queue;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -44,6 +45,7 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 discord_rpc: Mutex::new(discord_rpc),
+                thumbs: crate::thumb_queue::ThumbnailManager::new(),
             });
 
             // Remove legacy GitHub-based local clone directory if it exists.
@@ -148,6 +150,8 @@ pub fn run() {
             commands::repo::get_cached_thumbnail_by_title,
             commands::repo::cache_thumbnail_from_url,
             commands::repo::get_description_cached_or_remote,
+            commands::thumbnails::enqueue_thumbnails,
+            commands::thumbnails::enqueue_thumbnail,
             commands::mods::is_mod_enabled,
             commands::mods::toggle_mod_enabled,
             commands::mods::is_mod_enabled_by_path,

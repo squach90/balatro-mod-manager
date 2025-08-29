@@ -32,6 +32,9 @@
   let lockDefaultFor: string | null = null;
   // Avoid duplicate cache writes in a single session
   const seenCacheTitles = new Set<string>();
+  // One-shot cache recheck timer to update image after background caching
+  let cacheRecheckTimer: number | null = null;
+  const CACHE_RECHECK_DELAY_MS = 6000;
 
   function isValidSrc(val: string | undefined | null): boolean {
     if (!val) return false;
@@ -141,6 +144,26 @@
     loading = false;
     loaded = false;
     showSpinner = false;
+    // Schedule a one-shot cache recheck: background queue may fetch it soon
+    if (enableCache && cacheTitle && cacheRecheckTimer === null) {
+      cacheRecheckTimer = setTimeout(async () => {
+        cacheRecheckTimer = null;
+        try {
+          const cached = await invoke<string | null>(
+            "get_cached_thumbnail_by_title",
+            { title: cacheTitle }
+          );
+          if (cached) {
+            currentSrc = cached;
+            usingDefault = false;
+            loading = false;
+            loaded = true;
+            showSpinner = false;
+            dispatch("load");
+          }
+        } catch (_) { /* ignore */ }
+      }, CACHE_RECHECK_DELAY_MS) as unknown as number;
+    }
   }
 
   function handleLoad(event: Event) {
@@ -263,6 +286,10 @@
 
   onDestroy(() => {
     clearTimer();
+    if (cacheRecheckTimer !== null) {
+      clearTimeout(cacheRecheckTimer);
+      cacheRecheckTimer = null;
+    }
   });
 
   // Reset when src changes so pagination or prop updates reload correct image
