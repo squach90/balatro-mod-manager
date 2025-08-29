@@ -26,4 +26,3 @@ pub async fn enqueue_thumbnail(
     state.thumbs.enqueue(title, url);
     Ok(())
 }
-

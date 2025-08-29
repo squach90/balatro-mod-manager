@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
-use bmm_lib::{database::Database, discord_rpc::DiscordRpcManager};
 use crate::thumb_queue::ThumbnailManager;
+use bmm_lib::{database::Database, discord_rpc::DiscordRpcManager};
 
 /// Global application state shared with Tauri commands.
 pub struct AppState {

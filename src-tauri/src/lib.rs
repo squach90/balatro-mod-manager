@@ -1,8 +1,8 @@
 pub mod commands;
 mod models;
 mod state;
-mod util;
 mod thumb_queue;
+mod util;
 
 use std::path::PathBuf;
 use std::sync::Mutex;

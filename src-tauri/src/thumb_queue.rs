@@ -43,7 +43,9 @@ impl ThumbnailManager {
                 // Skip if file already exists or has been de-duped
                 if file_exists_for_title(&req.title) {
                     // Remove from enqueued set so future explicit requests are allowed
-                    if let Ok(mut set) = enq_for_task.lock() { set.remove(&req.title); }
+                    if let Ok(mut set) = enq_for_task.lock() {
+                        set.remove(&req.title);
+                    }
                     continue;
                 }
 
@@ -55,11 +57,15 @@ impl ThumbnailManager {
                     let _permit = permit.ok();
                     match fetch_and_store(&client, &req.title, &req.url).await {
                         Ok(true) => {
-                            if let Ok(mut set) = enq_set.lock() { set.remove(&req.title); }
+                            if let Ok(mut set) = enq_set.lock() {
+                                set.remove(&req.title);
+                            }
                         }
                         Ok(false) => {
                             // Non-retryable (e.g., 404/unsupported), drop and clear
-                            if let Ok(mut set) = enq_set.lock() { set.remove(&req.title); }
+                            if let Ok(mut set) = enq_set.lock() {
+                                set.remove(&req.title);
+                            }
                         }
                         Err(Backoff::RetryAfter(delay)) => {
                             // schedule retry after delay
@@ -70,7 +76,9 @@ impl ThumbnailManager {
                                 // Put back into queue, keep enqueued flag as-is
                                 let _ = tx_inner.send(req).await;
                                 // If send fails, allow future enqueue by clearing mark
-                                if let Ok(mut set) = enq_set.lock() { set.remove(&title); }
+                                if let Ok(mut set) = enq_set.lock() {
+                                    set.remove(&title);
+                                }
                             });
                         }
                     }
@@ -83,13 +91,19 @@ impl ThumbnailManager {
 
     /// Enqueue a single thumbnail request if not already present and not already cached.
     pub fn enqueue(&self, title: String, url: String) {
-        if file_exists_for_title(&title) { return; }
+        if file_exists_for_title(&title) {
+            return;
+        }
         if let Ok(mut set) = self.enqueued.lock() {
             if !set.insert(title.clone()) {
                 return; // already queued
             }
         }
-        let _ = self.tx.try_send(ThumbReq { title, url, attempts: 0 });
+        let _ = self.tx.try_send(ThumbReq {
+            title,
+            url,
+            attempts: 0,
+        });
     }
 
     /// Enqueue multiple thumbnail requests.
@@ -101,7 +115,9 @@ impl ThumbnailManager {
 }
 
 impl Default for ThumbnailManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Errors that indicate we should retry later with a delay
@@ -109,18 +125,27 @@ enum Backoff {
     RetryAfter(Duration),
 }
 
-async fn fetch_and_store(client: &reqwest::Client, title: &str, url: &str) -> Result<bool, Backoff> {
+async fn fetch_and_store(
+    client: &reqwest::Client,
+    title: &str,
+    url: &str,
+) -> Result<bool, Backoff> {
     // Don't waste network if already cached
-    if file_exists_for_title(title) { return Ok(false); }
+    if file_exists_for_title(title) {
+        return Ok(false);
+    }
 
     let resp = match client.get(url).send().await {
         Ok(r) => r,
-        Err(_) => return Err(Backoff::RetryAfter(jitter(Duration::from_secs(3))))
+        Err(_) => return Err(Backoff::RetryAfter(jitter(Duration::from_secs(3)))),
     };
 
     match resp.status() {
         StatusCode::OK => {
-            let bytes = match resp.bytes().await { Ok(b) => b, Err(_) => return Ok(false) };
+            let bytes = match resp.bytes().await {
+                Ok(b) => b,
+                Err(_) => return Ok(false),
+            };
             if write_thumbnail(title, &bytes).is_err() {
                 // Disk error; drop silently
                 return Ok(false);
@@ -128,7 +153,8 @@ async fn fetch_and_store(client: &reqwest::Client, title: &str, url: &str) -> Re
             Ok(true)
         }
         StatusCode::TOO_MANY_REQUESTS => {
-            let delay = retry_after_delay(resp.headers()).unwrap_or_else(|| jitter(Duration::from_secs(5)));
+            let delay =
+                retry_after_delay(resp.headers()).unwrap_or_else(|| jitter(Duration::from_secs(5)));
             Err(Backoff::RetryAfter(delay))
         }
         s if s.is_server_error() => Err(Backoff::RetryAfter(jitter(Duration::from_secs(4)))),
