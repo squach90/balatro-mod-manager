@@ -1205,18 +1205,18 @@ let descLoading = $state(false);
 		font-family: "M6X11", sans-serif;
 	}
 
-	.image-button {
-		padding: 0;
-		margin: 0;
-		border: none;
-		background: none;
-		cursor: pointer;
-		width: 100%;
-		height: 100%;
-		display: block;
-		line-height: 0; /* Add this to remove any spacing */
-		font-size: 0; /* Add this to remove any spacing */
-	}
+    .image-button {
+        padding: 0;
+        margin: 0;
+        border: none;
+        background: none;
+        cursor: default; /* do not show pointer over thumbnail */
+        width: 100%;
+        height: 100%;
+        display: block;
+        line-height: 0; /* remove any spacing */
+        font-size: 0; /* remove any spacing */
+    }
 
 	h2 {
 		margin-bottom: 2rem;
@@ -1236,7 +1236,17 @@ let descLoading = $state(false);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
-	/* Image display is managed by LazyImage; keep container-only styles */
+    /* Image display is managed by LazyImage; keep container-only styles */
+    .image-container { cursor: default; }
+
+    /* Subtle zoom-in on hover for thumbnail (style child component via :global) */
+    .image-container :global(.lazy-image img) {
+        transition: transform 180ms ease-out;
+        will-change: transform;
+    }
+    .image-container:hover :global(.lazy-image img) {
+        transform: scale(1.04);
+    }
 
 	.button-container {
 		display: flex;
