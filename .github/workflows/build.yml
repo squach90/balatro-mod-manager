@@ -172,7 +172,7 @@ jobs:
           CARGO_INCREMENTAL: true
           CARGO_TARGET_DIR: src-tauri/target
         run: |
-          bunx --bun @tauri-apps/cli tauri build --target universal-apple-darwin --bundles dmg app -v
+          bun run tauri build --target universal-apple-darwin --bundles dmg app -v
 
       - name: Build Tauri App (Windows)
         if: matrix.platform == 'windows-latest'
@@ -184,7 +184,7 @@ jobs:
           CARGO_INCREMENTAL: true
           CARGO_TARGET_DIR: src-tauri/target
         run: |
-          bunx --bun @tauri-apps/cli tauri build --bundles nsis -v
+          bun run tauri build --bundles nsis -v
       
       # Debug: list bundle outputs to verify build locations
       - name: List macOS bundle outputs (debug)
