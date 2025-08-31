@@ -17,7 +17,7 @@
 		showWarningPopup,
 	} from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
-	import { fetchCachedMods } from "../../stores/modCache";
+    import { fetchCachedMods, forceRefreshCache } from "../../stores/modCache";
 	import { addMessage } from "$lib/stores";
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
@@ -120,14 +120,16 @@
 	let showUninstallDialog = $state(false);
 	const selectedMod = $derived($selectedModStore);
 
-	async function handleRefresh() {
-		const installedMods: InstalledMod[] = await fetchCachedMods();
-		installationStatus.set(
-			Object.fromEntries(
-				installedMods.map((mod: InstalledMod) => [mod.name, true]),
-			),
-		);
-	}
+    async function handleRefresh() {
+        // Force-refresh cache so removal reflects immediately
+        await forceRefreshCache();
+        const installedMods: InstalledMod[] = await fetchCachedMods();
+        installationStatus.set(
+            Object.fromEntries(
+                installedMods.map((mod: InstalledMod) => [mod.name, true]),
+            ),
+        );
+    }
 
 	function showError(error: unknown) {
 		addMessage(

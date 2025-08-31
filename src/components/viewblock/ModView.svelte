@@ -307,39 +307,39 @@ let descLoading = $state(false);
 		}
 	}
 
-	const uninstallMod = async (mod: Mod) => {
-		const isCoreMod = ["steamodded", "talisman"].includes(
-			mod.title.toLowerCase(),
-		);
+    const uninstallMod = async (mod: Mod) => {
+        const isCoreMod = ["steamodded", "talisman"].includes(
+            mod.title.toLowerCase(),
+        );
 
-		try {
-			await getAllInstalledMods();
-			const installedMod = installedMods.find(
-				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
-			);
+        try {
+            await getAllInstalledMods();
+            const installedMod = installedMods.find(
+                (m) => m.name.toLowerCase() === mod.title.toLowerCase(),
+            );
 
-			if (!installedMod) return;
+            if (isCoreMod) {
+                // Get dependents
+                const dependents = await invoke<string[]>("get_dependents", {
+                    modName: mod.title,
+                });
 
-			if (isCoreMod) {
-				// Get dependents
-				const dependents = await invoke<string[]>("get_dependents", {
-					modName: mod.title,
-				});
-
-				// Always show the dialog for core mods
-				uninstallDialogStore.set({
-					show: true,
-					modName: mod.title,
-					modPath: installedMod.path,
-					dependents,
-				});
-			} else {
-				await invoke("remove_installed_mod", {
-					name: mod.title,
-					path: installedMod.path,
-				});
-				installationStatus.update((s) => ({
-					...s,
+                // Always show the dialog for core mods
+                uninstallDialogStore.set({
+                    show: true,
+                    modName: mod.title,
+                    // Path may be resolved in the dialog if missing
+                    modPath: installedMod?.path || "",
+                    dependents,
+                });
+            } else {
+                if (!installedMod) return;
+                await invoke("remove_installed_mod", {
+                    name: mod.title,
+                    path: installedMod.path,
+                });
+                installationStatus.update((s) => ({
+                    ...s,
 					[mod.title]: false,
 				}));
 

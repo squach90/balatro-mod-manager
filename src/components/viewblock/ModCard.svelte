@@ -9,7 +9,8 @@
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
-	import { lovelyPopupStore } from "../../stores/modStore";
+    import { lovelyPopupStore } from "../../stores/modStore";
+    import { forceRefreshCache } from "../../stores/modCache";
     import LazyImage from "../common/LazyImage.svelte";
 
 	interface Props {
@@ -122,8 +123,15 @@
 	}
 	function installMod(e: Event) {
 		e.stopPropagation();
+		// Guard: don't allow re-entrancy or duplicate installs
+		if ($loadingStates[mod.title] || $installationStatus[mod.title]) return;
 		if (mod.title.toLowerCase() === "steamodded") {
-			fetchAndInstallLatestSteamodded();
+			// Set loading immediately to prevent multiple clicks while fetching URL
+			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+			fetchAndInstallLatestSteamodded().catch(() => {
+				// ensure loading is cleared on early failure
+				loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+			});
 		} else if (oninstallclick) {
 			oninstallclick(mod);
 		}
@@ -156,6 +164,7 @@
 			await installModFromURL(latestReleaseURL);
 		} catch (error) {
 			console.error("Failed to get latest Steamodded release:", error);
+			throw error;
 		}
 	}
 
@@ -220,12 +229,14 @@
 			} catch (_) {
 				/* ignore */
 			}
-		} catch (error) {
-			console.error("Failed to install mod:", error);
-		} finally {
-			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
-		}
-	}
+        } catch (error) {
+            console.error("Failed to install mod:", error);
+        } finally {
+            loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+            // Keep cache in sync so other views reflect installation immediately
+            try { await forceRefreshCache(); } catch (_) { /* ignore */ }
+        }
+    }
 </script>
 
 <div

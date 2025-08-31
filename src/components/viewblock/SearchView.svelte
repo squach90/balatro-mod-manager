@@ -48,50 +48,50 @@
 		}
 	};
 
-	const uninstallMod = async (mod: Mod) => {
-		const isCoreMod = ["steamodded", "talisman"].includes(
-			mod.title.toLowerCase(),
-		);
+    const uninstallMod = async (mod: Mod) => {
+        const isCoreMod = ["steamodded", "talisman"].includes(
+            mod.title.toLowerCase(),
+        );
 
-		try {
-			await getAllInstalledMods();
-			const installedMod = installedMods.find(
-				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
-			);
+        try {
+            await getAllInstalledMods();
+            const installedMod = installedMods.find(
+                (m) => m.name.toLowerCase() === mod.title.toLowerCase(),
+            );
 
-			if (!installedMod) {
-				console.error("Mod not found in installed mods");
-				return;
-			}
+            if (isCoreMod) {
+                // Get dependents
+                const dependents = await invoke<string[]>("get_dependents", {
+                    modName: mod.title,
+                });
 
-			if (isCoreMod) {
-				// Get dependents
-				const dependents = await invoke<string[]>("get_dependents", {
-					modName: mod.title,
-				});
-
-				// Always show dialog for core mods, even if no dependents
-				uninstallDialogStore.set({
-					show: true,
-					modName: mod.title,
-					modPath: installedMod.path,
-					dependents,
-				});
-			} else {
-				// Immediate uninstall for normal mods
-				await invoke("remove_installed_mod", {
-					name: mod.title,
-					path: installedMod.path,
-				});
-				installationStatus.update((s) => ({
-					...s,
-					[mod.title]: false,
-				}));
-			}
-		} catch (error) {
-			console.error("Uninstall failed:", error);
-		}
-	};
+                // Always show dialog for core mods, even if no dependents
+                uninstallDialogStore.set({
+                    show: true,
+                    modName: mod.title,
+                    // Path may be resolved in the dialog if missing
+                    modPath: installedMod?.path || "",
+                    dependents,
+                });
+            } else {
+                // Immediate uninstall for normal mods
+                if (!installedMod) {
+                    console.error("Mod not found in installed mods");
+                    return;
+                }
+                await invoke("remove_installed_mod", {
+                    name: mod.title,
+                    path: installedMod.path,
+                });
+                installationStatus.update((s) => ({
+                    ...s,
+                    [mod.title]: false,
+                }));
+            }
+        } catch (error) {
+            console.error("Uninstall failed:", error);
+        }
+    };
 
 	const installMod = async (mod: Mod) => {
 		// Create a closure-safe reference to the mod

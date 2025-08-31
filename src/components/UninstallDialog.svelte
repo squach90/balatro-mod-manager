@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { fade, scale } from "svelte/transition";
-	import { invoke } from "@tauri-apps/api/core";
-	import { uninstallDialogStore } from "../stores/modStore";
+    import { fade, scale } from "svelte/transition";
+    import { invoke } from "@tauri-apps/api/core";
+    import { uninstallDialogStore, installationStatus } from "../stores/modStore";
 
 	// Component props for callbacks
 	export let onUninstalled:
@@ -36,48 +36,77 @@
 		return unsubscribe;
 	});
 
-	let action: "cancel" | "force" | "cascade" | null = null;
+    let action: "cancel" | "force" | "cascade" | null = null;
 
-	async function handleUninstall() {
-		try {
-			let success = false;
+    // Resolve path from DB when not provided
+    async function resolvePathIfNeeded(name: string, path: string): Promise<string> {
+        if (path && path.trim().length > 0) return path;
+        try {
+            const mods: { name: string; path: string }[] = await invoke("get_installed_mods_from_db");
+            const found = mods.find((m) => m.name.toLowerCase() === name.toLowerCase());
+            return found?.path ?? "";
+        } catch (_) {
+            return "";
+        }
+    }
 
-			if (action === "cascade") {
-				await invoke("cascade_uninstall", { rootMod: modName });
-				success = true;
-			} else if (action === "force") {
-				await invoke("force_remove_mod", {
-					name: modName,
-					path: modPath,
-				});
-				success = true;
-			} else if (action === null) {
-				await invoke("remove_installed_mod", {
-					name: modName,
-					path: modPath,
-				});
-				success = true;
-			}
+    async function handleUninstall() {
+        try {
+            let success = false;
 
-			if (success && onUninstalled) {
-				onUninstalled({
-					detail: {
-						modName,
-						success: true,
-						action: action || "single",
-					},
-				});
-			}
+            if (action === "cascade") {
+                await invoke("cascade_uninstall", { rootMod: modName });
+                success = true;
+            } else if (action === "force") {
+                const pathToUse = await resolvePathIfNeeded(modName, modPath);
+                await invoke("force_remove_mod", {
+                    name: modName,
+                    path: pathToUse,
+                });
+                success = true;
+            } else if (action === null) {
+                const pathToUse = await resolvePathIfNeeded(modName, modPath);
+                await invoke("remove_installed_mod", {
+                    name: modName,
+                    path: pathToUse,
+                });
+                success = true;
+            }
 
-			// Close the dialog
-			show = false;
-			// Also update the store
-			uninstallDialogStore.update((s) => ({ ...s, show: false }));
-		} catch (e) {
-			console.error("Uninstall error:", e);
-			onError?.({ detail: e });
-		}
-	}
+            if (success && onUninstalled) {
+                onUninstalled({
+                    detail: {
+                        modName,
+                        success: true,
+                        action: action || "single",
+                    },
+                });
+            }
+
+            // Immediately update UI state to reflect removal
+            if (success) {
+                if (action === "cascade") {
+                    const toClear = Array.isArray(dependents) ? dependents : [];
+                    installationStatus.update((s) => {
+                        const next = { ...s } as Record<string, boolean>;
+                        next[modName] = false;
+                        for (const d of toClear) next[d] = false;
+                        return next;
+                    });
+                } else {
+                    installationStatus.update((s) => ({ ...s, [modName]: false }));
+                }
+            }
+
+            // Close the dialog
+            show = false;
+            // Also update the store
+            uninstallDialogStore.update((s) => ({ ...s, show: false }));
+        } catch (e) {
+            console.error("Uninstall error:", e);
+            onError?.({ detail: e });
+        }
+    }
 
 	function closeDialog() {
 		show = false;
