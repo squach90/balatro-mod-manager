@@ -322,7 +322,7 @@
 		{onError}
 	/>
 
-	<div class="version-text">v0.2.7</div>
+	<div class="version-text">v0.2.8</div>
 </div>
 
 <LovelyMissingPopup />
