@@ -7,12 +7,14 @@ use std::io::{BufReader, Read};
 #[cfg(target_os = "windows")]
 use std::path::Path;
 use std::path::PathBuf;
+use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use sysinfo::System;
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
+use crate::database::Database;
 
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
@@ -36,43 +38,97 @@ fn remove_unexisting_paths(paths: &mut Vec<PathBuf>) {
 
 #[cfg(target_os = "windows")]
 pub fn get_balatro_paths() -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = vec![];
+
+    // 1) Respect custom Balatro path from our database first
+    if let Ok(db) = Database::new() {
+        if let Ok(Some(custom_path)) = db.get_installation_path() {
+            let p = PathBuf::from(&custom_path);
+            if p.exists() {
+                paths.push(p);
+            }
+        }
+    }
+
+    // 2) Discover Steam libraries (registry + libraryfolders.vdf)
     let steam_path = read_path_from_registry();
     let mut steam_path = steam_path.unwrap_or_else(|_| {
-        error!("Could not read steam install path from Registry! Trying standard installation path in C:\\");
+        error!(
+            "Could not read steam install path from Registry! Trying standard installation path in C:\\"
+        );
         String::from("C:\\Program Files (x86)\\Steam")
     });
 
     steam_path.push_str("\\steamapps\\libraryfolders.vdf");
     let libraryfolders_path = Path::new(&steam_path);
     if !libraryfolders_path.exists() {
-        error!("'{}' not found.", libraryfolders_path.to_str().unwrap());
-        return vec![];
+        error!("'{}' not found.", libraryfolders_path.to_str().unwrap_or("<invalid path>"));
+        // Return whatever we have (e.g., custom path), after cleaning
+        remove_unexisting_paths(&mut paths);
+        dedup_paths_case_insensitive(&mut paths);
+        return paths;
     }
 
-    let libraryfolders_file =
-        File::open(libraryfolders_path).expect("Failed to open libraryfolders.vdf");
+    let libraryfolders_file = match File::open(libraryfolders_path) {
+        Ok(f) => f,
+        Err(e) => {
+            error!(
+                "Failed to open libraryfolders.vdf at {}: {}",
+                libraryfolders_path.to_string_lossy(),
+                e
+            );
+            remove_unexisting_paths(&mut paths);
+            dedup_paths_case_insensitive(&mut paths);
+            return paths;
+        }
+    };
+
     let mut libraryfolders_contents = String::new();
     let mut libraryfolders_reader = BufReader::new(libraryfolders_file);
-    libraryfolders_reader
-        .read_to_string(&mut libraryfolders_contents)
-        .expect("Failed to read libraryfolders.vdf");
+    if let Err(e) = libraryfolders_reader.read_to_string(&mut libraryfolders_contents) {
+        error!("Failed to read libraryfolders.vdf: {}", e);
+        remove_unexisting_paths(&mut paths);
+        dedup_paths_case_insensitive(&mut paths);
+        return paths;
+    }
 
-    let mut paths: Vec<PathBuf> = vec![];
-    let libraryfolders_contents = libraryfolders_contents.split('\n').collect::<Vec<&str>>();
-    let mut libraryfolders_contents = libraryfolders_contents.iter();
-    while let Some(line) = libraryfolders_contents.next() {
+    let lines = libraryfolders_contents.split('\n').collect::<Vec<&str>>();
+    for line in lines {
         if line.contains("\t\t\"path\"\t\t") {
-            let path = line.split('\"').collect::<Vec<&str>>()[3];
-            paths.push(PathBuf::from(path).join("steamapps\\common\\Balatro"));
+            let parts = line.split('\"').collect::<Vec<&str>>();
+            if parts.len() > 3 {
+                let path = parts[3];
+                paths.push(PathBuf::from(path).join("steamapps\\common\\Balatro"));
+            }
         }
     }
+
     remove_unexisting_paths(&mut paths);
+    dedup_paths_case_insensitive(&mut paths);
     paths
+}
+
+fn dedup_paths_case_insensitive(paths: &mut Vec<PathBuf>) {
+    let mut seen: HashSet<String> = HashSet::new();
+    paths.retain(|p| {
+        let key = p.to_string_lossy().to_string().to_lowercase();
+        seen.insert(key)
+    });
 }
 
 #[cfg(target_os = "macos")]
 pub fn get_balatro_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = vec![];
+
+    // Prefer custom DB path first
+    if let Ok(db) = Database::new() {
+        if let Ok(Some(custom_path)) = db.get_installation_path() {
+            let p = PathBuf::from(&custom_path);
+            if p.exists() {
+                paths.push(p);
+            }
+        }
+    }
     match home::home_dir() {
         Some(path) => {
             let mut path = path;
@@ -82,12 +138,23 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
         None => error!("Impossible to get your home dir!"),
     }
     remove_unexisting_paths(&mut paths);
+    dedup_paths_case_insensitive(&mut paths);
     paths
 }
 
 #[cfg(target_os = "linux")]
 pub fn get_balatro_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = vec![];
+
+    // Prefer custom DB path first
+    if let Ok(db) = Database::new() {
+        if let Ok(Some(custom_path)) = db.get_installation_path() {
+            let p = PathBuf::from(&custom_path);
+            if p.exists() {
+                paths.push(p);
+            }
+        }
+    }
     match home::home_dir() {
         Some(path) => {
             let mut path = path;
@@ -97,6 +164,7 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
         None => error!("Impossible to get your home dir!"),
     }
     remove_unexisting_paths(&mut paths);
+    dedup_paths_case_insensitive(&mut paths);
     paths
 }
 
