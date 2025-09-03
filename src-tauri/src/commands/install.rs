@@ -1,81 +1,95 @@
 use std::path::PathBuf;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::process::Command;
 
 use crate::state::AppState;
 use crate::util::map_error;
 use bmm_lib::errors::AppError;
+#[cfg(target_os = "macos")]
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
 use bmm_lib::{cache, database::InstalledMod};
 
+fn get_installation_and_console(
+    state: &tauri::State<'_, AppState>,
+) -> Result<(String, bool), String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()).to_string())?;
+    let install_path = db
+        .get_installation_path()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| {
+            AppError::InvalidState("No installation path set".to_string()).to_string()
+        })?;
+    let lovely_console_enabled = db.is_lovely_console_enabled().map_err(|e| e.to_string())?;
+    Ok((install_path, lovely_console_enabled))
+}
+
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let (path_str, lovely_console_enabled) = {
-        let db = state
-            .db
-            .lock()
-            .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-
-        (
-            db.get_installation_path()?
-                .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?,
-            db.is_lovely_console_enabled()?,
-        )
-    };
-
+    let (path_str, lovely_console_enabled) = get_installation_and_console(&state)?;
     let path = PathBuf::from(path_str);
 
-    #[cfg(target_os = "macos")]
-    {
-        let lovely_path = map_error(lovely::ensure_lovely_exists().await)?;
-        let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
+    let lovely_path = map_error(lovely::ensure_lovely_exists().await)?;
+    let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
 
-        if lovely_console_enabled {
-            let disable_arg = if !lovely_console_enabled {
-                " --disable-console"
-            } else {
-                ""
-            };
-            let command_line = format!(
-                "cd '{}' && DYLD_INSERT_LIBRARIES='{}' '{}'{}",
-                path.display(),
-                lovely_path.display(),
-                balatro_executable.display(),
-                disable_arg
-            );
-
-            let applescript =
-                format!("tell application \"Terminal\" to do script \"{command_line}\"",);
-
-            Command::new("osascript")
-                .arg("-e")
-                .arg(applescript)
-                .status()
-                .map_err(|e| e.to_string())?;
+    if lovely_console_enabled {
+        let disable_arg = if !lovely_console_enabled {
+            " --disable-console"
         } else {
-            let cmd = format!(
-                "DYLD_INSERT_LIBRARIES='{}' '{}'",
-                lovely_path.display(),
-                balatro_executable.display()
-            );
-            // Spawn the process without waiting so the UI doesn't block
-            Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
+            ""
+        };
+        let command_line = format!(
+            "cd '{}' && DYLD_INSERT_LIBRARIES='{}' '{}'{}",
+            path.display(),
+            lovely_path.display(),
+            balatro_executable.display(),
+            disable_arg
+        );
 
-        Ok(())
-    }
+        let applescript = format!("tell application \"Terminal\" to do script \"{command_line}\"");
 
-    #[cfg(target_os = "windows")]
-    {
-        Command::new(path.join("Balatro.exe"))
+        Command::new("osascript")
+            .arg("-e")
+            .arg(applescript)
+            .status()
+            .map_err(|e| e.to_string())?;
+    } else {
+        let cmd = format!(
+            "DYLD_INSERT_LIBRARIES='{}' '{}'",
+            lovely_path.display(),
+            balatro_executable.display()
+        );
+        // Spawn the process without waiting so the UI doesn't block
+        Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
             .spawn()
             .map_err(|e| e.to_string())?;
-        Ok(())
     }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let (path_str, _lovely_console_enabled) = get_installation_and_console(&state)?;
+    let path = PathBuf::from(path_str);
+
+    Command::new(path.join("Balatro.exe"))
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[tauri::command]
+pub async fn launch_balatro(_state: tauri::State<'_, AppState>) -> Result<(), String> {
+    Err("Launching Balatro is not supported on this operating system".to_string())
 }
 
 #[tauri::command]
