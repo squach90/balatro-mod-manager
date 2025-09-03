@@ -61,6 +61,23 @@ jobs:
             src-tauri/bmm-lib/../lovely-injector/target/release
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install system dependencies (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libwebkit2gtk-4.1-dev \
+            pkg-config
+
+          # Verify installation
+          find /usr -name 'glib-2.0.pc' 2>/dev/null || true
+          find /usr -name 'gtk+-3.0.pc' 2>/dev/null || true
+          find /usr -name 'libsoup-3.0.pc' 2>/dev/null || true
+          find /usr -name 'webkit2gtk-4.1.pc' 2>/dev/null || true
+
       - name: Lint (fmt)
         run: cargo fmt --all --check
 
