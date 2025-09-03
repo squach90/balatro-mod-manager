@@ -53,7 +53,10 @@ export default [
     rules: {
       // TS handles undefined symbols and unused vars
       "no-undef": "off",
-      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+      "no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
   // Node globals for config files

@@ -1,5 +1,7 @@
+use crate::database::Database;
 use log::error;
 use log::info;
+use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use std::fs::File;
 #[cfg(target_os = "windows")]
@@ -7,14 +9,12 @@ use std::io::{BufReader, Read};
 #[cfg(target_os = "windows")]
 use std::path::Path;
 use std::path::PathBuf;
-use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use sysinfo::System;
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
-use crate::database::Database;
 
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
@@ -62,7 +62,10 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     steam_path.push_str("\\steamapps\\libraryfolders.vdf");
     let libraryfolders_path = Path::new(&steam_path);
     if !libraryfolders_path.exists() {
-        error!("'{}' not found.", libraryfolders_path.to_str().unwrap_or("<invalid path>"));
+        error!(
+            "'{}' not found.",
+            libraryfolders_path.to_str().unwrap_or("<invalid path>")
+        );
         // Return whatever we have (e.g., custom path), after cleaning
         remove_unexisting_paths(&mut paths);
         dedup_paths_case_insensitive(&mut paths);

@@ -1,51 +1,184 @@
-version: '3'
-
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
 vars:
-  OS_TYPE: '{{if eq .OS "windows"}}windows{{else}}unix{{end}}'
-  NO_OUTPUT: '{{if eq .OS "windows"}}> nul{{else}}> /dev/null{{end}}'
-
+  INCOMPATIBLE: '{{.INCOMPATIBLE | default "false"}}'
+  UPGRADE_INCOMPAT_FLAG: '{{if eq .INCOMPATIBLE "true"}}--incompatible{{end}}'
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
 tasks:
   debug:
-    desc: Start development server
+    desc: Start development (desktop)
+    aliases: [dev]
+    preconditions:
+      - sh: command -v cargo >/dev/null 2>&1
+        msg: "Rust toolchain (cargo) is required"
+      - sh: command -v bun >/dev/null 2>&1
+        msg: "Bun is required (used by SvelteKit dev)"
     cmds:
       - cmd: cargo tauri dev
-
+  dev:web:
+    desc: Start web-only dev server (Vite)
+    preconditions:
+      - sh: command -v bun >/dev/null 2>&1
+        msg: "Bun is required"
+    cmds:
+      - cmd: bun run dev
   default:
     - task: debug
-
   release:
-    desc: Platform-appropriate release build
+    desc: Platform-appropriate release build (delegates by platform)
+    cmds:
+      - task: release-macos
+        vars:
+          ARCH: '{{.ARCH | default "universal"}}'
+      - task: release-windows
+      - task: release-linux
+  release-macos:
+    desc: Universal macOS build (Darwin)
+    platforms: [darwin]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "{{.MACOSX_DEPLOYMENT_TARGET}}"
+    preconditions:
+      - sh: 'case "${ARCH:-universal}" in universal|arm64|x86_64) ;; *) exit 1;; esac'
+        msg: "ARCH must be one of: universal, arm64, x86_64 (e.g., task release-macos ARCH=arm64)"
+      - sh: 'test "${ARCH:-universal}" != "arm64" || rustup target list --installed | grep -q "^aarch64-apple-darwin$"'
+        msg: "Install target: rustup target add aarch64-apple-darwin"
+      - sh: 'test "${ARCH:-universal}" != "x86_64" || rustup target list --installed | grep -q "^x86_64-apple-darwin$"'
+        msg: "Install target: rustup target add x86_64-apple-darwin"
+      - sh: 'test "${ARCH:-universal}" != "universal" || (rustup target list --installed | grep -q "^aarch64-apple-darwin$" && rustup target list --installed | grep -q "^x86_64-apple-darwin$")'
+        msg: "Install both targets: rustup target add aarch64-apple-darwin x86_64-apple-darwin"
     cmds:
       - cmd: |
-          {{if eq .OS "windows" -}}
-          cargo tauri build --target x86_64-pc-windows-msvc --verbose
-          {{- else -}}
-          MACOSX_DEPLOYMENT_TARGET=11.0 cargo tauri build --target universal-apple-darwin --verbose
-          {{- end}}
-
-  release-macos:
-    desc: Universal macOS build (requires Darwin)
-    platform: darwin
-    cmds:
-      - cmd: MACOSX_DEPLOYMENT_TARGET=11.0 cargo tauri build --target universal-apple-darwin --verbose
-
+          case "${ARCH:-universal}" in
+            universal) TARGET="universal-apple-darwin" ;;
+            arm64)     TARGET="aarch64-apple-darwin" ;;
+            x86_64)    TARGET="x86_64-apple-darwin" ;;
+          esac
+          MACOSX_DEPLOYMENT_TARGET={{.MACOSX_DEPLOYMENT_TARGET}} cargo tauri build --target "$TARGET" --verbose
   release-windows:
     desc: Windows production build
+    platforms: [windows]
     cmds:
       - cmd: cargo tauri build --target x86_64-pc-windows-msvc --verbose
-
+  release-linux:
+    desc: Linux production build
+    platforms: [linux]
+    cmds:
+      - cmd: cargo tauri build --target x86_64-unknown-linux-gnu --verbose
   release-macos-production:
-    desc: Signed macOS build
-    platform: darwin
+    desc: Signed macOS build (local only, requires identity env)
+    platforms: [darwin]
+    preconditions:
+      - sh: test -n "${APPLE_SIGNING_IDENTITY:-}"
+        msg: "Set APPLE_SIGNING_IDENTITY in your environment (do not commit secrets)"
+      - sh: 'case "${ARCH:-universal}" in universal|arm64|x86_64) ;; *) exit 1;; esac'
+        msg: "ARCH must be one of: universal, arm64, x86_64 (e.g., task release-macos-production ARCH=arm64)"
+      - sh: 'test "${ARCH:-universal}" != "arm64" || rustup target list --installed | grep -q "^aarch64-apple-darwin$"'
+        msg: "Install target: rustup target add aarch64-apple-darwin"
+      - sh: 'test "${ARCH:-universal}" != "x86_64" || rustup target list --installed | grep -q "^x86_64-apple-darwin$"'
+        msg: "Install target: rustup target add x86_64-apple-darwin"
+      - sh: 'test "${ARCH:-universal}" != "universal" || (rustup target list --installed | grep -q "^aarch64-apple-darwin$" && rustup target list --installed | grep -q "^x86_64-apple-darwin$")'
+        msg: "Install both targets: rustup target add aarch64-apple-darwin x86_64-apple-darwin"
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "{{.MACOSX_DEPLOYMENT_TARGET}}"
+      APPLE_SIGNING_IDENTITY: "{{.APPLE_SIGNING_IDENTITY}}"
     cmds:
       - cmd: |
-          MACOSX_DEPLOYMENT_TARGET=11.0 \
-          APPLE_SIGNING_IDENTITY="Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)" \
-          cargo tauri build --target universal-apple-darwin --verbose
-
+          case "${ARCH:-universal}" in
+            universal) TARGET="universal-apple-darwin" ;;
+            arm64)     TARGET="aarch64-apple-darwin" ;;
+            x86_64)    TARGET="x86_64-apple-darwin" ;;
+          esac
+          cargo tauri build --target "$TARGET" --verbose
+  release-macos-arm:
+    desc: macOS build for arm64 (Darwin convenience task)
+    platforms: [darwin]
+    cmds:
+      - task: release-macos
+        vars:
+          ARCH: arm64
+  release-macos-x64:
+    desc: macOS build for x86_64 (Darwin convenience task)
+    platforms: [darwin]
+    cmds:
+      - task: release-macos
+        vars:
+          ARCH: x86_64
+  update-frontend-deps:
+    desc: Update frontend dependencies
+    preconditions:
+      - sh: command -v bun >/dev/null 2>&1
+        msg: "Bun is required"
+    cmds:
+      - cmd: bun update
+  update-backend-deps:
+    desc: Update backend dependencies
+    dir: ./src-tauri/
+    preconditions:
+      - sh: command -v cargo >/dev/null 2>&1
+        msg: "Rust toolchain (cargo) is required"
+      - sh: cargo upgrade -V >/dev/null 2>&1
+        msg: "cargo-edit is required for 'cargo upgrade' (install with: cargo install cargo-edit)"
+    cmds:
+      - cmd: cargo update
+      - cmd: cargo upgrade {{.UPGRADE_INCOMPAT_FLAG}}
+      - cmd: cd bmm-lib && cargo update
+      - cmd: cd bmm-lib && cargo upgrade {{.UPGRADE_INCOMPAT_FLAG}}
+  update-dependencies:
+    desc: Update front- and backend dependencies
+    cmds:
+      - task: update-frontend-deps
+      - task: update-backend-deps
+        vars:
+          INCOMPATIBLE: "{{.INCOMPATIBLE}}"
+  check:
+    desc: Typecheck frontend + lint/test Rust
+    cmds:
+      - cmd: bun run check
+      - cmd: cd ./src-tauri && cargo fmt --all --check
+      - cmd: cd ./src-tauri && cargo clippy -- -D warnings
+      - cmd: cd ./src-tauri && cargo test -q
+      - cmd: cd ./src-tauri/bmm-lib && cargo test -q
+  fmt:
+    desc: Format Rust and frontend code
+    cmds:
+      - task: fmt-rust
+      - task: fmt-ui
+  fmt-rust:
+    desc: Format Rust code
+    cmds:
+      - cmd: cd ./src-tauri && cargo fmt --all
+  fmt-ui:
+    desc: Format frontend (best effort)
+    cmds:
+      - cmd: |
+          if [ -f package.json ] && grep -q '"format"\s*:' package.json; then
+            echo "Running: bun run format"
+            bun run format || true
+          elif command -v bunx >/dev/null 2>&1; then
+            echo "Running: bunx prettier -w . --ignore-path .prettierignore (fallback)"
+            bunx -y prettier -w . --ignore-path .prettierignore || true
+          else
+            echo "Skipping frontend format: no 'format' script and no bunx/prettier" >&2
+          fi
+  test:
+    desc: Run Rust tests for both crates
+    cmds:
+      - cmd: cd ./src-tauri && cargo test -q
+      - cmd: cd ./src-tauri/bmm-lib && cargo test -q
   clean:
     desc: Clean build artifacts
     cmds:
       - cmd: echo Removing build artifacts...
-      - cmd: cd ./src-tauri && cargo clean {{.NO_OUTPUT}}
-
+      - cmd: cd ./src-tauri && cargo clean
+        silent: true
+      - cmd: cd ./src-tauri/bmm-lib && cargo clean
+        silent: true
+  clean-ui:
+    desc: Clean frontend build artifacts
+    cmds:
+      - cmd: rm -rf .svelte-kit build dist 2>/dev/null || true
+  bootstrap:
+    desc: Install dev dependencies (idempotent)
+    cmds:
+      - cmd: bun install
+      - cmd: cd ./src-tauri && cargo fetch

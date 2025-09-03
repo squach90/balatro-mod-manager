@@ -4,7 +4,6 @@ The Balatro Mod Manager by _Skyline_.
 
 Balatro Mod Manager is a standalone tool made for [Balatro](https://store.steampowered.com/app/2379780/Balatro/) that makes finding, downloading, and installing mods easy.
 
-
 <p align="center">
     <img width="49%" alt="Home screen" src="images/cover_1.png"/>
     &nbsp;
@@ -21,7 +20,6 @@ Balatro Mod Manager is a standalone tool made for [Balatro](https://store.steamp
     </a>
 </p>
 
-
 # [![Download](images/download.svg)](https://github.com/skyline69/balatro-mod-manager/releases/latest)
 
 Balatro Mod Manager is currently available for Windows and macOS. The installer is standalone and does not require any external libraries.
@@ -29,14 +27,13 @@ Balatro Mod Manager is currently available for Windows and macOS. The installer 
 [Download the Balatro Mod Manager installer here](https://github.com/skyline69/balatro-mod-manager/releases/latest).
 
 Scroll down to find **▸Assets** and download the right version of the installer for your system.
+
 - Windows: `Balatro.Mod.Manager_…_x64-setup.exe` or `Balatro.Mod.Manager_…_x64_en-US.msi`
 - macOS: `Balatro.Mod.Manager_…_universal.dmg`
-
 
 # [![Build](images/build.svg)](#build-prerequisites)
 
 Alternatively, if you would prefer to build Balatro Mod Manager yourself instead of downloading the [prebuilt installer](https://github.com/skyline69/balatro-mod-manager/releases/latest), Balatro Mod Manager can be compiled from source using the instructions below.
-
 
 ## Build Prerequisites
 
@@ -46,14 +43,19 @@ Alternatively, if you would prefer to build Balatro Mod Manager yourself instead
 - [Task](https://taskfile.dev/) (for running task commands)
 
 ## Automatic Installation
+
 ### For Windows
+
 open Powershell & run this command:
+
 ```powershell
 iwr https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.ps1 -useb | iex
 ```
 
 ### For macOS
+
 run this command:
+
 ```bash
 curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.sh | bash
 ```
@@ -61,19 +63,19 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
 ## Manual Installation
 
 1. Clone the repository & install bun's dependencies:
-    ```sh
-    git clone https://github.com/skyline69/balatro-mod-manager.git
-    cd balatro-mod-manager && bun install --allow-scripts
-    ```
+   ```sh
+   git clone https://github.com/skyline69/balatro-mod-manager.git
+   cd balatro-mod-manager && bun install --allow-scripts
+   ```
 2. Run the task based on your OS
-    - For Windows:
-        ```sh
-        task release-windows
-        ```
-    - For macOS:
-        ```sh
-        task release-macos
-        ```
+   - For Windows:
+     ```sh
+     task release-windows
+     ```
+   - For macOS:
+     ```sh
+     task release-macos
+     ```
 
 ## Running the Project
 
@@ -82,19 +84,18 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
 To start the project in development mode, use the provided taskfile:
 
 1. Run the debug target:
-    ```sh
-    task debug
-    ```
+   ```sh
+   task debug
+   ```
 
 ### Production Mode
 
 To build the project for production:
 
 1. Build the release target (`release-windows` for Windows, `release-macos` for macOS):
-    ```sh
-    task release-windows # or task release-macos
-    ```
-
+   ```sh
+   task release-windows # or task release-macos
+   ```
 
 The built application will be located in the `src-tauri/target/release` directory and the installer paths will be shown at the end of the build process.
 
@@ -103,16 +104,18 @@ The built application will be located in the `src-tauri/target/release` director
 To clean the build files, use the provided taskfile:
 
 1. Run the clean target:
-    ```sh
-    task clean
-    ```
+   ```sh
+   task clean
+   ```
 
 > Font by Daniel Linssen
 
 # Contributing
+
 Would like to contribute by adding a mod that you couldn't find on the manager?
 
 Feel free to check the [Balatro Mod Index](https://github.com/skyline69/balatro-mod-index) repo and look at the README to know how to process.
 
 # Code Signing
+
 Balatro Mod Manager releases are code-signed using [SignPath](https://signpath.io) to ensure authenticity and security. This helps verify that the downloaded software hasn't been tampered with and comes from a trusted source.

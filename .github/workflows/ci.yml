@@ -1,24 +1,41 @@
-name: CI - Test bmm-lib
+name: CI - Test app and lib
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  test:
-    name: Test bmm-lib
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest] # macos-latest, windows-latest
-        rust: [stable]
+  frontend:
+    name: Frontend check & build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Typecheck (Svelte/TS)
+        run: bun run check
+
+      - name: Build UI
+        run: bun run build
+
+  test_bmm_lib:
+    name: Test bmm-lib
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src-tauri/bmm-lib
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,12 +46,51 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            src-tauri/bmm-lib/target
+            src-tauri/bmm-lib/../lovely-injector/target/release
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Lint (fmt)
+        run: cargo fmt --all --check
+
+      - name: Lint (clippy)
+        run: cargo clippy -- -D warnings
+
+      - name: Run tests (bmm-lib)
+        run: cargo test -p bmm-lib -- --test-threads=1
+
+  test_app:
+    name: Build & test balatro-mod-manager
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
           override: true
           components: rustfmt, clippy
 
       - name: Install system dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -44,14 +100,10 @@ jobs:
             libjavascriptcoregtk-4.1-dev \
             libwebkit2gtk-4.1-dev \
             pkg-config
-          
+
           # Verify installation
-          find /usr -name 'libsoup-3.0.pc' 2>/dev/null
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-           
-          # Verify installation
-          find /usr -name 'javascriptcoregtk-4.1.pc' 2>/dev/null || echo "javascriptcoregtk-4.1.pc not found!"
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          find /usr -name 'libsoup-3.0.pc' 2>/dev/null || true
+          find /usr -name 'webkit2gtk-4.1.pc' 2>/dev/null || true
 
       - name: Cache cargo dependencies
         uses: actions/cache@v3
@@ -60,14 +112,14 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            src-tauri/bmm-lib/../lovely-injector/target/release  # Cache lovely-injector's target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-app-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build lovely-injector (macOS only)
-        if: matrix.os == 'macos-latest'
-        run: |
-          cd ../lovely-injector
-          SKIP_BUILD_SCRIPT=1 cargo build --release
+      - name: Lint (fmt)
+        run: cargo fmt --all --check
 
-      - name: Run tests
-        run: cargo test -p bmm-lib -- --test-threads=1
+      - name: Lint (clippy)
+        run: cargo clippy -- -D warnings
+
+      - name: Build & run tests (app)
+        run: cargo test -p balatro-mod-manager -- --test-threads=1

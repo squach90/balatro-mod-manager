@@ -75,17 +75,13 @@ impl DiscordRpcManager {
                     last_connection_attempt = now;
                     log::info!("Creating new Discord RPC client");
 
-                    match DiscordIpcClient::new("1344296383145967669") {
-                        Ok(mut client) => {
-                            log::info!("Created client, connecting...");
-                            if let Err(e) = client.connect() {
-                                log::error!("Failed to connect: {e}");
-                            } else {
-                                log::info!("Connected to Discord!");
-                                *client_guard = Some(client);
-                            }
-                        }
-                        Err(e) => log::error!("Failed to create client: {e}"),
+                    let mut client = DiscordIpcClient::new("1344296383145967669");
+                    log::info!("Created client, connecting...");
+                    if let Err(e) = client.connect() {
+                        log::error!("Failed to connect: {e}");
+                    } else {
+                        log::info!("Connected to Discord!");
+                        *client_guard = Some(client);
                     }
                 }
 

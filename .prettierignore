@@ -1,0 +1,22 @@
+# General OS/editor
+.DS_Store
+.idea
+.vscode
+
+# Node & frontend build outputs
+node_modules
+.svelte-kit
+build
+dist
+.vite
+.parcel-cache
+
+# Rust build outputs (ignore everywhere)
+**/target
+
+# Misc caches
+coverage
+.turbo
+.vercel
+.netlify
+

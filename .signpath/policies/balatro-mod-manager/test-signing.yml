@@ -1,8 +1,8 @@
 # File: .signpath/policies/balatro-mod-manager/test-signing.yml
-# Purpose: Defines GitHub-specific rules enforced by SignPath 
+# Purpose: Defines GitHub-specific rules enforced by SignPath
 #          before allowing a signing request for the 'test-signing' policy.
 
-github-policies: 
+github-policies:
   runners:
     allowed_groups:
-      - 'GitHub Actions' # all jobs need to run on GitHub-hosted runners
+      - "GitHub Actions" # all jobs need to run on GitHub-hosted runners
