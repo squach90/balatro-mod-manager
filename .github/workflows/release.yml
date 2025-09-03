@@ -113,7 +113,7 @@ jobs:
           exit 1
 
       - name: Download all artifacts from triggering workflow
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-sign # Ensure this matches the actual name of your build workflow
           run_id: ${{ github.event.workflow_run.id }}
@@ -142,7 +142,7 @@ jobs:
 
       # Submit the uploaded artifact to SignPath for signing
       - name: Submit SignPath Signing Request
-        uses: signpath/github-action-submit-signing-request@v1.2
+        uses: signpath/github-action-submit-signing-request@v1
         id: signpath
         with:
           # Required SignPath Credentials and Configuration
