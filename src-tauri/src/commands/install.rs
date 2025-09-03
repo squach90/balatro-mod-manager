@@ -10,6 +10,7 @@ use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
 use bmm_lib::{cache, database::InstalledMod};
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn get_installation_and_console(
     state: &tauri::State<'_, AppState>,
 ) -> Result<(String, bool), String> {
