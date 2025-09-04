@@ -629,7 +629,7 @@ let descLoading = $state(false);
 	};
 
     // Ensure description is loaded (lazy) for detail view
-    async function ensureDescriptionLoaded(m: any) {
+    async function ensureDescriptionLoaded(m: Mod & { _dirName?: string }) {
         if (!m || m.description) return;
         const dir = m._dirName as string | undefined;
         if (!dir) return;
@@ -646,7 +646,7 @@ let descLoading = $state(false);
                 const pos = arr.findIndex((x) => x.title === m.title);
                 if (pos >= 0) {
                     arr = arr.slice();
-                    (arr[pos] as any).description = text;
+                    arr[pos] = { ...arr[pos], description: text };
                 }
                 return arr;
             });
@@ -659,7 +659,7 @@ let descLoading = $state(false);
 
     // This effect handles the description rendering
     $effect(() => {
-        const m = mod as any;
+        const m = mod as Mod & { _dirName?: string };
         if (m && !m.description) {
             ensureDescriptionLoaded(m);
         }
@@ -886,10 +886,10 @@ let descLoading = $state(false);
 							class="image-button"
 							aria-label={`View full size image of ${mod.title}`}
 						>
-							<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
+                            <LazyImage src={mod.image} fallbackSrc={mod.imageFallback} alt={mod.title} cacheTitle={mod.title} />
 						</button>
 					{:else}
-						<LazyImage src={mod.image} fallbackSrc={(mod as any).imageFallback} alt={mod.title} cacheTitle={mod.title} />
+                        <LazyImage src={mod.image} fallbackSrc={mod.imageFallback} alt={mod.title} cacheTitle={mod.title} />
 					{/if}
 				</div>
 

@@ -709,7 +709,7 @@ import { onMount, onDestroy } from "svelte";
                     invoke("enqueue_thumbnails", { items: thumbItems }).catch(() => {});
                 }
             } catch (_) { /* ignore */ }
-            const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+            const mods: Mod[] = items.map((item) => {
 				const mappedCategories = item.meta.categories
 					.map((cat) => categoryMap[cat] ?? null)
 					.filter((cat): cat is Category => cat !== null);
@@ -723,17 +723,17 @@ import { onMount, onDestroy } from "svelte";
 					imageFallback: hasRemote ? "/images/cover.jpg" : undefined,
 					colors: getRandomColorPair(),
 					categories: mappedCategories,
-					requires_steamodded: (item.meta as any)["requires-steamodded"],
-					requires_talisman: (item.meta as any)["requires-talisman"],
+					requires_steamodded: item.meta["requires-steamodded"],
+					requires_talisman: item.meta["requires-talisman"],
 					publisher: item.meta.author,
 					repo: item.meta.repo,
 					downloadURL: item.meta.downloadURL || "",
 					folderName: item.meta.folderName,
 					version: item.meta.version,
 					installed: false,
-					last_updated: (item.meta as any)["last-updated"] ?? 0,
+					last_updated: item.meta["last-updated"] ?? 0,
 					_dirName: item.dir_name,
-				} as Mod & { _dirName?: string };
+				};
 			});
 
             // Merge fresh remote mods with any locally seeded placeholders; prefer remote data
@@ -741,11 +741,11 @@ import { onMount, onDestroy } from "svelte";
             let prunedCount = 0;
             modsStore.update((arr) => {
                 const incoming = new Map<string, Mod>();
-                for (const m of mods as Mod[]) incoming.set(m.title, m);
+                for (const m of mods) incoming.set(m.title, m);
                 const seen = new Set<string>();
                 const out: Mod[] = [];
                 // Only allow pruning when we fetched a reasonably complete index
-                const existingRemoteCount = arr.reduce((n, it) => n + ((it as any)._dirName ? 1 : 0), 0);
+                const existingRemoteCount = arr.reduce((n, it) => n + (it._dirName ? 1 : 0), 0);
                 const pruneAllowed = incoming.size > 0 && incoming.size >= Math.max(10, Math.floor(existingRemoteCount * 0.5));
                 for (const existing of arr) {
                     const inc = incoming.get(existing.title);
@@ -767,13 +767,13 @@ import { onMount, onDestroy } from "svelte";
                             colors: existing.colors,
                             image: keepExistingImage ? existing.image : inc.image,
                             imageFallback: keepExistingImage
-                                ? (existing as any).imageFallback
-                                : (inc as any).imageFallback,
+                                ? existing.imageFallback
+                                : inc.imageFallback,
                         });
                         seen.add(existing.title);
                     } else {
                         // Keep only local placeholders (no _dirName); drop stale remote entries
-                        if (!(existing as any)._dirName) {
+                        if (!existing._dirName) {
                             out.push(existing);
                         } else if (pruneAllowed) {
                             prunedCount++;
@@ -795,7 +795,7 @@ import { onMount, onDestroy } from "svelte";
 
             // Persist refreshed upstream catalog to Rust cache for update checks
             try {
-                const forCache = (mods as Mod[]).map((m) => ({
+                const forCache = mods.map((m) => ({
                     title: m.title,
                     description: m.description,
                     image: m.image,
@@ -806,9 +806,9 @@ import { onMount, onDestroy } from "svelte";
                     requires_talisman: m.requires_talisman,
                     publisher: m.publisher,
                     repo: m.repo,
-                    downloadURL: (m as any).downloadURL || "",
-                    folderName: (m as any).folderName ?? null,
-                    version: (m as any).version ?? null,
+                    downloadURL: m.downloadURL || "",
+                    folderName: m.folderName ?? null,
+                    version: m.version ?? null,
                 }));
                 invoke("save_mods_cache", { mods: forCache }).catch(() => {});
             } catch (_) { /* ignore */ }
@@ -850,7 +850,7 @@ import { onMount, onDestroy } from "svelte";
                     invoke("enqueue_thumbnails", { items: thumbItems }).catch(() => {});
                 }
             } catch (_) { /* ignore */ }
-            const mods: (Mod & { _dirName?: string })[] = items.map((item) => {
+            const mods: Mod[] = items.map((item) => {
 				const mappedCategories = item.meta.categories
 					.map((cat) => categoryMap[cat] ?? null)
 					.filter((cat): cat is Category => cat !== null);
@@ -864,17 +864,17 @@ import { onMount, onDestroy } from "svelte";
 					imageFallback: hasRemote ? "/images/cover.jpg" : undefined,
 					colors: getRandomColorPair(),
 					categories: mappedCategories,
-					requires_steamodded: (item.meta as any)["requires-steamodded"],
-					requires_talisman: (item.meta as any)["requires-talisman"],
+					requires_steamodded: item.meta["requires-steamodded"],
+					requires_talisman: item.meta["requires-talisman"],
 					publisher: item.meta.author,
 					repo: item.meta.repo,
 					downloadURL: item.meta.downloadURL || "",
 					folderName: item.meta.folderName,
 					version: item.meta.version,
 					installed: false,
-					last_updated: (item.meta as any)["last-updated"] ?? 0,
+					last_updated: item.meta["last-updated"] ?? 0,
 					_dirName: item.dir_name,
-				} as Mod & { _dirName?: string };
+				};
 			});
 
             // Merge with any pre-seeded placeholders, and cautiously prune removed mods
@@ -884,7 +884,7 @@ import { onMount, onDestroy } from "svelte";
                 for (const m of mods as Mod[]) incoming.set(m.title, m);
                 const seen = new Set<string>();
                 const out: Mod[] = [];
-                const existingRemoteCount = arr.reduce((n, it) => n + ((it as any)._dirName ? 1 : 0), 0);
+                const existingRemoteCount = arr.reduce((n, it) => n + (it._dirName ? 1 : 0), 0);
                 const pruneAllowed = incoming.size > 0 && incoming.size >= Math.max(10, Math.floor(existingRemoteCount * 0.5));
                 for (const existing of arr) {
                     const inc = incoming.get(existing.title);
@@ -904,12 +904,12 @@ import { onMount, onDestroy } from "svelte";
                             colors: existing.colors,
                             image: keepExistingImage ? existing.image : inc.image,
                             imageFallback: keepExistingImage
-                                ? (existing as any).imageFallback
-                                : (inc as any).imageFallback,
+                                ? existing.imageFallback
+                                : inc.imageFallback,
                         });
                         seen.add(existing.title);
                     } else {
-                        if (!(existing as any)._dirName) {
+                        if (!existing._dirName) {
                             out.push(existing);
                         } else if (pruneAllowed) {
                             prunedCount++;
@@ -941,9 +941,9 @@ import { onMount, onDestroy } from "svelte";
                     requires_talisman: m.requires_talisman,
                     publisher: m.publisher,
                     repo: m.repo,
-                    downloadURL: (m as any).downloadURL || "",
-                    folderName: (m as any).folderName ?? null,
-                    version: (m as any).version ?? null,
+                    downloadURL: m.downloadURL || "",
+                    folderName: m.folderName ?? null,
+                    version: m.version ?? null,
                 }));
                 invoke("save_mods_cache", { mods: forCache }).catch(() => {});
             } catch (_) { /* ignore */ }
@@ -974,7 +974,7 @@ import { onMount, onDestroy } from "svelte";
 				const m = mods[idx];
 				if (!m || m.description) continue;
 				if (inflightDescriptions.has(m.title)) continue;
-				const dir = (m as any)._dirName as string | undefined;
+                const dir = m._dirName as string | undefined;
 				if (!dir) continue;
 				try {
 					inflightDescriptions.add(m.title);
@@ -986,8 +986,8 @@ import { onMount, onDestroy } from "svelte";
 					modsStore.update((arr) => {
 						const pos = arr.findIndex((x) => x.title === m.title);
 						if (pos >= 0) {
-							arr = arr.slice();
-							(arr[pos] as any).description = text;
+                    arr = arr.slice();
+                    arr[pos] = { ...arr[pos], description: text };
 						}
 						return arr;
 					});
@@ -1007,7 +1007,7 @@ import { onMount, onDestroy } from "svelte";
 		// Prioritize current page mods so skeletons disappear quickly
 		const candidates = paginatedMods
 			.filter((m) => !m.description || m.description.trim().length === 0)
-			.map((m) => ({ title: m.title, dir: (m as any)._dirName as string | undefined }))
+			.map((m) => ({ title: m.title, dir: m._dirName as string | undefined }))
 			.filter((x) => Boolean(x.dir));
 		if (candidates.length === 0) return;
 		const limit = 4;
@@ -1029,7 +1029,7 @@ import { onMount, onDestroy } from "svelte";
 						const pos = arr.findIndex((x) => x.title === c.title);
 						if (pos >= 0) {
 							arr = arr.slice();
-							(arr[pos] as any).description = text;
+							arr[pos] = { ...arr[pos], description: text };
 						}
 						return arr;
 					});
@@ -1061,16 +1061,16 @@ import { onMount, onDestroy } from "svelte";
 						"get_cached_description_by_title",
 						{ title: m.title },
 					);
-					if (cached) {
-						modsStore.update((arr) => {
-							const pos = arr.findIndex((x) => x.title === m.title);
-							if (pos >= 0) {
-								arr = arr.slice();
-								(arr[pos] as any).description = cached;
-							}
-							return arr;
-						});
-					}
+                        if (cached) {
+                            modsStore.update((arr) => {
+                                const pos = arr.findIndex((x) => x.title === m.title);
+                                if (pos >= 0) {
+                                    arr = arr.slice();
+                                    arr[pos] = { ...arr[pos], description: cached };
+                                }
+                                return arr;
+                            });
+                        }
 				} catch (_) {
 					// ignore
 				}
@@ -1100,16 +1100,16 @@ import { onMount, onDestroy } from "svelte";
 						"get_cached_description_by_title",
 						{ title },
 					);
-					if (cached) {
-						modsStore.update((arr) => {
-							const pos = arr.findIndex((x) => x.title === title);
-							if (pos >= 0) {
-								arr = arr.slice();
-								(arr[pos] as any).description = cached;
-							}
-							return arr;
-						});
-					}
+                        if (cached) {
+                            modsStore.update((arr) => {
+                                const pos = arr.findIndex((x) => x.title === title);
+                                if (pos >= 0) {
+                                    arr = arr.slice();
+                                    arr[pos] = { ...arr[pos], description: cached };
+                                }
+                                return arr;
+                            });
+                        }
 				} catch (_) {
 					// ignore
 				}
@@ -1120,9 +1120,7 @@ import { onMount, onDestroy } from "svelte";
 		);
 	}
 
-	async function fillInstalledThumbnails(
-		mods: (Mod & { _dirName?: string })[],
-	) {
+	async function fillInstalledThumbnails(mods: Mod[]) {
 		const limit = 8;
 		let i = 0;
 		const client = async () => {
@@ -1132,7 +1130,7 @@ import { onMount, onDestroy } from "svelte";
 				const m = mods[idx];
 				if (!m) continue;
 				if (!$installationStatus[m.title]) continue; // only for installed mods
-				const dir = (m as any)._dirName as string | undefined;
+				const dir = m._dirName as string | undefined;
 				if (!dir) continue;
 				try {
 					const dataUrl = await invoke<string | null>(
@@ -1141,14 +1139,11 @@ import { onMount, onDestroy } from "svelte";
 					);
 					if (dataUrl) {
 						modsStore.update((arr) => {
-							const pos = arr.findIndex(
-								(x) => x.title === m.title,
-							);
-							if (pos >= 0) {
-								arr = arr.slice();
-								(arr[pos] as any).image = dataUrl;
-								(arr[pos] as any).imageFallback = undefined;
-							}
+                            const pos = arr.findIndex((x) => x.title === m.title);
+                            if (pos >= 0) {
+                                arr = arr.slice();
+                                arr[pos] = { ...arr[pos], image: dataUrl, imageFallback: undefined };
+                            }
 							return arr;
 						});
 					}
@@ -1189,9 +1184,8 @@ import { onMount, onDestroy } from "svelte";
 								installed: true,
 								last_updated: 0,
 								// Keep private installed path for potential future local reads
-								// @ts-ignore
 								_installedPath: m.path,
-							}) as any,
+							}),
 					);
 				return additions.length ? [...additions, ...arr] : arr;
 			});

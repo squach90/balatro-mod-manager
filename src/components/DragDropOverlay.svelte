@@ -9,30 +9,29 @@
 	let isDragging = false;
 	let unlisten: (() => void) | null = null;
 
+	// Use Tauri's inferred event types from `onDragDropEvent`.
+
 	onMount(async () => {
 		try {
 			// Get current webview window
 			const webview = webviewWindow.getCurrentWebviewWindow();
 
 			// Listen for file drop events
-			unlisten = await webview.onDragDropEvent(async (event: any) => {
+			unlisten = await webview.onDragDropEvent(async (event) => {
 				// console.log("Drag drop event received:", event);
 
-				// Handle different event types based on the actual event structure from logs
-				if (event.event === "tauri://drag-over") {
+				// Handle different event types per Tauri v2 API
+				if (event.payload.type === "over" || event.payload.type === "enter") {
 					isDragging = true;
-				} else if (
-					event.event === "tauri://drag-leave" ||
-					event.event === "tauri://cancel"
-				) {
+				} else if (event.payload.type === "leave") {
 					isDragging = false;
-				} else if (event.event === "tauri://drag-drop") {
+				} else if (event.payload.type === "drop") {
 					// FIXED: The correct event name!
 					// console.log("Drop event detected:", JSON.stringify(event));
 					// Always hide the drag overlay on drop
 					isDragging = false;
 
-					// According to your logs, paths are directly in event.payload.paths
+					// Paths are provided in event.payload.paths per Tauri v2
 					const paths = event.payload.paths;
 					// console.log("Extracted paths:", paths);
 

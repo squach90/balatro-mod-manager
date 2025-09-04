@@ -251,7 +251,7 @@
 	<div class="mod-image">
     <LazyImage
         src={mod.image}
-        fallbackSrc={(mod as any).imageFallback}
+        fallbackSrc={mod.imageFallback}
         alt={mod.title}
         cacheTitle={mod.title}
     />

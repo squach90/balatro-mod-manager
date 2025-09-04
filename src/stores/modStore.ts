@@ -5,6 +5,9 @@ export interface Mod {
   description: string;
   image: string;
   imageFallback?: string;
+  // Internal optional fields used by views/cache
+  _dirName?: string;
+  _installedPath?: string;
   categories: Category[];
   colors: {
     color1: string;
@@ -15,8 +18,8 @@ export interface Mod {
   publisher: string;
   repo: string;
   downloadURL: string;
-  folderName: string;
-  version: string;
+  folderName?: string | null;
+  version?: string | null;
   installed: boolean;
   last_updated: number;
 }

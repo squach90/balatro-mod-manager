@@ -19,7 +19,11 @@
 	let searchQuery = $state("");
 	let searchResults = $state<Mod[]>([]);
 	let isSearching = $state(false);
-	let searchIndex: any = $state(null);
+	type SearchIndex = {
+		add: (id: number, text: string) => void;
+		search: (query: string) => number[];
+	} | null;
+	let searchIndex: SearchIndex = $state(null);
 	let mods = $state<Mod[]>([]);
 	let installedMods = $state<InstalledMod[]>([]);
 	let mod = $state<Mod | null>(null);
@@ -221,11 +225,11 @@
 
 	onMount(() => {
 		// Initialize the search index
-		searchIndex = new FlexSearch.Index({
+		searchIndex = new (FlexSearch as any).Index({
 			tokenize: "forward",
 			preset: "match",
 			cache: true,
-		});
+		}) as unknown as SearchIndex;
 
 		$effect(() => {
 			if (searchInput) {
@@ -238,16 +242,16 @@
 			mods = currentMods;
 			if (mods.length > 0) {
 				// Instead of clear(), recreate the index
-				searchIndex = new FlexSearch.Index({
+				searchIndex = new (FlexSearch as any).Index({
 					tokenize: "forward",
 					preset: "match",
 					cache: true,
-				});
+				}) as unknown as SearchIndex;
 
 				mods.forEach((mod, idx) => {
 					const searchText =
 						`${mod.title} ${mod.publisher}`.toLowerCase();
-					searchIndex.add(idx, searchText);
+					if (searchIndex) searchIndex.add(idx, searchText);
 				});
 			}
 		});

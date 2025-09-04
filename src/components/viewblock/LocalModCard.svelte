@@ -10,8 +10,13 @@
 	import { modsStore } from "../../stores/modStore";
 	import { modEnabledStore } from "../../stores/modStore";
 
-	export let mod: any;
-	export let onUninstall: (mod: any) => void;
+	import type { LocalMod } from "../../stores/modStore";
+
+	type CatalogMatch = { title: string; download_url: string; version?: string };
+	type LocalModWithCatalog = LocalMod & { catalog_match?: CatalogMatch };
+
+	export let mod: LocalModWithCatalog;
+	export let onUninstall: (mod: LocalModWithCatalog) => void;
 	export let onToggleEnabled: (() => Promise<void>) | undefined = undefined;
 
 	// Local state for loading and enabled status
@@ -105,16 +110,17 @@
 
 	async function installOfficialVersion(e: Event) {
 		e.stopPropagation();
-		if (!mod.catalog_match) return;
+		const catalogMatch = mod.catalog_match;
+		if (!catalogMatch) return;
 
 		try {
 			isInstalling = true;
 
 			// Create a simplified version of the catalog mod for installation
 			const catalogMod = {
-				title: mod.catalog_match.title,
-				downloadURL: mod.catalog_match.download_url,
-				version: mod.catalog_match.version || "",
+				title: catalogMatch.title,
+				downloadURL: catalogMatch.download_url,
+				version: catalogMatch.version || "",
 				requires_steamodded: false,
 				requires_talisman: false,
 			};
@@ -122,8 +128,7 @@
 			// Find the full catalog mod if available
 			const fullCatalogMod = $modsStore.find(
 				(m) =>
-					m.title.toLowerCase() ===
-					mod.catalog_match.title.toLowerCase(),
+					m.title.toLowerCase() === catalogMatch.title.toLowerCase(),
 			);
 
 			// Use the dependency info from the full catalog mod if found
@@ -196,7 +201,7 @@
 				}
 
 				addMessage(
-					`Installed official version of ${mod.catalog_match.title}`,
+					`Installed official version of ${catalogMatch.title}`,
 					"success",
 				);
 
