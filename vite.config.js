@@ -5,7 +5,7 @@ import { sveltekit } from "@sveltejs/kit/vite";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [sveltekit()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -29,21 +29,5 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          search: ["flexsearch"],
-          markdown: ["marked"],
-          tauri: [
-            "@tauri-apps/api",
-            "@tauri-apps/plugin-dialog",
-            "@tauri-apps/plugin-shell",
-            "@tauri-apps/plugin-fs",
-            "@tauri-apps/plugin-window-state",
-          ],
-        },
-      },
-    },
-  },
+  // Keep defaults; SvelteKit controls code-splitting adequately.
 }));
