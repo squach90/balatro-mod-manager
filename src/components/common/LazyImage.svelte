@@ -35,6 +35,9 @@
   // One-shot cache recheck timer to update image after background caching
   let cacheRecheckTimer: number | null = null;
   const CACHE_RECHECK_DELAY_MS = 6000;
+  // IntersectionObserver to avoid loading offscreen images
+  let observer: IntersectionObserver | null = null;
+  let inView = false;
 
   function isValidSrc(val: string | undefined | null): boolean {
     if (!val) return false;
@@ -100,6 +103,11 @@
   }
 
   function startLoading() {
+    if (!inView) {
+      // Defer until the image is within (or near) the viewport
+      ensureObserved();
+      return;
+    }
     // If no src or clearly invalid, use default immediately
     if (!isValidSrc(src)) {
       resetToDefault();
@@ -280,8 +288,29 @@
     startLoading();
   }
 
+  function ensureObserved() {
+    if (inView || !wrapper) return;
+    if (observer) return;
+    observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry && entry.isIntersecting) {
+          inView = true;
+          observer?.disconnect();
+          observer = null;
+          // Now actually start loading
+          tryLoadCachedOrStart();
+        }
+      },
+      { root: null, rootMargin: "150px", threshold: 0.01 }
+    );
+    observer.observe(wrapper);
+  }
+
   onMount(() => {
-    tryLoadCachedOrStart();
+    // If already in view on mount, we'll proceed immediately; else observe
+    ensureObserved();
+    if (inView) tryLoadCachedOrStart();
   });
 
   onDestroy(() => {
@@ -289,6 +318,10 @@
     if (cacheRecheckTimer !== null) {
       clearTimeout(cacheRecheckTimer);
       cacheRecheckTimer = null;
+    }
+    if (observer) {
+      observer.disconnect();
+      observer = null;
     }
   });
 
@@ -303,9 +336,9 @@
       if (!usingDefault) resetToDefault();
       lockDefaultFor = srcStr;
     } else if (currentSrc !== resolved && !usingDefault) {
-      tryLoadCachedOrStart();
+      if (inView) tryLoadCachedOrStart(); else ensureObserved();
     } else if (currentSrc === null && !usingDefault) {
-      tryLoadCachedOrStart();
+      if (inView) tryLoadCachedOrStart(); else ensureObserved();
     }
   } else {
     // If no src is provided, immediately show the static default cover

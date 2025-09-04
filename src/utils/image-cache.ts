@@ -1,15 +1,15 @@
 import { writeFile, readFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { BaseDirectory } from "@tauri-apps/api/path";
 
-import axios from "axios";
+// Use native fetch to reduce bundle size
 
 const CACHE_DIR = "cache";
 
 async function cacheImage(imageUrl: string): Promise<void> {
   try {
-    const imageData = await axios.get(imageUrl, {
-      responseType: "arraybuffer",
-    });
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
+    const buf = await res.arrayBuffer();
     const imageName = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
     const imagePath = `${CACHE_DIR}/${imageName}`;
 
@@ -18,7 +18,7 @@ async function cacheImage(imageUrl: string): Promise<void> {
       baseDir: BaseDirectory.AppData,
     });
 
-    await writeFile(imagePath, new Uint8Array(imageData.data), {
+    await writeFile(imagePath, new Uint8Array(buf), {
       baseDir: BaseDirectory.AppData,
     });
   } catch (error) {

@@ -1,5 +1,7 @@
 <script lang="ts">
-	import ShaderBackground from "../../components/ShaderBackground.svelte";
+// Lazy-load ShaderBackground only when enabled
+import type { Component } from "svelte";
+let ShaderBackgroundComp = $state<Component | null>(null);
 	import About from "../../components/viewblock/About.svelte";
 	import LaunchButton from "../../components/LaunchButton.svelte";
 	import Mods from "../../components/viewblock/Mods.svelte";
@@ -21,7 +23,8 @@
 	import { addMessage } from "$lib/stores";
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
-	import { lovelyPopupStore } from "../../stores/modStore";
+import { lovelyPopupStore } from "../../stores/modStore";
+import { get } from "svelte/store";
 
 	let currentSection = $state("mods");
 	let showSecurityPopup = $state(false); // Control visibility of the security popup
@@ -155,13 +158,10 @@
 
 	function handleDependencyClick(dependency: string) {
 		// Find the mod in the store
-		let foundMod = null;
-		const unsubscribe = modsStore.subscribe((mods) => {
-			foundMod = mods.find(
-				(m) => m.title.toLowerCase() === dependency.toLowerCase(),
-			);
-		});
-		unsubscribe(); // Important to prevent memory leaks
+		const mods = get(modsStore);
+		const foundMod = mods.find(
+			(m) => m.title.toLowerCase() === dependency.toLowerCase(),
+		);
 
 		// If found, open it in the mod view
 		if (foundMod) {
@@ -181,6 +181,17 @@
 
 	onMount(async () => {
 		handleRefresh();
+
+		// Load shader background lazily when enabled
+		$effect(() => {
+			if ($backgroundEnabled && !ShaderBackgroundComp) {
+				import("../../components/ShaderBackground.svelte")
+					.then((m) => {
+						ShaderBackgroundComp = m.default;
+					})
+					.catch(() => {});
+			}
+		});
 
 		// Check if we need to show the security popup on first launch
 		const isFirstLaunch = await invoke<boolean>(
@@ -234,8 +245,10 @@
 	});
 </script>
 
-{#if $backgroundEnabled}
-	<ShaderBackground />
+<!-- Background shader is dynamically imported below when enabled -->
+
+{#if $backgroundEnabled && ShaderBackgroundComp}
+	<ShaderBackgroundComp />
 {/if}
 
 <div class="main-page">
@@ -274,11 +287,7 @@
 		<!-- Keep Mods mounted to preserve state and avoid re-fetching
 		     Use display: contents when visible to avoid layout shifts -->
 		<div class="section" style:display={currentSection !== "mods" ? 'none' : 'contents'}>
-			<Mods
-				mod={null}
-				{handleDependencyCheck}
-				on:request_uninstall={handleRequestUninstall}
-			/>
+			<Mods mod={null} {handleDependencyCheck} />
 		</div>
 
 		<!-- Settings and About can remain conditional to save resources -->

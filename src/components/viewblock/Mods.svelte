@@ -34,7 +34,9 @@
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
-	import SearchView from "./SearchView.svelte";
+// Lazy-load SearchView only when Search tab is active
+import type { Component } from "svelte";
+let SearchViewComp = $state<Component | null>(null);
 import { onMount, onDestroy } from "svelte";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
@@ -59,10 +61,10 @@ import { onMount, onDestroy } from "svelte";
 	let visibleHydrateTimer: number | null = null;
 
 	// Add these variables to track enabled/disabled mods
-	let enabledMods: Mod[] = [];
-	let disabledMods: Mod[] = [];
-	let enabledLocalMods: LocalMod[] = [];
-	let disabledLocalMods: LocalMod[] = [];
+	let enabledMods: Mod[] = $state([]);
+	let disabledMods: Mod[] = $state([]);
+	let enabledLocalMods: LocalMod[] = $state([]);
+	let disabledLocalMods: LocalMod[] = $state([]);
 
 	// Animate the dots
 	let dotInterval: number;
@@ -75,15 +77,15 @@ import { onMount, onDestroy } from "svelte";
 	}
 
 	// let mods: Mod[] = [];
-	let isLoading = true;
+	let isLoading = $state(true);
 
 	interface DependencyCheck {
 		steamodded: boolean;
 		talisman: boolean;
 	}
 
-	let localMods: LocalMod[] = [];
-	let isLoadingLocalMods = false;
+	let localMods: LocalMod[] = $state([]);
+	let isLoadingLocalMods = $state(false);
 
 	async function handleModToggled(): Promise<void> {
 		if ($currentCategory === "Installed Mods") {
@@ -181,11 +183,13 @@ import { onMount, onDestroy } from "svelte";
 		}
 	}
 
-	// Avoid forcing a refresh on every reactive pass; only fetch local mods here.
-	// We refresh installed mods on category switch and after install/uninstall events.
-	$: if ($currentCategory === "Installed Mods") {
-		getLocalMods();
-	}
+    // Avoid forcing a refresh on every reactive pass; only fetch local mods here.
+    // We refresh installed mods on category switch and after install/uninstall events.
+    $effect(() => {
+        if ($currentCategory === "Installed Mods") {
+            getLocalMods();
+        }
+    });
 
 	async function checkIfModIsInstalled(mod: Mod) {
 		if (!mod?.title) return false;
@@ -198,17 +202,13 @@ import { onMount, onDestroy } from "svelte";
 		return status;
 	}
 
-	export let handleDependencyCheck: (
-		requirements: DependencyCheck,
-		downloadAction?: () => Promise<void>,
-	) => void;
-	// function onDependencyCheck(
-	//   event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
-	// ) {
-	//   handleDependencyCheck(event.detail);
-	// }
-
-	export let mod: Mod | null;
+const { handleDependencyCheck, mod } = $props<{
+    handleDependencyCheck: (
+        requirements: DependencyCheck,
+        downloadAction?: () => Promise<void>,
+    ) => void;
+    mod: Mod | null;
+}>();
 
 	async function updateInstallStatus(mod: Mod | undefined) {
 		if (!mod) return;
@@ -216,11 +216,11 @@ import { onMount, onDestroy } from "svelte";
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
 	}
 
-	$: {
+	$effect(() => {
 		if (mod) {
 			updateInstallStatus(mod);
 		}
-	}
+	});
 
 	// Update the pagination functions to reset scroll position when switching pages
 	function nextPage() {
@@ -282,11 +282,11 @@ import { onMount, onDestroy } from "svelte";
 	}
 
 	// Update the lists whenever the stores change
-	$: {
+	$effect(() => {
 		if ($currentCategory === "Installed Mods") {
 			updateEnabledDisabledLists();
 		}
-	}
+	});
 
 	onMount(() => {
 		// Animation dots initialization
@@ -307,7 +307,7 @@ import { onMount, onDestroy } from "svelte";
 					await loadCatalogForeground();
 				} else {
 					// Otherwise, refresh in the background
-					refreshCatalogInBackground();
+				refreshCatalogInBackground();
 				}
 
 				// After mods load, update install status and local mods if needed
@@ -359,6 +359,13 @@ import { onMount, onDestroy } from "svelte";
 		// Call async functions without awaiting them directly in onMount
 		initialize();
 		initBackgroundState();
+
+		// Lazy-load SearchView when needed
+		$effect(() => {
+			if (showSearch && !SearchViewComp) {
+				import("./SearchView.svelte").then((m) => (SearchViewComp = m.default)).catch(() => {});
+			}
+		});
 
 		// Return synchronous cleanup function
 		return () => {
@@ -414,9 +421,9 @@ import { onMount, onDestroy } from "svelte";
 		}
 	};
 
-	$: hasUpdatesAvailable = Object.values($updateAvailableStore).some(
-		(value) => value === true,
-	);
+    let hasUpdatesAvailable = $derived(
+        Object.values($updateAvailableStore).some((value) => value === true)
+    );
 
 	async function updateAllMods(e?: Event) {
 		if (e) e.preventDefault();
@@ -1255,12 +1262,10 @@ import { onMount, onDestroy } from "svelte";
 		currentModView.set(mod);
 	}
 
-	let showSearch: boolean = false;
+	let showSearch = $derived($currentCategory === "Search");
 	$currentCategory = "All Mods";
 
-	$: showSearch = $currentCategory === "Search";
-
-	$: filteredMods = $modsStore.filter((mod) => {
+	let filteredMods = $derived($modsStore.filter((mod) => {
 		switch ($currentCategory) {
 			case "Content":
 				return (
@@ -1305,7 +1310,7 @@ import { onMount, onDestroy } from "svelte";
 			default:
 				return true;
 		}
-	});
+	}));
 
 	function handleCategoryClick(category: string) {
 		currentPage.set(1);
@@ -1313,14 +1318,25 @@ import { onMount, onDestroy } from "svelte";
 		currentCategory.set(category);
 	}
 
-	document.addEventListener("click", (e) => {
-		const target = e.target as HTMLElement;
-		const anchor = target.closest("a");
-		if (anchor && anchor.href.startsWith("https://") && anchor.href) {
-			e.preventDefault();
-			open(anchor.href);
-		}
-	});
+// Safely register global click handler with cleanup to avoid duplicates
+let globalClickHandler: ((e: MouseEvent) => void) | null = null;
+onMount(() => {
+  globalClickHandler = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target?.closest?.("a");
+    if (anchor && anchor instanceof HTMLAnchorElement && anchor.href.startsWith("https://")) {
+      e.preventDefault();
+      open(anchor.href);
+    }
+  };
+  document.addEventListener("click", globalClickHandler);
+});
+onDestroy(() => {
+  if (globalClickHandler) {
+    document.removeEventListener("click", globalClickHandler);
+    globalClickHandler = null;
+  }
+});
 
 	function sortMods(mods: Mod[], sortOption: SortOption): Mod[] {
 		switch (sortOption) {
@@ -1345,10 +1361,7 @@ import { onMount, onDestroy } from "svelte";
 	function handleSortChange(event: Event) {
 		const select = event.target as HTMLSelectElement;
 		currentSort.set(select.value as SortOption);
-		// Force a UI update by creating a new array reference
-		sortedAndFilteredMods = [
-			...sortMods(filteredMods, select.value as SortOption),
-		];
+		// Derived values react to $currentSort; no manual assignment needed
 		// Reset to first page when sort changes to prevent out-of-bounds issues
 		if ($currentPage > 1) {
 			currentPage.set(1);
@@ -1356,43 +1369,39 @@ import { onMount, onDestroy } from "svelte";
 		}
 	}
 
-	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+    let sortedAndFilteredMods = $derived(sortMods(filteredMods, $currentSort));
 
-	$: {
-		if (sortedAndFilteredMods) {
-			// Ensure pagination is updated
-			paginatedMods = sortedAndFilteredMods.slice(
-				($currentPage - 1) * $itemsPerPage,
-				$currentPage * $itemsPerPage,
-			);
-			// Update enabled/disabled lists if on the InstalledMods page
-			if ($currentCategory === "Installed Mods") {
-				updateEnabledDisabledLists();
-			}
-		}
-	}
+    $effect(() => {
+        // touch dependencies so effect runs when these change
+        sortedAndFilteredMods;
+        paginatedMods;
+        if ($currentCategory === "Installed Mods") {
+            updateEnabledDisabledLists();
+        }
+    });
 
-	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
-$: paginatedMods = sortedAndFilteredMods.slice(
-    ($currentPage - 1) * $itemsPerPage,
-    $currentPage * $itemsPerPage,
-);
+    let totalPages = $derived(Math.ceil(sortedAndFilteredMods.length / $itemsPerPage));
+    let paginatedMods = $derived(
+        sortedAndFilteredMods.slice(
+            ($currentPage - 1) * $itemsPerPage,
+            $currentPage * $itemsPerPage,
+        )
+    );
 
 // Whenever the visible page changes, try to quickly hydrate from cache
-$: {
-    // trigger on paginatedMods recalculation; debounce to avoid storms
-    if (paginatedMods) {
-        if (visibleHydrateTimer !== null) {
-            clearTimeout(visibleHydrateTimer);
-        }
-        visibleHydrateTimer = setTimeout(() => {
-            fillCachedDescriptionsVisibleFirst().catch(() => {});
-            if (!visibleFirstRunning) {
-                fillDescriptionsVisibleFirst().catch(() => {});
-            }
-        }, 120) as unknown as number;
+$effect(() => {
+    // touch dependency
+    paginatedMods;
+    if (visibleHydrateTimer !== null) {
+        clearTimeout(visibleHydrateTimer);
     }
-}
+    visibleHydrateTimer = setTimeout(() => {
+        fillCachedDescriptionsVisibleFirst().catch(() => {});
+        if (!visibleFirstRunning) {
+            fillDescriptionsVisibleFirst().catch(() => {});
+        }
+    }, 120) as unknown as number;
+});
 
 onDestroy(() => {
     if (visibleHydrateTimer !== null) {
@@ -1402,7 +1411,7 @@ onDestroy(() => {
 });
 
 	const maxVisiblePages = 5;
-	let startPage = 1;
+	let startPage = $state(1);
 
 	function updatePaginationWindow() {
 		if ($currentPage > startPage + maxVisiblePages - 1) {
@@ -1485,7 +1494,7 @@ onDestroy(() => {
 	}
 
 	let prevCategory = "";
-	$: {
+	$effect(() => {
 		const cat = $currentCategory;
 		if (
 			$currentModView === null &&
@@ -1499,9 +1508,9 @@ onDestroy(() => {
 			}
 		}
 		prevCategory = cat;
-	}
+	});
 
-	$: {
+	$effect(() => {
 		if (
 			$modEnabledStore &&
 			Object.keys($modEnabledStore).length > 0 &&
@@ -1509,18 +1518,19 @@ onDestroy(() => {
 		) {
 			updateEnabledDisabledLists();
 		}
-	}
+	});
 </script>
 
 <div class="container default-scrollbar">
 	<div class="mods-container">
 		<div class="categories">
-			{#each categories as category}
+		{#each categories as category}
+				{@const Icon = category.icon}
 				<button
 					class:active={$currentCategory === category.name}
 					onclick={() => handleCategoryClick(category.name)}
 				>
-					<svelte:component this={category.icon} size={16} />
+					<Icon size={16} />
 					{category.name}
 				</button>
 			{/each}
@@ -1535,7 +1545,13 @@ onDestroy(() => {
 				</p>
 			</div>
 		{:else if showSearch}
-			<SearchView onCheckDependencies={handleDependencyCheck} />
+			{#if SearchViewComp}
+				<SearchViewComp onCheckDependencies={handleDependencyCheck} />
+			{:else}
+				<div class="loading-container">
+					<p class="loading-text">Loading search…</p>
+				</div>
+			{/if}
 		{:else}
 			<div class="mods-wrapper">
 				<div class="controls-container">

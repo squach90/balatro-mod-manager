@@ -144,16 +144,26 @@
 	}
 
 	let animationFrame: number;
+  let running = false;
+  const MIN_FRAME_MS = 1000 / 30; // throttle to ~30fps to save GPU
+  let lastFrame = 0;
 
-	function render() {
-		const time = (performance.now() - startTime) * 0.001;
-		gl.viewport(0, 0, canvas.width, canvas.height);
-		gl.useProgram(program);
-		gl.uniform1f(timeLocation, time);
-		gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-		animationFrame = requestAnimationFrame(render);
-	}
+  function render(now?: number) {
+    if (!running) return;
+    const n = now ?? performance.now();
+    if (n - lastFrame < MIN_FRAME_MS) {
+      animationFrame = requestAnimationFrame(render);
+      return;
+    }
+    lastFrame = n;
+    const time = (n - startTime) * 0.001;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.useProgram(program);
+    gl.uniform1f(timeLocation, time);
+    gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    animationFrame = requestAnimationFrame(render);
+  }
 
 	function handleResize() {
 		canvas.width = window.innerWidth;
@@ -163,10 +173,25 @@
 	onMount(() => {
 		handleResize();
 		window.addEventListener("resize", handleResize);
+		running = true;
 		initWebGL();
+
+		// Pause when the tab/app is hidden and resume on visible
+		const onVis = () => {
+			if (document.hidden) {
+				running = false;
+				if (animationFrame) cancelAnimationFrame(animationFrame);
+			} else {
+				running = true;
+				lastFrame = 0;
+				animationFrame = requestAnimationFrame(render);
+			}
+		};
+		document.addEventListener("visibilitychange", onVis);
 
 		return () => {
 			window.removeEventListener("resize", handleResize);
+			document.removeEventListener("visibilitychange", onVis);
 			if (animationFrame) {
 				cancelAnimationFrame(animationFrame);
 			}

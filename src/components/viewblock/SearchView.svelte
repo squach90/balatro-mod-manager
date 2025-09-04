@@ -7,7 +7,14 @@
 		loadingStates2 as loadingStates,
 		uninstallDialogStore,
 	} from "../../stores/modStore";
-	import { debounce } from "lodash";
+// lightweight debounce to avoid pulling in lodash for a single helper
+function debounce<T extends (...args: unknown[]) => void>(fn: T, wait: number) {
+  let t: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<T>) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
 	import FlexSearch from "flexsearch";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
@@ -225,11 +232,12 @@
 
 	onMount(() => {
 		// Initialize the search index
-		searchIndex = new (FlexSearch as any).Index({
+		const IndexCtor = (FlexSearch as unknown as { Index: new (opts: { tokenize: string; preset: string; cache: boolean }) => { add: (id: number, text: string) => void; search: (q: string) => number[] } }).Index;
+		searchIndex = new IndexCtor({
 			tokenize: "forward",
 			preset: "match",
 			cache: true,
-		}) as unknown as SearchIndex;
+		});
 
 		$effect(() => {
 			if (searchInput) {
@@ -241,12 +249,13 @@
 		return modsStore.subscribe((currentMods) => {
 			mods = currentMods;
 			if (mods.length > 0) {
-				// Instead of clear(), recreate the index
-				searchIndex = new (FlexSearch as any).Index({
-					tokenize: "forward",
-					preset: "match",
-					cache: true,
-				}) as unknown as SearchIndex;
+		// Instead of clear(), recreate the index
+			const IndexCtor = (FlexSearch as unknown as { Index: new (opts: { tokenize: string; preset: string; cache: boolean }) => { add: (id: number, text: string) => void; search: (q: string) => number[] } }).Index;
+			searchIndex = new IndexCtor({
+				tokenize: "forward",
+				preset: "match",
+				cache: true,
+			});
 
 				mods.forEach((mod, idx) => {
 					const searchText =

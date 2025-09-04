@@ -29,4 +29,21 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          search: ["flexsearch"],
+          markdown: ["marked"],
+          tauri: [
+            "@tauri-apps/api",
+            "@tauri-apps/plugin-dialog",
+            "@tauri-apps/plugin-shell",
+            "@tauri-apps/plugin-fs",
+            "@tauri-apps/plugin-window-state",
+          ],
+        },
+      },
+    },
+  },
 }));

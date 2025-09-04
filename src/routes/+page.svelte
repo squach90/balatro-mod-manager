@@ -1,7 +1,7 @@
 <script lang="ts">
 	import BalatroPicker from "../components/BalatroPicker.svelte";
 	import { Menu, MenuItem } from "@tauri-apps/api/menu";
-	import { onMount } from "svelte";
+import { onMount, onDestroy } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { goto } from "$app/navigation";
 
@@ -22,21 +22,26 @@
 		init();
 	});
 
-	window.addEventListener("contextmenu", async (e) => {
-		e.preventDefault();
-		const menuItems = [
-			await MenuItem.new({
-				text: "Copy",
-				action: () => {},
-			}),
-			await MenuItem.new({
-				text: "Paste",
-				action: () => {},
-			}),
-		];
-		const menu = await Menu.new({ items: menuItems });
-		menu.popup();
-	});
+let contextHandler: ((e: MouseEvent) => void) | null = null;
+onMount(() => {
+  contextHandler = async (e: MouseEvent) => {
+    e.preventDefault();
+    const menuItems = [
+      await MenuItem.new({ text: "Copy", action: () => {} }),
+      await MenuItem.new({ text: "Paste", action: () => {} }),
+    ];
+    const menu = await Menu.new({ items: menuItems });
+    menu.popup();
+  };
+  window.addEventListener("contextmenu", contextHandler);
+});
+
+onDestroy(() => {
+  if (contextHandler) {
+    window.removeEventListener("contextmenu", contextHandler);
+    contextHandler = null;
+  }
+});
 </script>
 
 <div class="area">
