@@ -25,6 +25,7 @@ let ShaderBackgroundComp = $state<Component | null>(null);
 	import { onMount } from "svelte";
 import { lovelyPopupStore } from "../../stores/modStore";
 import { get } from "svelte/store";
+import ReportIssue from "../../components/ReportIssue.svelte";
 
 	let currentSection = $state("mods");
 	let showSecurityPopup = $state(false); // Control visibility of the security popup
@@ -335,6 +336,7 @@ import { get } from "svelte/store";
 </div>
 
 <LovelyMissingPopup />
+<ReportIssue />
 
 <style>
 	.main-page {
