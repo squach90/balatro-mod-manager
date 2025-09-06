@@ -29,6 +29,12 @@ pub async fn submit_report(
     // Collect system info
     let (cpu, ram_str) = get_cpu_and_ram();
     let os = std::env::consts::OS.to_string();
+    let os_version = detect_os_version().unwrap_or_else(|| "Unknown".to_string());
+    let os_combined = if os_version == "Unknown" {
+        os.clone()
+    } else {
+        format!("{} | {}", os, os_version)
+    };
     let arch = std::env::consts::ARCH.to_string();
     let gpu = detect_gpu().unwrap_or_else(|| "Unknown".to_string());
 
@@ -41,7 +47,7 @@ pub async fn submit_report(
         title: &title,
         description: &description,
         mm_version: &mm_version,
-        os,
+        os: os_combined,
         arch,
         cpu,
         gpu,
@@ -123,6 +129,159 @@ fn get_cpu_and_ram() -> (String, String) {
     (cpu, ram_str)
 }
 
+/// Returns a human-friendly OS version string, if available.
+///
+/// Examples:
+/// - Windows: "Microsoft Windows 11 Pro 10.0.22631 (Build 3880)"
+/// - macOS:   "macOS 14.5 (23F79)"
+/// - Linux:   distro + kernel if available
+fn detect_os_version() -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        // Prefer PowerShell CIM query (wmic deprecated on newer Windows)
+        let ps = r#"
+            $o = Get-CimInstance Win32_OperatingSystem; 
+            Write-Output ($o.Caption + ' ' + $o.Version + ' (Build ' + $o.BuildNumber + ')')
+        "#;
+        if let Ok(out) = Command::new("powershell")
+            .args(["-NoProfile", "-Command", ps])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !s.is_empty() {
+                    return Some(s);
+                }
+            }
+        }
+
+        // Fallback: wmic
+        if let Ok(out) = Command::new("wmic")
+            .args(["os", "get", "Caption,Version,BuildNumber", "/value"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                let mut caption = String::new();
+                let mut version = String::new();
+                let mut build = String::new();
+                for line in s.lines() {
+                    let l = line.trim();
+                    if let Some(v) = l.strip_prefix("Caption=") {
+                        caption = v.trim().to_string();
+                    } else if let Some(v) = l.strip_prefix("Version=") {
+                        version = v.trim().to_string();
+                    } else if let Some(v) = l.strip_prefix("BuildNumber=") {
+                        build = v.trim().to_string();
+                    }
+                }
+                if !caption.is_empty() && !version.is_empty() && !build.is_empty() {
+                    return Some(format!("{} {} (Build {})", caption, version, build));
+                }
+            }
+        }
+
+        // Last resort: sysinfo long_os_version + kernel
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        let long = System::long_os_version().or_else(System::os_version);
+        let kernel = System::kernel_version();
+        if let Some(l) = long {
+            if let Some(k) = kernel {
+                return Some(format!("{} (Kernel {})", l, k));
+            }
+            return Some(l);
+        }
+        None
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let name = Command::new("sw_vers").arg("-productName").output().ok();
+        let version = Command::new("sw_vers").arg("-productVersion").output().ok();
+        let build = Command::new("sw_vers").arg("-buildVersion").output().ok();
+
+        let clean = |o: Option<std::process::Output>| -> Option<String> {
+            o.and_then(|out| {
+                if out.status.success() {
+                    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+        };
+
+        let name = clean(name).unwrap_or_else(|| "macOS".to_string());
+        let version = clean(version).unwrap_or_default();
+        let build = clean(build);
+        if !version.is_empty() {
+            return Some(match build {
+                Some(b) if !b.is_empty() => format!("{} {} ({})", name, version, b),
+                _ => format!("{} {}", name, version),
+            });
+        }
+
+        // Fallback: sysinfo long_os_version
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        if let Some(l) = System::long_os_version().or_else(System::os_version) {
+            return Some(l);
+        }
+        Some(name)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs;
+
+        // Try /etc/os-release PRETTY_NAME
+        if let Ok(s) = fs::read_to_string("/etc/os-release") {
+            let mut pretty = None;
+            for line in s.lines() {
+                if let Some(v) = line.strip_prefix("PRETTY_NAME=") {
+                    let v = v.trim_matches('"').to_string();
+                    if !v.is_empty() {
+                        pretty = Some(v);
+                        break;
+                    }
+                }
+            }
+            if let Some(p) = pretty {
+                return Some(p);
+            }
+        }
+
+        // Fallback: sysinfo long_os_version + kernel
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        let long = System::long_os_version().or_else(System::os_version);
+        let kernel = System::kernel_version();
+        match (long, kernel) {
+            (Some(l), Some(k)) => Some(format!("{} (Kernel {})", l, k)),
+            (Some(l), None) => Some(l),
+            (None, Some(k)) => Some(format!("Linux (Kernel {})", k)),
+            _ => None,
+        }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    {
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        System::long_os_version()
+            .or_else(System::os_version)
+            .or_else(|| Some(std::env::consts::OS.to_string()))
+    }
+}
+
 // Best-effort GPU detection; returns None if not supported
 #[cfg(target_os = "macos")]
 fn detect_gpu() -> Option<String> {
@@ -152,8 +311,11 @@ fn detect_gpu() -> Option<String> {
 fn detect_gpu() -> Option<String> {
     // Using wmic is deprecated on newer Windows; keep it best-effort
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let out = Command::new("wmic")
         .args(["path", "win32_VideoController", "get", "name"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
@@ -201,7 +363,13 @@ fn detect_cpu() -> String {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        if let Ok(out) = Command::new("wmic").args(["cpu", "get", "name"]).output() {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        if let Ok(out) = Command::new("wmic")
+            .args(["cpu", "get", "name"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
             if out.status.success() {
                 let s = String::from_utf8_lossy(&out.stdout);
                 if let Some(name) = s.lines().skip(1).find(|l| !l.trim().is_empty()) {
