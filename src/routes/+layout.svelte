@@ -6,11 +6,79 @@
 	import DragDropOverlay from "../components/DragDropOverlay.svelte";
 	import { Window } from "@tauri-apps/api/window";
 
-	import "../app.css";
+    import "../app.css";
+    import UpdateAvailablePopup from "../components/UpdateAvailablePopup.svelte";
+    import { updatePromptDisabled } from "../stores/update";
+    import { invoke } from "@tauri-apps/api/core";
 
-	export let data;
+	const { data, children } = $props();
 
-	let isWindows = false;
+	let isWindows = $state(false);
+    let showUpdatePopup = $state(false);
+    let currentVersion = $state("");
+    let latestVersion = $state("");
+
+    function normalize(v: string): string {
+        // strip leading 'v' and any pre-release metadata
+        const t = v.trim().replace(/^v/i, "");
+        // keep only digits and dots prefix
+        const m = t.match(/^[0-9]+(?:\.[0-9]+)*/);
+        return m ? m[0] : t;
+    }
+
+    function cmp(a: string, b: string): number {
+        const as = normalize(a).split(".").map((n) => parseInt(n, 10));
+        const bs = normalize(b).split(".").map((n) => parseInt(n, 10));
+        const len = Math.max(as.length, bs.length);
+        for (let i = 0; i < len; i++) {
+            const ai = as[i] ?? 0;
+            const bi = bs[i] ?? 0;
+            if (ai < bi) return -1;
+            if (ai > bi) return 1;
+        }
+        return 0;
+    }
+
+    async function checkForUpdate() {
+        try {
+            if ($updatePromptDisabled) return;
+            const cur = await invoke<string>("get_app_version");
+            currentVersion = cur;
+            let tag = "";
+            // Prefer tags API to avoid 404s when no releases exist
+            const tagRes = await fetch(
+                "https://api.github.com/repos/skyline69/balatro-mod-manager/tags?per_page=1",
+                { headers: { "Accept": "application/vnd.github+json" } },
+            );
+            if (tagRes.ok) {
+                const tags = await tagRes.json();
+                if (Array.isArray(tags) && tags.length > 0) {
+                    tag = tags[0].name || "";
+                }
+            }
+            if (!tag) {
+                // Fallback: newest release from list (handles repos without 'latest')
+                const relRes = await fetch(
+                    "https://api.github.com/repos/skyline69/balatro-mod-manager/releases?per_page=1",
+                    { headers: { "Accept": "application/vnd.github+json" } },
+                );
+                if (relRes.ok) {
+                    const list = await relRes.json();
+                    if (Array.isArray(list) && list.length > 0) {
+                        tag = list[0].tag_name || list[0].name || "";
+                    }
+                }
+            }
+            if (!tag) return;
+            latestVersion = tag.replace(/^v/i, "");
+            console.log("BMM latest version (GitHub):", latestVersion);
+            if (cmp(cur, latestVersion) < 0) {
+                showUpdatePopup = true;
+            }
+        } catch (e) {
+            console.warn("Update check failed:", e);
+        }
+    }
 
 	async function setupAppWindow() {
 		const appWindow = Window.getCurrent();
@@ -19,10 +87,11 @@
 		await appWindow.setFocus();
 	}
 
-	onMount(() => {
-		isWindows = navigator.userAgent.indexOf("Windows") !== -1;
-		setupAppWindow();
-	});
+    onMount(() => {
+        isWindows = navigator.userAgent.indexOf("Windows") !== -1;
+        setupAppWindow();
+        checkForUpdate();
+    });
 </script>
 
 <MessageStack />
@@ -39,10 +108,18 @@
 			out:blur={{ duration: 150 }}
 			class="page-content"
 		>
-			<slot />
+			{@render children()}
 		</div>
 	{/key}
 </div>
+
+<UpdateAvailablePopup
+    visible={showUpdatePopup}
+    {currentVersion}
+    {latestVersion}
+    onClose={() => (showUpdatePopup = false)}
+    onDontShow={() => { updatePromptDisabled.set(true); showUpdatePopup = false; }}
+/>
 
 <style>
 	.layout-container {
