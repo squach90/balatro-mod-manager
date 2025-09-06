@@ -89,6 +89,12 @@ pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), Str
     // Respect the "Enable Lovely Console" setting on Windows by hiding the console
     // when disabled. If enabled, let the process manage its own console normally.
     if !lovely_console_enabled {
+        // Ask Lovely to suppress its console and also prevent a console window
+        // from being created for the process.
+        cmd.arg("--disable-console");
+        cmd.env("LOVELY_DISABLE_CONSOLE", "1");
+        cmd.env("LOVELY_NO_CONSOLE", "1");
+        cmd.env("LOVELY_CONSOLE", "0");
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
