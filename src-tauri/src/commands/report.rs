@@ -138,8 +138,8 @@ fn get_cpu_and_ram() -> (String, String) {
 fn detect_os_version() -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         // Prefer PowerShell CIM query (wmic deprecated on newer Windows)
@@ -310,8 +310,8 @@ fn detect_gpu() -> Option<String> {
 #[cfg(target_os = "windows")]
 fn detect_gpu() -> Option<String> {
     // Using wmic is deprecated on newer Windows; keep it best-effort
-    use std::process::Command;
     use std::os::windows::process::CommandExt;
+    use std::process::Command;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let out = Command::new("wmic")
         .args(["path", "win32_VideoController", "get", "name"])
@@ -362,8 +362,8 @@ fn detect_cpu() -> String {
     }
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         if let Ok(out) = Command::new("wmic")
             .args(["cpu", "get", "name"])
