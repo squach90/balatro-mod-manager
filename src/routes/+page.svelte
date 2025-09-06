@@ -1,5 +1,6 @@
 <script lang="ts">
 	import BalatroPicker from "../components/BalatroPicker.svelte";
+	import ReportIssue from "../components/ReportIssue.svelte";
 	import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { onMount, onDestroy } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
@@ -62,6 +63,7 @@ onDestroy(() => {
 <div class="app">
 	<h1>Welcome to Balatro Mod Manager</h1>
 	<BalatroPicker />
+	<ReportIssue />
 	<div class="version-text">v0.2.8</div>
 </div>
 

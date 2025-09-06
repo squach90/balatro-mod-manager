@@ -6,6 +6,7 @@ pub mod lovely;
 pub mod mods;
 pub mod paths;
 pub mod repo;
+pub mod report;
 pub mod settings;
 pub mod system;
 pub mod thumbnails;
