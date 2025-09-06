@@ -78,12 +78,27 @@ pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), Str
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let (path_str, _lovely_console_enabled) = get_installation_and_console(&state)?;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let (path_str, lovely_console_enabled) = get_installation_and_console(&state)?;
     let path = PathBuf::from(path_str);
 
-    Command::new(path.join("Balatro.exe"))
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(path.join("Balatro.exe"));
+
+    // Respect the "Enable Lovely Console" setting on Windows by hiding the console
+    // when disabled. If enabled, let the process manage its own console normally.
+    if !lovely_console_enabled {
+        // Ask Lovely to suppress its console and also prevent a console window
+        // from being created for the process.
+        cmd.arg("--disable-console");
+        cmd.env("LOVELY_DISABLE_CONSOLE", "1");
+        cmd.env("LOVELY_NO_CONSOLE", "1");
+        cmd.env("LOVELY_CONSOLE", "0");
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    cmd.spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
