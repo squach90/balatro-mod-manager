@@ -5,6 +5,7 @@
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { backgroundEnabled } from "../../stores/modStore";
+    import { cardScale } from "../../stores/ui";
 
 	let isReindexing = false;
 	let isClearingCache = false;
@@ -260,9 +261,29 @@
 					</label>
 				</div>
 			</div>
+		<p class="description-small">
+			Enable or disable the animated background. Disabling may improve
+			performance on low-end devices.
+		</p>
+
+			<!-- Card size slider -->
+			<div class="slider-row">
+				<div class="slider-label">
+					<span class="label-text">Card Size</span>
+					<span class="value">{Math.round($cardScale * 100)}%</span>
+				</div>
+				<input
+					class="range"
+					type="range"
+					min="0.75"
+					max="1.4"
+					step="0.05"
+					bind:value={$cardScale}
+					aria-label="Card size"
+				/>
+			</div>
 			<p class="description-small">
-				Enable or disable the animated background. Disabling may improve
-				performance on low-end devices.
+				Adjust how large mod cards render. Smaller cards fit more per row.
 			</p>
 
 			<div class="console-settings">
@@ -488,6 +509,94 @@
 	.switch input:checked + .slider:before {
 		transform: translateX(28px);
 	}
+
+	/* Range slider styling */
+    .slider-row {
+        margin-top: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 420px;
+    }
+	.slider-label {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		color: #f4eee0;
+		font-size: 1.1rem;
+	}
+    .slider-label .value {
+        color: #fdcf51;
+    }
+    .range {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 28px; /* provide vertical room for thumb */
+        background: transparent; /* move visuals to track */
+        border: 0;
+        box-shadow: none;
+    }
+
+    /* Track visuals */
+    .range::-webkit-slider-runnable-track {
+        height: 12px; /* thicker bar */
+        border-radius: 6px;
+        background: linear-gradient(90deg, #ea9600, #fdcf51);
+        border: 2px solid #f4eee0;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .range::-moz-range-track {
+        height: 12px; /* thicker bar */
+        border-radius: 6px;
+        background: linear-gradient(90deg, #ea9600, #fdcf51);
+        border: 2px solid #f4eee0;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        background: #f4eee0; /* white thumb */
+        border: 2px solid #9e9a90; /* subtle gray border */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+        cursor: pointer;
+        position: relative; /* allow offset */
+        margin-top: -4px; /* center 20px thumb over 12px track */
+    }
+    .range::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        background: #f4eee0; /* white thumb */
+        border: 2px solid #9e9a90; /* subtle gray border */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+        cursor: pointer;
+    }
+    .range::-webkit-slider-thumb:hover,
+    .range::-moz-range-thumb:hover {
+        box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    }
+
+    /* Responsive sizing */
+    @media (max-width: 1160px) {
+        /* Keep slider a comfortable width on smaller screens */
+        .slider-row { max-width: 300px; }
+        .slider-label { font-size: 1rem; }
+        .slider-label .value { font-size: 0.95rem; }
+        .range { height: 24px; }
+        .range::-webkit-slider-runnable-track { height: 10px; }
+        .range::-moz-range-track { height: 10px; }
+        .range::-webkit-slider-thumb {
+            width: 16px; height: 16px; margin-top: -3px; border-radius: 4px;
+        }
+        .range::-moz-range-thumb {
+            width: 16px; height: 16px; border-radius: 4px;
+        }
+    }
+
 	@media (max-width: 1160px) {
 		.switch {
 			width: 50px;
