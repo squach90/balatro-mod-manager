@@ -24,6 +24,7 @@ let ShaderBackgroundComp = $state<Component | null>(null);
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
 import { lovelyPopupStore } from "../../stores/modStore";
+import { cardScale } from "../../stores/ui";
 import { get } from "svelte/store";
 import ReportIssue from "../../components/ReportIssue.svelte";
 
@@ -280,10 +281,11 @@ import ReportIssue from "../../components/ReportIssue.svelte";
 		</nav>
 	</header>
 
-	<div
+    <div
 		class="content"
 		class:modal-open={!!$currentModView && currentSection == "mods"}
 		bind:this={contentElement}
+        style="--card-scale: {$cardScale}"
 	>
 		<!-- Keep Mods mounted to preserve state and avoid re-fetching
 		     Use display: contents when visible to avoid layout shifts -->

@@ -2205,11 +2205,14 @@ onDestroy(() => {
 		margin-top: 3rem !important;
 	}
 
-	.mods-grid {
+    .mods-grid {
 		padding: 1rem 2rem 2rem 2rem;
 		flex: 1;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		grid-template-columns: repeat(
+			auto-fill,
+			minmax(calc(280px * var(--card-scale, 1)), 1fr)
+		);
 		gap: 30px;
 	}
 

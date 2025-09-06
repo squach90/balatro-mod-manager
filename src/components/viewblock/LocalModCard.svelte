@@ -281,9 +281,10 @@
 	if (mod.catalog_match && mod.catalog_match.version && mod.version) {
 		hasNewerVersion = mod.catalog_match.version !== mod.version;
 	}
+    import { cardScale } from "../../stores/ui";
 </script>
 
-<div class="mod-card" style="--bg-color: {bgColor}; --bg-color-2: {bgColor2};">
+<div class="mod-card" class:compact={$cardScale <= 0.85} style="--bg-color: {bgColor}; --bg-color-2: {bgColor2};">
 	<!-- Dark overlay to improve readability -->
 	<div class="overlay"></div>
 
@@ -408,9 +409,9 @@
 		border-radius: 8px;
 		overflow: hidden;
 		border: 2px solid #f4eee0;
-		width: 300px;
-		max-width: 300px;
-		height: 330px;
+		width: calc(300px * var(--card-scale, 1));
+		max-width: calc(300px * var(--card-scale, 1));
+		height: calc(330px * var(--card-scale, 1));
 		margin: 0 auto;
 		padding: 1rem;
 		box-sizing: border-box;
@@ -478,9 +479,21 @@
 
 	h3 {
 		color: #fdcf51;
-		font-size: 1.5rem;
+		font-size: calc(1.5rem * var(--card-scale, 1));
 		margin-bottom: 0.5rem;
 		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	/* Compact cards: clamp title to 1 line only when compact */
+	.mod-card.compact h3 {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 1;
+		line-clamp: 1;
+		overflow: hidden;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		text-overflow: ellipsis;
 	}
 
 	.description {
@@ -494,6 +507,14 @@
 		line-clamp: 3;
 		-webkit-box-orient: vertical;
 		padding: 0 0.1rem;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		text-overflow: ellipsis;
+	}
+
+	.mod-card.compact .description {
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
 	}
 
 	.mod-meta {
@@ -530,15 +551,15 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 0.75rem;
+		padding: calc(0.75rem * var(--card-scale, 1));
 		color: #f4eee0;
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
-		font-size: 1.1rem;
-		min-height: 42px;
+		font-size: calc(1.1rem * var(--card-scale, 1));
+		min-height: calc(42px * var(--card-scale, 1));
 		position: relative;
 	}
 
@@ -547,15 +568,15 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.4rem;
-		padding: 0.75rem 0.5rem;
+		gap: calc(0.4rem * var(--card-scale, 1));
+		padding: calc(0.75rem * var(--card-scale, 1)) calc(0.5rem * var(--card-scale, 1));
 		color: #f4eee0;
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
-		min-height: 42px;
+		min-height: calc(42px * var(--card-scale, 1));
 		position: relative;
 		background: #56a786;
 		outline: #459373 solid 2px;
@@ -591,9 +612,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 42px;
-		height: 42px;
-		padding: 8px;
+		min-width: calc(42px * var(--card-scale, 1));
+		height: calc(42px * var(--card-scale, 1));
+		padding: calc(8px * var(--card-scale, 1));
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
@@ -620,9 +641,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 42px;
-		height: 42px;
-		padding: 8px;
+		min-width: calc(42px * var(--card-scale, 1));
+		height: calc(42px * var(--card-scale, 1));
+		padding: calc(8px * var(--card-scale, 1));
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
@@ -630,7 +651,7 @@
 		border: none;
 		flex-shrink: 0;
 		font-family: "M6X11", sans-serif;
-		font-size: 1.1rem;
+		font-size: calc(1.1rem * var(--card-scale, 1));
 	}
 
 	.toggle-button.enabled {
@@ -664,9 +685,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 42px;
-		height: 42px;
-		padding: 8px;
+		min-width: calc(42px * var(--card-scale, 1));
+		height: calc(42px * var(--card-scale, 1));
+		padding: calc(8px * var(--card-scale, 1));
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
@@ -704,8 +725,8 @@
 		border: 2px solid rgba(255, 255, 255, 0.3);
 		border-top: 2px solid #ffffff;
 		border-radius: 50%;
-		width: 16px;
-		height: 16px;
+		width: calc(16px * var(--card-scale, 1));
+		height: calc(16px * var(--card-scale, 1));
 		animation: spin 1s linear infinite;
 		margin: 0 auto;
 		display: inline-block;

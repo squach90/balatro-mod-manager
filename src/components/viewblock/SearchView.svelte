@@ -442,7 +442,10 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, wait: number) {
 		width: 100%;
 		height: 100%;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		grid-template-columns: repeat(
+			auto-fill,
+			minmax(calc(300px * var(--card-scale, 1)), 1fr)
+		);
 		gap: 1rem;
 	}
 

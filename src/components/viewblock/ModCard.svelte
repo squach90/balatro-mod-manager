@@ -7,11 +7,12 @@
 		modEnabledStore,
 		updateAvailableStore,
 	} from "../../stores/modStore";
-	import { stripMarkdown, truncateText } from "../../utils/helpers";
+	import { stripMarkdown } from "../../utils/helpers";
 	import { invoke } from "@tauri-apps/api/core";
-    import { lovelyPopupStore } from "../../stores/modStore";
-    import { forceRefreshCache } from "../../stores/modCache";
-    import LazyImage from "../common/LazyImage.svelte";
+	import { lovelyPopupStore } from "../../stores/modStore";
+	import { forceRefreshCache } from "../../stores/modCache";
+	import LazyImage from "../common/LazyImage.svelte";
+	import { cardScale } from "../../stores/ui";
 
 	interface Props {
 		mod: Mod;
@@ -32,11 +33,15 @@
 	// Check if an update is available when component mounts
 	let updateChecked = false;
 	let isEnabled = $state(true); // Default to enabled if not yet checked
-    let enabledChecked = false;
+	let enabledChecked = false;
 
 	// Load the enabled state whenever the mod changes or when installationStatus changes
 	$effect(() => {
-		if ($installationStatus[mod.title] && !enabledChecked && $modEnabledStore[mod.title] === undefined) {
+		if (
+			$installationStatus[mod.title] &&
+			!enabledChecked &&
+			$modEnabledStore[mod.title] === undefined
+		) {
 			enabledChecked = true;
 			checkModEnabled(mod.title);
 		}
@@ -229,18 +234,35 @@
 			} catch (_) {
 				/* ignore */
 			}
-        } catch (error) {
-            console.error("Failed to install mod:", error);
-        } finally {
-            loadingStates.update((s) => ({ ...s, [mod.title]: false }));
-            // Keep cache in sync so other views reflect installation immediately
-            try { await forceRefreshCache(); } catch (_) { /* ignore */ }
-        }
+		} catch (error) {
+			console.error("Failed to install mod:", error);
+		} finally {
+			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+			// Keep cache in sync so other views reflect installation immediately
+			try {
+				await forceRefreshCache();
+			} catch (_) {
+				/* ignore */
+			}
+		}
+	}
+	// Truncate description based on current card scale; this avoids overflow
+	// even when CSS multi-line clamp support is inconsistent across platforms.
+    function truncateDynamic(text: string, scale: number): string {
+        if (!text) return "";
+        const lines = scale <= 0.85 ? 1 : 2;
+        // width and font-size scale together → per-line capacity ~ constant
+        const basePerLine = 38;
+        const maxChars = Math.max(18, basePerLine * lines);
+        return text.length > maxChars
+            ? text.slice(0, maxChars).trimEnd() + "..."
+            : text;
     }
 </script>
 
 <div
 	class="mod-card"
+	class:compact={$cardScale <= 0.85}
 	onclick={openModView}
 	onkeydown={(e) => e.key === "Enter" && openModView()}
 	role="button"
@@ -249,14 +271,14 @@
 		.color2};"
 >
 	<div class="mod-image">
-    <LazyImage
-        src={mod.image}
-        fallbackSrc={mod.imageFallback}
-        alt={mod.title}
-        cacheTitle={mod.title}
-    />
+		<LazyImage
+			src={mod.image}
+			fallbackSrc={mod.imageFallback}
+			alt={mod.title}
+			cacheTitle={mod.title}
+		/>
 
-        <div class="tags">
+		<div class="tags">
 			<!-- <span class="tag updated"> -->
 			<!-- 	<Clock size={13} /> -->
 			<!-- 	{mod.lastUpdated} -->
@@ -267,7 +289,7 @@
 	<div class="mod-info">
 		<h3>{mod.title}</h3>
 		{#if mod.description && mod.description.trim().length > 0}
-			<p>{truncateText(stripMarkdown(mod.description))}</p>
+			<p>{truncateDynamic(stripMarkdown(mod.description), $cardScale)}</p>
 		{:else}
 			<div class="desc-skeleton" aria-hidden="true">
 				<div class="line" style="width: 92%"></div>
@@ -352,9 +374,9 @@
 		border-radius: 8px;
 		overflow: hidden;
 		border: 2px solid #f4eee0;
-		width: 300px;
-		max-width: 300px;
-		height: 330px;
+		width: calc(300px * var(--card-scale, 1));
+		max-width: calc(300px * var(--card-scale, 1));
+		height: calc(330px * var(--card-scale, 1));
 		margin: 0 auto;
 		padding: 1rem;
 		box-sizing: border-box;
@@ -386,7 +408,7 @@
 
 	.mod-image {
 		position: relative;
-		height: 150px;
+		height: calc(150px * var(--card-scale, 1));
 	}
 
 	/* Image styling handled inside LazyImage */
@@ -413,40 +435,55 @@
 		display: -webkit-box;
 		-webkit-box-orient: vertical;
 		padding: 0 0.1rem;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		text-overflow: ellipsis;
 	}
 
 	.mod-info h3 {
 		color: #fdcf51;
-		font-size: 1.5rem;
+		font-size: calc(1.5rem * var(--card-scale, 1));
 		margin-bottom: 0.2rem;
 	}
 
 	.mod-info p {
 		color: #f4eee0;
-		font-size: 1rem;
+		font-size: calc(1rem * var(--card-scale, 1));
 		line-height: 1.2;
 	}
 
-    /* Description skeleton */
-    .desc-skeleton { margin-top: 0.2rem; }
-    .desc-skeleton .line {
-        height: 12px;
-        margin: 6px 0;
-        border-radius: 6px;
-        background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0.08) 25%,
-            rgba(255, 255, 255, 0.18) 37%,
-            rgba(255, 255, 255, 0.08) 63%
-        );
-        background-size: 400% 100%;
-        animation: shimmer 1.2s ease-in-out infinite;
-    }
+	/* Tighten description to 1 line for compact cards */
+	.mod-card.compact .mod-info > p {
+		-webkit-line-clamp: 1;
+		line-clamp: 1;
+	}
 
-    @keyframes shimmer {
-        0% { background-position: 100% 0; }
-        100% { background-position: 0 0; }
-    }
+	/* Description skeleton */
+	.desc-skeleton {
+		margin-top: 0.2rem;
+	}
+	.desc-skeleton .line {
+		height: 12px;
+		margin: 6px 0;
+		border-radius: 6px;
+		background: linear-gradient(
+			90deg,
+			rgba(255, 255, 255, 0.08) 25%,
+			rgba(255, 255, 255, 0.18) 37%,
+			rgba(255, 255, 255, 0.08) 63%
+		);
+		background-size: 400% 100%;
+		animation: shimmer 1.2s ease-in-out infinite;
+	}
+
+	@keyframes shimmer {
+		0% {
+			background-position: 100% 0;
+		}
+		100% {
+			background-position: 0 0;
+		}
+	}
 
 	.button-container {
 		display: flex;
@@ -464,15 +501,15 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 0.75rem;
+		padding: calc(0.75rem * var(--card-scale, 1));
 		border: none;
 		border-radius: 4px;
 		font-family: "M6X11", sans-serif;
-		font-size: 1rem;
+		font-size: calc(1rem * var(--card-scale, 1));
 		cursor: pointer;
 		transition: all 0.2s ease;
 		/* Add these properties to prevent resizing */
-		min-height: 42px; /* Set explicit height */
+		min-height: calc(42px * var(--card-scale, 1)); /* Set explicit height */
 		position: relative; /* For absolute positioning of spinner */
 	}
 
@@ -512,11 +549,29 @@
 		transform: translateY(1px);
 	}
 
+	/* Compact adjustments: make primary buttons a touch smaller */
+	.mod-card.compact .download-button,
+	.mod-card.compact .update-button {
+		padding: calc(0.55rem * var(--card-scale, 1));
+		min-height: calc(36px * var(--card-scale, 1));
+		font-size: calc(0.9rem * var(--card-scale, 1));
+	}
+
+	.mod-card.compact .toggle-button {
+		transform: translateY(1px);
+	}
+
+	.mod-card.compact .button-container {
+		bottom: 0.7rem;
+	}
+
 	.delete-button {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.75rem;
+		min-width: calc(42px * var(--card-scale, 1));
+		height: calc(42px * var(--card-scale, 1));
+		padding: calc(8px * var(--card-scale, 1));
 		background: #c14139;
 		color: #f4eee0;
 		border: none;
@@ -524,6 +579,8 @@
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+		font-size: calc(1rem * var(--card-scale, 1));
 	}
 
 	.delete-button:hover {
@@ -540,9 +597,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 42px;
-		height: 42px;
-		padding: 8px;
+		min-width: calc(42px * var(--card-scale, 1));
+		height: calc(42px * var(--card-scale, 1));
+		padding: calc(8px * var(--card-scale, 1));
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
@@ -550,7 +607,7 @@
 		border: none;
 		flex-shrink: 0;
 		font-family: "M6X11", sans-serif;
-		font-size: 1.1rem;
+		font-size: calc(1.1rem * var(--card-scale, 1));
 	}
 
 	.toggle-button.enabled {
@@ -596,8 +653,8 @@
 		border: 2px solid rgba(255, 255, 255, 0.3);
 		border-top: 2px solid #ffffff;
 		border-radius: 50%;
-		width: 16px;
-		height: 16px;
+		width: calc(16px * var(--card-scale, 1));
+		height: calc(16px * var(--card-scale, 1));
 		animation: spin 1s linear infinite;
 		/* Center the spinner while maintaining button size */
 		margin: 0 auto;
