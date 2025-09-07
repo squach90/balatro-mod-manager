@@ -4,6 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { InstalledMod } from "./modStore";
 
+declare global {
+  interface Window {
+    __bmmInstalledModsListenerAttached?: boolean;
+    __bmmInstalledModsUnlisten?: () => void;
+  }
+}
+
 // Create a self-contained cache system
 const createModCache = () => {
   // Private variables inside closure
@@ -86,9 +93,8 @@ const modCache = createModCache();
 // Guard against duplicate listeners during Vite HMR by stashing a flag on window.
 try {
   if (typeof window !== "undefined") {
-    const w = window as any;
-    if (!w.__bmmInstalledModsListenerAttached) {
-      w.__bmmInstalledModsListenerAttached = true;
+    if (!window.__bmmInstalledModsListenerAttached) {
+      window.__bmmInstalledModsListenerAttached = true;
       listen("installed-mods-changed", async () => {
         try {
           await modCache.forceRefreshCache();
@@ -97,14 +103,13 @@ try {
         }
       })
         .then((un) => {
-          w.__bmmInstalledModsUnlisten = un;
-          if (import.meta && (import.meta as any).hot) {
-            (import.meta as any).hot.dispose(() => {
+          window.__bmmInstalledModsUnlisten = un;
+          if (import.meta?.hot) {
+            import.meta.hot.dispose(() => {
               try {
-                if (typeof w.__bmmInstalledModsUnlisten === "function")
-                  w.__bmmInstalledModsUnlisten();
+                window.__bmmInstalledModsUnlisten?.();
               } catch {}
-              w.__bmmInstalledModsListenerAttached = false;
+              window.__bmmInstalledModsListenerAttached = false;
             });
           }
         })
