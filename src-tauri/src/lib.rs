@@ -94,7 +94,7 @@ pub fn run() {
                 use std::time::Duration;
                 use tokio::time::sleep;
 
-                const REINDEX_TICK_SECS: u64 = 3; // can drop to 1s if desired
+                const REINDEX_TICK_SECS: u64 = 1; // 1s polling for quick updates
                 const REINDEX_BATCH_SIZE: usize = 5; // small batch to keep cost negligible
 
                 // Snapshot of installed mods to sweep over between refreshes
