@@ -1,6 +1,7 @@
 // stores/modCache.ts
 import { writable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { InstalledMod } from "./modStore";
 
 // Create a self-contained cache system
@@ -79,6 +80,42 @@ const createModCache = () => {
 
 // Create a single instance of the cache system
 const modCache = createModCache();
+
+// Listen for backend notifications that installed mods have changed,
+// and refresh the cache immediately to update the UI in real-time.
+// Guard against duplicate listeners during Vite HMR by stashing a flag on window.
+try {
+  if (typeof window !== "undefined") {
+    const w = window as any;
+    if (!w.__bmmInstalledModsListenerAttached) {
+      w.__bmmInstalledModsListenerAttached = true;
+      listen("installed-mods-changed", async () => {
+        try {
+          await modCache.forceRefreshCache();
+        } catch {
+          // ignore
+        }
+      })
+        .then((un) => {
+          w.__bmmInstalledModsUnlisten = un;
+          if (import.meta && (import.meta as any).hot) {
+            (import.meta as any).hot.dispose(() => {
+              try {
+                if (typeof w.__bmmInstalledModsUnlisten === "function")
+                  w.__bmmInstalledModsUnlisten();
+              } catch {}
+              w.__bmmInstalledModsListenerAttached = false;
+            });
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
+    }
+  }
+} catch {
+  // ignore if listen fails outside Tauri context
+}
 
 // Export the public interface
 export const {

@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::state::AppState;
 use crate::util::map_error;
-use bmm_lib::{cache, errors::AppError, local_mod_detection};
+use bmm_lib::{cache, database::Database, errors::AppError, local_mod_detection};
 use serde_json::json;
+use tauri::Emitter;
 
 #[tauri::command]
 pub async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
@@ -72,18 +73,35 @@ pub async fn get_detected_local_mods(
 /// Reindexes mods by syncing the database with the filesystem.
 /// Returns (files_removed, db_entries_cleaned). Currently we only clean DB entries.
 #[tauri::command]
-pub async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
+pub async fn reindex_mods(
+    state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(usize, usize), String> {
     let db = state
         .db
         .lock()
         .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
 
-    let installed = map_error(db.get_installed_mods())?;
+    let result = reindex_db(&db);
+    match &result {
+        Ok((_files, cleaned)) if *cleaned > 0 => {
+            // Best-effort event notify; ignore if there are no listeners
+            let _ = app_handle.emit("installed-mods-changed", ());
+        }
+        _ => {}
+    }
+    map_error(result)
+}
+
+/// Internal helper to perform the actual reindexing logic.
+/// Returns (files_removed, db_entries_cleaned). Currently we only clean DB entries.
+pub fn reindex_db(db: &Database) -> Result<(usize, usize), AppError> {
+    let installed = db.get_installed_mods()?;
     let mut cleaned_entries = 0usize;
     for m in installed {
         let path = PathBuf::from(&m.path);
         if !path.exists() {
-            map_error(db.remove_installed_mod(&m.name))?;
+            db.remove_installed_mod(&m.name)?;
             cleaned_entries += 1;
         }
     }

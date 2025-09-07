@@ -38,6 +38,7 @@
 import type { Component } from "svelte";
 let SearchViewComp = $state<Component | null>(null);
 import { onMount, onDestroy } from "svelte";
+import { listen } from "@tauri-apps/api/event";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
@@ -361,17 +362,32 @@ const { handleDependencyCheck, mod } = $props<{
 		initBackgroundState();
 
 		// Lazy-load SearchView when needed
-		$effect(() => {
-			if (showSearch && !SearchViewComp) {
-				import("./SearchView.svelte").then((m) => (SearchViewComp = m.default)).catch(() => {});
-			}
-		});
+			$effect(() => {
+				if (showSearch && !SearchViewComp) {
+					import("./SearchView.svelte").then((m) => (SearchViewComp = m.default)).catch(() => {});
+				}
+			});
 
-		// Return synchronous cleanup function
-		return () => {
-			clearInterval(dotInterval);
-		};
-	});
+			// Listen for backend notifications of installed mods changes
+			let unlistenModsChanged: (() => void) | null = null;
+			listen("installed-mods-changed", async () => {
+				if ($currentCategory === "Installed Mods") {
+					try {
+						await refreshInstalledMods();
+					} catch {}
+				}
+			})
+				.then((un) => (unlistenModsChanged = un))
+				.catch(() => {});
+
+			// Return synchronous cleanup function
+			return () => {
+				clearInterval(dotInterval);
+				try {
+					if (typeof unlistenModsChanged === "function") unlistenModsChanged();
+				} catch {}
+			};
+		});
 
 	const getAllInstalledMods = async () => {
 		try {

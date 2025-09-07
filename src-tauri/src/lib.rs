@@ -10,7 +10,9 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tauri_plugin_window_state::StateFlags;
 
-use bmm_lib::{database::Database, discord_rpc::DiscordRpcManager, errors::AppError};
+use bmm_lib::{
+    database::Database, discord_rpc::DiscordRpcManager, errors::AppError, local_mod_detection,
+};
 
 use crate::models::Payload;
 use crate::state::AppState;
@@ -80,6 +82,87 @@ pub fn run() {
                         log::info!(
                             "lovely_version missing; UI will prompt to install/update Lovely"
                         );
+                    }
+                }
+            });
+
+            // Periodically validate the mod database in a very cheap, incremental sweep.
+            // Runs every few seconds and checks only a small batch of entries each tick.
+            // Clone a handle that is 'static so we can emit events from the background task.
+            let handle_for_events = app.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use std::time::Duration;
+                use tokio::time::sleep;
+
+                const REINDEX_TICK_SECS: u64 = 3; // can drop to 1s if desired
+                const REINDEX_BATCH_SIZE: usize = 5; // small batch to keep cost negligible
+
+                // Snapshot of installed mods to sweep over between refreshes
+                let mut snapshot: Vec<(String, String)> = Vec::new(); // (name, path)
+                let mut cursor_idx: usize = 0;
+
+                // Open a dedicated DB connection for this background task.
+                // Using a separate connection avoids borrowing app state and remains lightweight.
+                let db = match Database::new() {
+                    Ok(db) => db,
+                    Err(e) => {
+                        log::warn!("Auto reindex: failed to open DB: {}", e);
+                        return;
+                    }
+                };
+
+                loop {
+                    sleep(Duration::from_secs(REINDEX_TICK_SECS)).await;
+
+                    // Refresh snapshot when exhausted or empty
+                    if cursor_idx >= snapshot.len() {
+                        let mods: Vec<(String, String)> = match db
+                            .get_installed_mods()
+                            .map(|v| v.into_iter().map(|m| (m.name, m.path)).collect())
+                        {
+                            Ok(v) => v,
+                            Err(e) => {
+                                log::warn!("Auto reindex: failed to load mods: {}", e);
+                                continue;
+                            }
+                        };
+                        snapshot = mods;
+                        cursor_idx = 0;
+                    }
+
+                    if snapshot.is_empty() {
+                        continue; // nothing to do
+                    }
+
+                    let end = (cursor_idx + REINDEX_BATCH_SIZE).min(snapshot.len());
+                    let mut cleaned = 0usize;
+                    for (name, path) in &snapshot[cursor_idx..end] {
+                        if !std::path::Path::new(path).exists() {
+                            // Remove missing entry from DB
+                            match db.remove_installed_mod(name) {
+                                Ok(()) => {
+                                    cleaned += 1;
+                                }
+                                Err(e) => {
+                                    log::warn!("Auto reindex: failed to remove '{}': {}", name, e)
+                                }
+                            }
+                        }
+                    }
+                    cursor_idx = end;
+
+                    if cleaned > 0 {
+                        // Clear detection cache so next detection reflects changes
+                        local_mod_detection::clear_detection_cache();
+                        log::info!(
+                            "Auto reindex: cleaned {} database entr{} (batch)",
+                            cleaned,
+                            if cleaned == 1 { "y" } else { "ies" }
+                        );
+
+                        // Notify UI to refresh installed mods in real-time
+                        // Ignore errors if there are no listeners
+                        let _ = handle_for_events.emit("installed-mods-changed", ());
                     }
                 }
             });
