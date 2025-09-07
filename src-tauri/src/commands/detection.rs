@@ -112,6 +112,55 @@ pub fn reindex_db(db: &Database) -> Result<(usize, usize), AppError> {
     Ok((0, cleaned_entries))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn reindex_db_removes_missing_paths() {
+        // Redirect config dir to temp
+        let td = tempdir().unwrap();
+        let original_cfg = std::env::var_os("XDG_CONFIG_HOME");
+        let original_home = std::env::var_os("HOME");
+        std::env::set_var("XDG_CONFIG_HOME", td.path());
+        if cfg!(target_os = "macos") {
+            std::env::set_var("HOME", td.path());
+        }
+
+        let db = Database::new().expect("db");
+
+        // Create one existing and one missing mod path
+        let mods_dir = dirs::config_dir().unwrap().join("Balatro").join("Mods");
+        std::fs::create_dir_all(&mods_dir).unwrap();
+        let existing = mods_dir.join("Exists");
+        std::fs::create_dir_all(&existing).unwrap();
+        let missing = mods_dir.join("Missing"); // do not create
+
+        db.add_installed_mod("Existing", existing.to_string_lossy().as_ref(), &[], None)
+            .unwrap();
+        db.add_installed_mod("Missing", missing.to_string_lossy().as_ref(), &[], None)
+            .unwrap();
+
+        let (_files, cleaned) = reindex_db(&db).expect("reindex");
+        assert_eq!(cleaned, 1);
+
+        let remaining = db.get_installed_mods().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "Existing");
+
+        // restore env
+        match original_cfg {
+            Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        match original_home {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn delete_manual_mod(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
