@@ -1663,13 +1663,7 @@ onDestroy(() => {
 										(outside the mod manager)
 									</p>
 								</div>
-								<button
-									class="open-folder-button"
-									onclick={openModsFolder}
-									title="Open mods folder"
-								>
-									<Folder size={20} /> Open Mods Folder
-								</button>
+								<!-- Removed Open Mods Folder button for Local Mods section -->
 							</div>
 
 							<!-- Enabled Local Mods -->
@@ -1731,13 +1725,7 @@ onDestroy(() => {
 										catalog
 									</p>
 								</div>
-								<button
-									class="open-folder-button"
-									onclick={openModsFolder}
-									title="Open mods folder"
-								>
-									<Folder size={20} /> Open Mods Folder
-								</button>
+								<!-- Removed Open Mods Folder button for Mod Manager Catalog section -->
 							</div>
 						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
 							<div class="no-mods-message">
