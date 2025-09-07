@@ -111,6 +111,46 @@ pub fn run() {
                     }
                 };
 
+                // Lightweight fingerprint of Mods directory to detect additions/removals
+                fn mods_dir_fingerprint() -> Option<u64> {
+                    let config_dir = dirs::config_dir()?;
+                    let mods_dir = config_dir.join("Balatro").join("Mods");
+                    if !mods_dir.exists() {
+                        return Some(0);
+                    }
+                    let mut sum: u64 = 1469598103934665603; // FNV offset basis
+                    let rd = std::fs::read_dir(&mods_dir).ok()?;
+                    for entry in rd.flatten() {
+                        let path = entry.path();
+                        if !path.is_dir() {
+                            continue;
+                        }
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            let lower = name.to_lowercase();
+                            if lower.contains("lovely")
+                                || lower.starts_with('.')
+                                || matches!(lower.as_str(), ".git" | "node_modules" | "__macosx")
+                            {
+                                continue;
+                            }
+                            for b in lower.as_bytes() {
+                                sum = sum.wrapping_mul(1099511628211).wrapping_add(*b as u64);
+                            }
+                            if let Ok(meta) = path.metadata() {
+                                if let Ok(mtime) = meta.modified() {
+                                    if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                                        sum = sum
+                                            .wrapping_mul(1099511628211)
+                                            .wrapping_add(dur.as_secs());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(sum)
+                }
+                let mut last_fp = mods_dir_fingerprint();
+
                 loop {
                     sleep(Duration::from_secs(REINDEX_TICK_SECS)).await;
 
@@ -150,6 +190,16 @@ pub fn run() {
                         }
                     }
                     cursor_idx = end;
+
+                    // Detect Mods dir fingerprint changes (additions/removals/renames)
+                    let cur_fp = mods_dir_fingerprint();
+                    let fp_changed = cur_fp.is_some() && cur_fp != last_fp;
+                    if fp_changed {
+                        last_fp = cur_fp;
+                        // Clear cache so next detection reflects changes and notify UI
+                        local_mod_detection::clear_detection_cache();
+                        let _ = handle_for_events.emit("installed-mods-changed", ());
+                    }
 
                     if cleaned > 0 {
                         // Clear detection cache so next detection reflects changes

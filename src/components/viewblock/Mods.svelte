@@ -374,6 +374,7 @@ const { handleDependencyCheck, mod } = $props<{
 				if ($currentCategory === "Installed Mods") {
 					try {
 						await refreshInstalledMods();
+						await getLocalMods();
 					} catch {}
 				}
 			})
