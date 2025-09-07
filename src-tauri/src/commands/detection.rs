@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::state::AppState;
 use crate::util::map_error;
-use bmm_lib::{cache, errors::AppError, local_mod_detection};
+use bmm_lib::{cache, database::Database, errors::AppError, local_mod_detection};
 use serde_json::json;
+use tauri::Emitter;
 
 #[tauri::command]
 pub async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
@@ -72,18 +73,35 @@ pub async fn get_detected_local_mods(
 /// Reindexes mods by syncing the database with the filesystem.
 /// Returns (files_removed, db_entries_cleaned). Currently we only clean DB entries.
 #[tauri::command]
-pub async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
+pub async fn reindex_mods(
+    state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(usize, usize), String> {
     let db = state
         .db
         .lock()
         .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
 
-    let installed = map_error(db.get_installed_mods())?;
+    let result = reindex_db(&db);
+    match &result {
+        Ok((_files, cleaned)) if *cleaned > 0 => {
+            // Best-effort event notify; ignore if there are no listeners
+            let _ = app_handle.emit("installed-mods-changed", ());
+        }
+        _ => {}
+    }
+    map_error(result)
+}
+
+/// Internal helper to perform the actual reindexing logic.
+/// Returns (files_removed, db_entries_cleaned). Currently we only clean DB entries.
+pub fn reindex_db(db: &Database) -> Result<(usize, usize), AppError> {
+    let installed = db.get_installed_mods()?;
     let mut cleaned_entries = 0usize;
     for m in installed {
         let path = PathBuf::from(&m.path);
         if !path.exists() {
-            map_error(db.remove_installed_mod(&m.name))?;
+            db.remove_installed_mod(&m.name)?;
             cleaned_entries += 1;
         }
     }
@@ -92,6 +110,55 @@ pub async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, u
     local_mod_detection::clear_detection_cache();
 
     Ok((0, cleaned_entries))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn reindex_db_removes_missing_paths() {
+        // Redirect config dir to temp
+        let td = tempdir().unwrap();
+        let original_cfg = std::env::var_os("XDG_CONFIG_HOME");
+        let original_home = std::env::var_os("HOME");
+        std::env::set_var("XDG_CONFIG_HOME", td.path());
+        if cfg!(target_os = "macos") {
+            std::env::set_var("HOME", td.path());
+        }
+
+        let db = Database::new().expect("db");
+
+        // Create one existing and one missing mod path
+        let mods_dir = dirs::config_dir().unwrap().join("Balatro").join("Mods");
+        std::fs::create_dir_all(&mods_dir).unwrap();
+        let existing = mods_dir.join("Exists");
+        std::fs::create_dir_all(&existing).unwrap();
+        let missing = mods_dir.join("Missing"); // do not create
+
+        db.add_installed_mod("Existing", existing.to_string_lossy().as_ref(), &[], None)
+            .unwrap();
+        db.add_installed_mod("Missing", missing.to_string_lossy().as_ref(), &[], None)
+            .unwrap();
+
+        let (_files, cleaned) = reindex_db(&db).expect("reindex");
+        assert_eq!(cleaned, 1);
+
+        let remaining = db.get_installed_mods().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "Existing");
+
+        // restore env
+        match original_cfg {
+            Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        match original_home {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
 }
 
 #[tauri::command]

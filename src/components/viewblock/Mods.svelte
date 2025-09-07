@@ -38,6 +38,7 @@
 import type { Component } from "svelte";
 let SearchViewComp = $state<Component | null>(null);
 import { onMount, onDestroy } from "svelte";
+import { listen } from "@tauri-apps/api/event";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
@@ -361,17 +362,33 @@ const { handleDependencyCheck, mod } = $props<{
 		initBackgroundState();
 
 		// Lazy-load SearchView when needed
-		$effect(() => {
-			if (showSearch && !SearchViewComp) {
-				import("./SearchView.svelte").then((m) => (SearchViewComp = m.default)).catch(() => {});
-			}
-		});
+			$effect(() => {
+				if (showSearch && !SearchViewComp) {
+					import("./SearchView.svelte").then((m) => (SearchViewComp = m.default)).catch(() => {});
+				}
+			});
 
-		// Return synchronous cleanup function
-		return () => {
-			clearInterval(dotInterval);
-		};
-	});
+			// Listen for backend notifications of installed mods changes
+			let unlistenModsChanged: (() => void) | null = null;
+			listen("installed-mods-changed", async () => {
+				if ($currentCategory === "Installed Mods") {
+					try {
+						await refreshInstalledMods();
+						await getLocalMods();
+					} catch {}
+				}
+			})
+				.then((un) => (unlistenModsChanged = un))
+				.catch(() => {});
+
+			// Return synchronous cleanup function
+			return () => {
+				clearInterval(dotInterval);
+				try {
+					if (typeof unlistenModsChanged === "function") unlistenModsChanged();
+				} catch {}
+			};
+		});
 
 	const getAllInstalledMods = async () => {
 		try {
@@ -1647,13 +1664,7 @@ onDestroy(() => {
 										(outside the mod manager)
 									</p>
 								</div>
-								<button
-									class="open-folder-button"
-									onclick={openModsFolder}
-									title="Open mods folder"
-								>
-									<Folder size={20} /> Open Mods Folder
-								</button>
+								<!-- Removed Open Mods Folder button for Local Mods section -->
 							</div>
 
 							<!-- Enabled Local Mods -->
@@ -1715,13 +1726,7 @@ onDestroy(() => {
 										catalog
 									</p>
 								</div>
-								<button
-									class="open-folder-button"
-									onclick={openModsFolder}
-									title="Open mods folder"
-								>
-									<Folder size={20} /> Open Mods Folder
-								</button>
+								<!-- Removed Open Mods Folder button for Mod Manager Catalog section -->
 							</div>
 						{:else if !isLoadingLocalMods && localMods.length === 0 && paginatedMods.length === 0}
 							<div class="no-mods-message">

@@ -510,3 +510,99 @@ fn validate_uninstall_path(path: &PathBuf, mods_dir: &PathBuf) -> Result<(), App
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use tempfile::tempdir;
+
+    #[test]
+    fn guess_archive_kind_magic_zip() {
+        let data = Bytes::from_static(&[0x50, 0x4B, 0x03, 0x04]);
+        let kind = guess_archive_kind(&data, "", None, None);
+        assert!(matches!(kind, Some(ArchiveKind::Zip)));
+    }
+
+    #[test]
+    fn guess_archive_kind_rejects_misleading_headers() {
+        let data = Bytes::from_static(&[0x00, 0x01, 0x02, 0x03]);
+        let kind = guess_archive_kind(&data, "file.zip", Some("application/zip"), Some("file.zip"));
+        // Without matching magic bytes, should not trust headers/filename alone
+        assert!(kind.is_none());
+    }
+
+    #[test]
+    fn ensure_safe_path_blocks_traversal() {
+        let td = tempdir().unwrap();
+        let base = td.path().join("base");
+        std::fs::create_dir_all(&base).unwrap();
+        // clearly outside the base path
+        let outside = td.path().join("outside.txt");
+        let res = ensure_safe_path(&base, &outside);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn handle_zip_extracts_root_files() {
+        use std::io::Write;
+        use zip::write::FileOptions;
+        use zip::ZipWriter;
+
+        let mut buf: Vec<u8> = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut buf);
+            let mut zw = ZipWriter::new(cursor);
+            let opts: FileOptions<'_, ()> = FileOptions::default();
+            zw.start_file("hello.txt", opts).unwrap();
+            zw.write_all(b"hi").unwrap();
+            zw.finish().unwrap();
+        }
+
+        let td = tempdir().unwrap();
+        let mod_dir = td.path();
+        let out = handle_zip(Bytes::from(buf), mod_dir, "TestMod").unwrap();
+        let file_path = out.join("hello.txt");
+        assert!(file_path.exists());
+        let content = std::fs::read_to_string(file_path).unwrap();
+        assert_eq!(content, "hi");
+    }
+
+    #[test]
+    fn handle_zip_extracts_folder_structure() {
+        use std::io::Write;
+        use zip::write::FileOptions;
+        use zip::ZipWriter;
+
+        let mut buf: Vec<u8> = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut buf);
+            let mut zw = ZipWriter::new(cursor);
+            let opts: FileOptions<'_, ()> = FileOptions::default();
+            // Write root directory entry first so get_zip_root_dir sees it
+            zw.add_directory("Root/", opts).unwrap();
+            zw.start_file("Root/readme.md", opts).unwrap();
+            zw.write_all(b"docs").unwrap();
+            zw.finish().unwrap();
+        }
+
+        let td = tempdir().unwrap();
+        let mod_dir = td.path();
+        let out = handle_zip(Bytes::from(buf), mod_dir, "TestMod").unwrap();
+        let file_path = out.join("readme.md");
+        assert!(file_path.exists());
+        let content = std::fs::read_to_string(file_path).unwrap();
+        assert_eq!(content, "docs");
+    }
+
+    #[test]
+    fn validate_uninstall_path_guards_mods_root() {
+        let td = tempdir().unwrap();
+        let mods_dir = td.path().join("Mods");
+        std::fs::create_dir_all(&mods_dir).unwrap();
+
+        // Should not allow deleting Mods root
+        let res = validate_uninstall_path(&mods_dir.clone(), &mods_dir.clone());
+        assert!(res.is_err());
+    }
+}
