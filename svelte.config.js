@@ -9,6 +9,12 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
+    // Ensure SSG builds include non-linked routes like "/main".
+    // In release, missing prerendered entries can cause client-side
+    // navigation to hang or appear to do nothing inside Tauri.
+    prerender: {
+      entries: ["*", "/main"],
+    },
     alias: {
       $lib: "./src/lib",
     },

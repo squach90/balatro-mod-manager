@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
-	import { invoke } from "@tauri-apps/api/core";
+	import { invokeWithTimeout } from "../utils/tauriInvoke";
 	import { addMessage } from "../lib/stores";
 	import { FolderDot, FileDigit } from "lucide-svelte";
 	import { goto } from "$app/navigation";
@@ -49,11 +49,35 @@
 
 	let isLoading = false;
 
+    // All invocations use strongly-typed wrappers in ../utils/tauriInvoke
+
+	async function safeNavigateToMain() {
+		// Give the toast a moment to be visible
+		await new Promise((r) => setTimeout(r, 1000));
+		try {
+			// Race navigation against a timeout to avoid getting stuck
+			const nav = goto("/main/", { replaceState: true });
+			await Promise.race([
+				nav,
+				new Promise((_, reject) =>
+					setTimeout(() => reject(new Error("nav-timeout")), 4000),
+				),
+			]);
+		} catch (_) {
+			// Fallback: hard navigation if client routing stalled
+			try {
+				window.location.replace("/main/");
+			} catch (_) {
+				/* ignore */
+			}
+		}
+	}
+
 	const handleClick = async () => {
 		isLoading = true;
 		try {
 			if (selectedOption === "steam") {
-				const paths: string[] = await invoke("find_steam_balatro");
+				const paths = await invokeWithTimeout("find_steam_balatro");
 				if (paths.length === 0) {
 					addMessage(
 						"Balatro not found in Steam installation",
@@ -61,13 +85,8 @@
 					);
 				} else {
 					selectedPath = paths[0];
-					addMessage(
-						"Successfully found Balatro installation",
-						"success",
-					);
-
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-					await goto("/main", { replaceState: true });
+					addMessage("Successfully found Balatro installation", "success");
+					await safeNavigateToMain();
 				}
 			} else if (selectedOption === "custom") {
 				if (!selectedPath) {
@@ -90,18 +109,13 @@
 					}
 				}
 
-				const isValid = await invoke("check_custom_balatro", {
+				const isValid = await invokeWithTimeout("check_custom_balatro", {
 					path: pathToCheck,
 				});
 
 				if (isValid) {
-					addMessage(
-						"Successfully found Balatro installation",
-						"success",
-					);
-					// Wait for the success message to show
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-					await goto("/main", { replaceState: true });
+					addMessage("Successfully found Balatro installation", "success");
+					await safeNavigateToMain();
 				} else {
 					addMessage("Invalid Balatro path", "error");
 				}
