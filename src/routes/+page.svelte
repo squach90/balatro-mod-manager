@@ -3,17 +3,26 @@
 	import ReportIssue from "../components/ReportIssue.svelte";
 	import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { onMount, onDestroy } from "svelte";
-	import { invoke } from "@tauri-apps/api/core";
+	import { invokeWithTimeout } from "../utils/tauriInvoke";
 	import { goto } from "$app/navigation";
 
 	onMount(() => {
 		const init = async () => {
 			try {
-				const existingPath = await invoke(
-					"check_existing_installation",
-				);
+				const existingPath = await invokeWithTimeout("check_existing_installation");
 				if (existingPath) {
-					await goto("/main", { replaceState: true });
+					try {
+						const nav = goto("/main/", { replaceState: true });
+						await Promise.race([
+							nav,
+							new Promise((_, reject) =>
+								setTimeout(() => reject(new Error("nav-timeout")), 4000),
+							),
+						]);
+					} catch (_) {
+						// Fallback: hard navigate if SPA router stalls
+						window.location.replace("/main/");
+					}
 				}
 			} catch (error) {
 				console.error("Error checking existing installation:", error);

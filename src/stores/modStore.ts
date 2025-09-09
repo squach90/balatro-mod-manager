@@ -94,14 +94,18 @@ export const cachedVersions = writable<{
 
 if (typeof window !== "undefined") {
   cachedVersions.subscribe((value) => {
-    localStorage.setItem(
-      "version-cache-steamodded",
-      JSON.stringify(value.steamodded),
-    );
-    localStorage.setItem(
-      "version-cache-talisman",
-      JSON.stringify(value.talisman),
-    );
+    try {
+      localStorage.setItem(
+        "version-cache-steamodded",
+        JSON.stringify(value.steamodded),
+      );
+      localStorage.setItem(
+        "version-cache-talisman",
+        JSON.stringify(value.talisman),
+      );
+    } catch (_) {
+      // Ignore storage quota errors; caching is optional.
+    }
   });
 }
 
@@ -160,12 +164,37 @@ if (typeof window !== "undefined") {
 
   modsStore.subscribe((value) => {
     try {
-      localStorage.setItem("mods-cache", JSON.stringify(value));
+      // Store a slimmed cache to avoid exceeding localStorage limits.
+      const slim = value.map((m) => ({
+        title: m.title,
+        categories: m.categories,
+        colors: m.colors,
+        requires_steamodded: m.requires_steamodded,
+        requires_talisman: m.requires_talisman,
+        publisher: m.publisher,
+        repo: m.repo,
+        downloadURL: m.downloadURL,
+        folderName: m.folderName ?? null,
+        version: m.version ?? null,
+        installed: m.installed,
+        last_updated: m.last_updated,
+        _dirName: m._dirName,
+        _installedPath: m._installedPath,
+        // omit description and image fields (largest strings)
+      }));
+
+      localStorage.setItem("mods-cache", JSON.stringify(slim));
       const now = Date.now();
       localStorage.setItem("mods-cache-ts", String(now));
       catalogLastRefreshed.set(now);
-    } catch (_) {
-      // ignore cache write errors
+    } catch (e) {
+      // On quota errors, clear heavy entries to prevent repeated failures.
+      try {
+        localStorage.removeItem("mods-cache");
+        localStorage.removeItem("mods-cache-ts");
+      } catch (_) {
+        // ignore
+      }
     }
   });
 }
@@ -188,7 +217,11 @@ function createPersistentCategory() {
   return {
     subscribe,
     set: (value: string) => {
-      localStorage.setItem("currentCategory", value);
+      try {
+        localStorage.setItem("currentCategory", value);
+      } catch (_) {
+        // Ignore storage quota errors.
+      }
       set(value);
     },
   };
