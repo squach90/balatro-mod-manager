@@ -522,11 +522,39 @@ pub async fn fetch_gitlab_mods_meta_only() -> Result<Vec<ArchiveModItem>, String
     Ok(items)
 }
 
+fn is_legal_char(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+        || matches!(
+            c,
+            '!' | '#'
+                | '$'
+                | '%'
+                | '&'
+                | '\''
+                | '('
+                | ')'
+                | '+'
+                | ','
+                | '-'
+                | '='
+                | ';'
+                | '@'
+                | '['
+                | ']'
+                | '^'
+                | '_'
+                | '`'
+                | '{'
+                | '}'
+                | '~'
+        )
+}
+
 fn safe_slug(input: &str) -> String {
     let mut s = input.trim().to_lowercase();
     s = s
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .map(|c| if is_legal_char(c) { c } else { '-' })
         .collect();
     while s.contains("--") {
         s = s.replace("--", "-");
