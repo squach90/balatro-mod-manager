@@ -334,7 +334,7 @@ import ReportIssue from "../../components/ReportIssue.svelte";
 		{onError}
 	/>
 
-	<div class="version-text">v0.2.8</div>
+	<div class="version-text">v0.2.9</div>
 </div>
 
 <LovelyMissingPopup />
