@@ -27,9 +27,3 @@ pub struct ModMeta {
     #[serde(rename = "last-updated", default)]
     pub last_updated: u64,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ModCacheInfo {
-    pub path: String,
-    pub last_commit: i64,
-}
