@@ -29,6 +29,15 @@
 	const handlePathSelect = async () => {
 		const { open } = await import("@tauri-apps/plugin-dialog");
 
+		let filters;
+		if (customPathType === "executable") {
+			const isMac = navigator.userAgent.includes("Mac");
+
+			filters = isMac
+				? [{ name: "App Bundle", extensions: ["app"] }]
+				: [{ name: "Executable", extensions: ["exe"] }];
+		}
+
 		const selected = await open({
 			directory: customPathType === "directory",
 			multiple: false,
