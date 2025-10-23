@@ -28,13 +28,15 @@
 
 	const handlePathSelect = async () => {
 		const { open } = await import("@tauri-apps/plugin-dialog");
+		const { platform } = await import("@tauri-apps/plugin-os");
 
 		type DialogFilter = { name: string; extensions: string[] };
 		let filters: DialogFilter[] | undefined;
 		
 		if (customPathType === "executable") {
-			const isMac = navigator.userAgent.includes("Mac");
-			filters = isMac
+			const currentPlatform = await platform();
+			
+			filters = currentPlatform === "macos"
 				? [{ name: "App Bundle", extensions: ["app"] }]
 				: [{ name: "Executable", extensions: ["exe"] }];
 		}
@@ -46,7 +48,7 @@
 				customPathType === "directory"
 					? "Select Balatro Directory"
 					: "Select Balatro Executable",
-			filters: filters, // Use the filters variable you defined above
+			filters: filters,
 		});
 
 		if (selected) {
