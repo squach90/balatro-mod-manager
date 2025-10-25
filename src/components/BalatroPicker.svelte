@@ -3,34 +3,34 @@
 	import { invokeWithTimeout } from "../utils/tauriInvoke";
 	import { addMessage } from "../lib/stores";
 	import { FolderDot, FileDigit } from "lucide-svelte";
+	import type { DialogFilter } from "@tauri-apps/plugin-dialog";
 	import { goto } from "$app/navigation";
-
+	
 	let selectedOption = "steam";
 	let showCustomInput = false;
 	let selectedPath = "";
 	let customPathType = "directory"; // New state to track directory or executable selection
-
+	
 	const handleOptionChange = (option: string) => {
 		selectedOption = option;
 		showCustomInput = option === "custom";
-
+		
 		if (option == "custom") {
 			selectedPath = "";
 		}
 	};
-
+	
 	const truncatePath = (path: string) => {
 		const maxLength = 50;
 		return path.length > maxLength
-			? path.substring(0, maxLength - 3) + "..."
-			: path;
+		? path.substring(0, maxLength - 3) + "..."
+		: path;
 	};
-
+	
 	const handlePathSelect = async () => {
 		const { open } = await import("@tauri-apps/plugin-dialog");
 		const { platform } = await import("@tauri-apps/plugin-os");
 
-		type DialogFilter = { name: string; extensions: string[] };
 		let filters: DialogFilter[] | undefined;
 		
 		if (customPathType === "executable") {
